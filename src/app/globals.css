@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Signature visuelle de la vitrine publique (section 12) : une ligne
+ * pointillée entre le nom d'un produit et son prix, comme sur un ticket
+ * de caisse/menu — ancré dans le sujet réel (vente, reçu), pas décoratif.
+ */
+.receipt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.receipt-row::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px dotted theme("colors.muted");
+  opacity: 0.5;
+  transform: translateY(-0.3em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
