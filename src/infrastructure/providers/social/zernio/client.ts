@@ -4,6 +4,7 @@ import type {
   ZernioCreatePostResponse,
   ZernioGetPostResponse,
   ZernioAnalyticsResponse,
+  ZernioInboxCommentsResponse,
 } from "./types";
 
 /**
@@ -90,5 +91,79 @@ export class ZernioSocialClient {
     }
 
     return res.json() as Promise<ZernioAnalyticsResponse>;
+  }
+
+  /** CONFIRMÉ (docs.zernio.com "Get post comments") : GET /v1/inbox/comments/{postId}?accountId=... */
+  async listInboxComments(postId: string, accountId: string): Promise<ZernioInboxCommentsResponse> {
+    this.assertConfigured();
+
+    const res = await fetch(
+      `${this.baseUrl}/inbox/comments/${encodeURIComponent(postId)}?accountId=${encodeURIComponent(accountId)}`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio listInboxComments failed (${res.status}): ${body}`);
+    }
+
+    return res.json() as Promise<ZernioInboxCommentsResponse>;
+  }
+
+  /** CONFIRMÉ (docs.zernio.com "Social Media Comments API") : POST /v1/inbox/comments/{postId}. */
+  async replyToInboxComment(postId: string, accountId: string, commentId: string, message: string): Promise<void> {
+    this.assertConfigured();
+
+    const res = await fetch(`${this.baseUrl}/inbox/comments/${encodeURIComponent(postId)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, commentId, message }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio replyToInboxComment failed (${res.status}): ${body}`);
+    }
+  }
+
+  /** CONFIRMÉ (SDKs officiels zernio-php/zernio-dotnet) : POST .../{commentId}/hide avec { accountId }. */
+  async hideInboxComment(postId: string, accountId: string, commentId: string): Promise<void> {
+    this.assertConfigured();
+
+    const res = await fetch(
+      `${this.baseUrl}/inbox/comments/${encodeURIComponent(postId)}/${encodeURIComponent(commentId)}/hide`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      },
+    );
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio hideInboxComment failed (${res.status}): ${body}`);
+    }
+  }
+
+  /**
+   * CONFIRMÉ (SDKs officiels zernio-php/zernio-dotnet) : DELETE
+   * .../{commentId}/hide. INFÉRÉ (non documenté verbatim) : passage
+   * d'`accountId` en query string plutôt qu'en corps — par symétrie avec
+   * `hide` (une requête DELETE avec corps JSON est peu fiable selon les
+   * runtimes/proxys). À corriger si un test réel contre l'API révèle
+   * un format différent.
+   */
+  async unhideInboxComment(postId: string, accountId: string, commentId: string): Promise<void> {
+    this.assertConfigured();
+
+    const res = await fetch(
+      `${this.baseUrl}/inbox/comments/${encodeURIComponent(postId)}/${encodeURIComponent(commentId)}/hide?accountId=${encodeURIComponent(accountId)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio unhideInboxComment failed (${res.status}): ${body}`);
+    }
   }
 }

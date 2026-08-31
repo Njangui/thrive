@@ -92,3 +92,29 @@ export interface ZernioAccount {
   platform: string;
   username?: string;
 }
+
+/**
+ * Lot F — CONFIRMÉ (docs.zernio.com/whatsapp/list-whatsapp-group-chats,
+ * consulté 31 août 2026) : la réponse de `GET /whatsapp/wa-groups` ne
+ * contient QUE ces trois champs par groupe — pas de nombre de
+ * participants (voir whatsapp-group-service.ts, qui documente pourquoi
+ * `participant_count` reste nullable côté schéma). Non disponible pour
+ * les numéros connectés en mode Coexistence (Cloud API + app WhatsApp
+ * Business sur le même téléphone) — l'API renvoie une erreur dans ce cas,
+ * propagée telle quelle par client.ts (jamais masquée).
+ */
+export interface ZernioWhatsAppGroup {
+  id: string;
+  subject: string;
+  createdAt: string;
+}
+
+export interface ZernioListWhatsAppGroupsResponse {
+  groups: ZernioWhatsAppGroup[];
+  paging?: {
+    cursors?: {
+      after?: string;
+      before?: string;
+    };
+  };
+}

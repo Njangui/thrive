@@ -3,12 +3,15 @@ import Link from "next/link";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { getUnreadNotificationCount } from "@/application/services/notification-service";
+import { getOnboardingStatus } from "@/application/services/onboarding-service";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Vue d'ensemble" },
   { href: "/dashboard/products", label: "Catalogue" },
   { href: "/dashboard/appointments", label: "Rendez-vous" },
   { href: "/dashboard/conversations", label: "Conversations" },
+  { href: "/dashboard/comments", label: "Commentaires" },
+  { href: "/dashboard/groups", label: "Groupes WhatsApp" },
   { href: "/dashboard/finance", label: "Finance" },
   { href: "/dashboard/site", label: "Mon site" },
   { href: "/dashboard/subscription", label: "Mon abonnement" },
@@ -27,6 +30,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // sur-engineer avant qu'un vrai besoin apparaisse). Redirige vers
   // /onboarding si aucune organisation.
   const currentOrg = await requireCurrentOrganization();
+
+  // Lot I, Partie 2 : redirige aussi vers /onboarding si l'organisation
+  // existe mais n'a jamais terminé le wizard (onboarding_completed_at
+  // null) — /onboarding la reprendra à sa dernière étape persistée, jamais
+  // à l'étape 1 (voir onboarding/page.tsx). Sans danger pour les
+  // organisations créées avant ce lot : la migration 0025 les a
+  // rétroactivement marquées "terminé" (voir son commentaire).
+  const onboardingStatus = await getOnboardingStatus(currentOrg.organizationId);
+  if (!onboardingStatus.completedAt) redirect("/onboarding");
+
   const unreadCount = await getUnreadNotificationCount(currentOrg.organizationId, user.id);
 
   return (

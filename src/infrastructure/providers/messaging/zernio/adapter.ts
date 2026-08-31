@@ -4,6 +4,7 @@ import type {
   NormalizedConversation,
   OutboundMessage,
   SendMessageResult,
+  WhatsAppGroupSummary,
 } from "@/domain/ports/messaging-provider";
 import { ZernioClient } from "./client";
 
@@ -72,5 +73,20 @@ export class ZernioAdapter implements MessagingProvider {
   /** Utilisé par le ProviderRegistry pour vérifier la config à la connexion. */
   async listConnectedAccounts() {
     return this.client.listAccounts(this.profileId);
+  }
+
+  /**
+   * Lot F — CONFIRMÉ (docs.zernio.com/platforms/whatsapp/groups) :
+   * GET /whatsapp/wa-groups, paginé, sur le compte WhatsApp connecté.
+   * Propage l'erreur telle quelle (ex: numéro en mode Coexistence) plutôt
+   * que de la masquer — voir whatsapp-group-service.ts pour la gestion.
+   */
+  async listWhatsAppGroups(_organizationId: string): Promise<WhatsAppGroupSummary[]> {
+    const groups = await this.client.listAllWhatsAppGroups(this.accountId);
+    return groups.map((group) => ({
+      externalId: group.id,
+      name: group.subject,
+      createdAt: group.createdAt ?? null,
+    }));
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   submitBusinessStep,
@@ -8,6 +8,8 @@ import {
   submitContactStep,
   submitProductStep,
   submitFaqStep,
+  advanceOnboardingStep,
+  completeOnboarding,
 } from "./onboarding-actions";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
 
@@ -53,13 +55,44 @@ function StepHeader({ step, title }: { step: number; title: string }) {
  * pour la navigation elle-même. Seule l'étape 1 est obligatoire ; toutes
  * les autres ont un bouton "Passer pour plus tard" qui avance sans rien
  * soumettre — aucune étape ne bloque la création du compte.
+ *
+ * Lot I, Partie 2 (reprise) : `initialStep`/`initialOrganizationId` sont
+ * fournis par onboarding/page.tsx quand une organisation existe déjà mais
+ * n'a pas terminé l'onboarding (onboarding_completed_at = null). La
+ * progression est persistée à chaque étape (voir onboarding-actions.ts) et
+ * "Passer pour plus tard" persiste aussi (via advanceOnboardingStep) — un
+ * onboarding interrompu reprend toujours à la DERNIÈRE étape réellement
+ * quittée, jamais à l'étape 1.
  */
-export function OnboardingWizard() {
+export function OnboardingWizard({
+  initialStep = 1,
+  initialOrganizationId = null,
+}: {
+  initialStep?: number;
+  initialOrganizationId?: string | null;
+}) {
   const router = useRouter();
-  const [step, setStep] = useState(1);
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [step, setStep] = useState(initialStep);
+  const [organizationId, setOrganizationId] = useState<string | null>(initialOrganizationId);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Capturé une seule fois au montage : sert uniquement à afficher la
+  // bannière de reprise, ne doit pas réapparaître si l'utilisateur avance
+  // ensuite normalement dans le wizard pendant la même session.
+  const [isResuming] = useState(initialStep > 1);
+
+  // L'étape 6 est un état terminal, pas une simple étape "soumise" — on
+  // marque l'onboarding comme terminé dès qu'elle est atteinte (montage
+  // initial en reprise INCLUS, pas seulement après un clic "Continuer"),
+  // pour que dashboard/layout.tsx cesse de rediriger vers /onboarding même
+  // si l'utilisateur ferme l'onglet sans cliquer sur "Aller à mon tableau
+  // de bord".
+  useEffect(() => {
+    if (step === 6 && organizationId) {
+      void completeOnboarding(organizationId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, organizationId]);
 
   function goToDashboard() {
     router.push("/dashboard");
@@ -116,11 +149,25 @@ export function OnboardingWizard() {
 
   function skip() {
     setError(null);
-    setStep((s) => s + 1);
+    setStep((s) => {
+      const next = s + 1;
+      // Fire-and-forget assumé : `advanceOnboardingStep` ne lève jamais
+      // (voir onboarding-actions.ts) et la navigation locale ne doit
+      // JAMAIS attendre une écriture réseau — "Passer pour plus tard"
+      // doit rester instantané, c'est tout l'intérêt du bouton.
+      if (organizationId) void advanceOnboardingStep(organizationId, next);
+      return next;
+    });
   }
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6 py-10">
+      {isResuming && !error && (
+        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-ink">
+          Vous aviez commencé votre configuration — reprenons où vous vous étiez arrêté.
+        </p>
+      )}
+
       {error && (
         <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
       )}

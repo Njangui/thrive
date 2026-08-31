@@ -1,5 +1,6 @@
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { getDashboardSummary } from "@/application/services/dashboard-service";
+import { getAnalyticsSummary } from "@/application/services/analytics-service";
 
 function formatAmount(amount: number, currency: string): string {
   return `${amount.toLocaleString("fr-FR")} ${currency}`;
@@ -7,7 +8,10 @@ function formatAmount(amount: number, currency: string): string {
 
 export default async function DashboardHomePage() {
   const { organizationId } = await requireCurrentOrganization();
-  const summary = await getDashboardSummary(organizationId);
+  const [summary, activity] = await Promise.all([
+    getDashboardSummary(organizationId),
+    getAnalyticsSummary(organizationId, 30),
+  ]);
 
   const cards = [
     { label: "Revenus (30j)", value: formatAmount(summary.revenueLast30Days, summary.currency) },
@@ -19,6 +23,22 @@ export default async function DashboardHomePage() {
     { label: "Conversations à traiter", value: String(summary.conversationsNeedingAttention), alert: summary.conversationsNeedingAttention > 0 },
     { label: "Produits en rupture", value: String(summary.productsOutOfStock), alert: summary.productsOutOfStock > 0 },
     { label: "Publications programmées", value: String(summary.postsScheduled) },
+  ];
+
+  // Lot H, Partie 2 (master prompt §55) — "pas un nouvel écran dédié,
+  // intégrez dans l'existant pour rester simple". Volontairement une
+  // sélection des compteurs, pas les 8 : `lead_created`/`order_created`
+  // font doublon avec "Nouveaux leads (7j)"/"Commandes en attente"
+  // ci-dessus (déjà lus directement depuis leurs tables respectives, pas
+  // depuis analytics_events) ; `product_click`/`conversation_started` ne
+  // sont pas encore émis par ce lot (voir analytics-service.ts). Cette
+  // section n'affiche donc QUE la visibilité réellement nouvelle apportée
+  // par ce lot : trafic public + engagement CTA + diffusion sociale.
+  const activityCards = [
+    { label: "Vues de votre page (30j)", value: String(activity.counts.page_view) },
+    { label: "Vues de produits (30j)", value: String(activity.counts.product_view) },
+    { label: "Clics WhatsApp/contact (30j)", value: String(activity.counts.cta_click) },
+    { label: "Publications diffusées (30j)", value: String(activity.counts.publication_published) },
   ];
 
   return (
@@ -38,6 +58,19 @@ export default async function DashboardHomePage() {
             </p>
           </div>
         ))}
+      </div>
+
+      <div>
+        <h2 className="font-display text-lg font-semibold tracking-tight">Activité (30 derniers jours)</h2>
+        <p className="text-xs text-muted">Visites de votre page publique et intérêt de vos clients.</p>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {activityCards.map((card) => (
+            <div key={card.label} className="rounded-brand border border-ink/10 bg-white p-4">
+              <p className="text-xs text-muted">{card.label}</p>
+              <p className="mt-1 font-display text-xl font-semibold text-ink">{card.value}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

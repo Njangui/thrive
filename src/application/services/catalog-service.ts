@@ -81,6 +81,9 @@ export interface CatalogProductDetail extends CatalogProductSummary {
   currentStock: number;
   status: string;
   images: string[];
+  /** Lot H, Partie 1 — repli géré par src/lib/seo.ts::resolveProductSeo, pas ici. */
+  seoTitle: string | null;
+  seoDescription: string | null;
 }
 
 /** Total de produits actifs pour la pagination de la vitrine publique (voir listActiveProductsForStorefront). */
@@ -157,7 +160,7 @@ export async function getProductBySlug(
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, slug, unit_price, compare_at_price, current_stock, status, description, categories(name), product_images(url, position)",
+      "id, name, slug, unit_price, compare_at_price, current_stock, status, description, seo_title, seo_description, categories(name), product_images(url, position)",
     )
     .eq("organization_id", organizationId)
     .eq("slug", slug)
@@ -180,6 +183,8 @@ export async function getProductBySlug(
     currentStock: Number(data.current_stock),
     status: data.status,
     description: data.description,
+    seoTitle: data.seo_title,
+    seoDescription: data.seo_description,
     categoryName: (data as unknown as { categories?: { name?: string } }).categories?.name ?? null,
     images,
   };
@@ -474,6 +479,9 @@ export interface UpdateProductInput {
   status?: "draft" | "active" | "out_of_stock" | "inactive";
   /** URL finale de l'image si elle a changé — omis = photo inchangée. */
   imageUrl?: string;
+  /** Lot H, Partie 1 — optionnels comme le reste des champs de cette fonction. */
+  seoTitle?: string;
+  seoDescription?: string;
 }
 
 /**
@@ -503,6 +511,10 @@ export async function updateProduct(
   };
   if (input.currentStock !== undefined) updatePayload.current_stock = input.currentStock;
   if (input.status !== undefined) updatePayload.status = input.status;
+  // Lot H — mêmes règles qu'ailleurs dans cette fonction : un champ omis ne
+  // touche pas la colonne, il ne l'écrase jamais silencieusement à null.
+  if (input.seoTitle !== undefined) updatePayload.seo_title = input.seoTitle || null;
+  if (input.seoDescription !== undefined) updatePayload.seo_description = input.seoDescription || null;
 
   const { data, error } = await supabase
     .from("products")
@@ -533,6 +545,8 @@ export interface ProductForEdit {
   currentStock: number;
   status: string;
   imageUrl: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
 }
 
 /** Charge un produit pour pré-remplir le formulaire d'édition (Partie 2). */
@@ -542,7 +556,7 @@ export async function getProductForEdit(organizationId: string, productId: strin
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, description, unit_price, current_stock, status, categories(name), product_images(url, position)",
+      "id, name, description, unit_price, current_stock, status, seo_title, seo_description, categories(name), product_images(url, position)",
     )
     .eq("id", productId)
     .eq("organization_id", organizationId)
@@ -564,5 +578,7 @@ export async function getProductForEdit(organizationId: string, productId: strin
     currentStock: Number(data.current_stock),
     status: data.status,
     imageUrl: images[0]?.url ?? null,
+    seoTitle: data.seo_title,
+    seoDescription: data.seo_description,
   };
 }

@@ -10,7 +10,7 @@
 ## 1. Base de données
 
 Exécuter les migrations de `supabase/migrations/` **dans l'ordre
-numérique** (0001 → 0017 à ce jour — voir `docs/DATABASE.md` et
+numérique** (0001 → 0018 à ce jour — voir `docs/DATABASE.md` et
 `RAPPORT_FUSION.md` pour le détail de la fusion multi-lots), via le SQL
 Editor Supabase ou la CLI :
 
@@ -82,6 +82,30 @@ vercel --prod
 Ou connecter le repo GitHub directement dans Vercel (déploiement auto sur
 push).
 
+## 4bis. Diffusions groupées WhatsApp (Lot F) — cron externe
+
+`app/api/cron/process-broadcasts/route.ts` traite les diffusions
+programmées (`group_broadcasts.scheduled_at <= now()`). Aucun scheduler
+interne ne l'appelle tout seul — il faut le déclencher périodiquement de
+l'extérieur (Vercel Cron, ou un service gratuit comme cron-job.org) :
+
+1. Définir `CRON_SECRET` dans les variables d'environnement (une valeur
+   aléatoire longue — `openssl rand -hex 32`, par exemple). Sans elle, la
+   route reste fonctionnelle mais accessible sans authentification (un
+   avertissement est loggé à chaque appel — voir `route.ts`).
+2. Programmer un appel `GET` (ou `POST`) toutes les 5 à 15 minutes vers
+   `https://votre-domaine.com/api/cron/process-broadcasts`, avec l'en-tête :
+   ```
+   Authorization: Bearer <CRON_SECRET>
+   ```
+3. La réponse JSON (`{ ok, processedBroadcasts, sentTargets, failedTargets }`)
+   permet de vérifier rapidement que le cron tourne.
+
+**Attention** : à ce jour, `sentTargets` restera à 0 pour toute diffusion
+vers un groupe fraîchement connecté — voir `docs/ZERNIO_INTEGRATION.md`,
+section "Groupes WhatsApp", pour la limitation réelle et documentée de
+l'API Zernio (pas un bug de cette route).
+
 ## 5. Domaines custom par tenant
 
 `middleware.ts` gère déjà la résolution par sous-domaine
@@ -125,3 +149,6 @@ n'est pas dans cette table reçoit un 404 générique sur tout `/admin/*`
 - [ ] Le service worker (`public/sw.js`) et le manifest PWA nécessitent
       HTTPS pour être actifs (hors `localhost`) — tester l'installabilité
       sur le domaine de prod réel, pas seulement en local
+- [ ] Configurer `CRON_SECRET` et le déclencheur externe pour
+      `/api/cron/process-broadcasts` (Lot F, section 4bis) avant
+      d'annoncer les diffusions groupées WhatsApp comme disponibles

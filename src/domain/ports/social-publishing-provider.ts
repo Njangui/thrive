@@ -53,6 +53,27 @@ export interface SocialAnalyticsEntry {
   clicks?: number;
 }
 
+/**
+ * Lot I, Partie 3 — commentaires sociaux. CONFIRMÉ (docs.zernio.com,
+ * "Comments API"/"Get post comments", consulté le 31 août 2026) :
+ * Facebook, Instagram, YouTube, LinkedIn, Threads, X/Twitter, Reddit,
+ * Bluesky supportent la lecture ET la réponse. Limite documentée : LinkedIn
+ * nécessite un compte "organisation" (page d'entreprise) — les commentaires
+ * d'un profil personnel ne sont pas exposés par l'API de la plateforme
+ * elle-même (limite plateforme, pas Zernio). `canReply`/`canHide` viennent
+ * tels quels de la réponse Zernio (elle-même dérivée des permissions
+ * réelles du compte connecté) — jamais recalculés côté SME-OS.
+ */
+export interface SocialComment {
+  id: string;
+  authorName: string | null;
+  content: string;
+  createdAt: string | null;
+  canReply: boolean;
+  /** Hide/unhide CONFIRMÉ uniquement sur Facebook, Instagram, Threads (docs.zernio.com FAQ Comments API). */
+  canHide: boolean;
+}
+
 export interface SocialPublishingProvider {
   readonly providerName: string;
 
@@ -75,4 +96,24 @@ export interface SocialPublishingProvider {
   cancelPost(providerPostId: string): Promise<void>;
 
   getAnalytics(query: SocialAnalyticsQuery): Promise<SocialAnalyticsEntry[]>;
+
+  /**
+   * Commentaires d'un post publié, pour UN compte cible (un post
+   * cross-posté a un fil de commentaires distinct par compte/plateforme —
+   * voir social_post_targets). CONFIRMÉ : GET
+   * /v1/inbox/comments/{postId}?accountId=... Réponses mises en cache
+   * jusqu'à 10 min côté Zernio — pas un flux temps réel (un webhook
+   * `comment.received` existe pour ça, non exploité en V1, voir
+   * docs/ZERNIO_INTEGRATION.md).
+   */
+  listComments(providerPostId: string, accountId: string): Promise<SocialComment[]>;
+
+  /** CONFIRMÉ : POST /v1/inbox/comments/{postId} avec { accountId, commentId, message }. */
+  replyToComment(providerPostId: string, accountId: string, commentId: string, message: string): Promise<void>;
+
+  /** CONFIRMÉ (SDKs officiels Zernio) : POST .../{commentId}/hide avec { accountId }. Facebook/Instagram/Threads uniquement. */
+  hideComment(providerPostId: string, accountId: string, commentId: string): Promise<void>;
+
+  /** CONFIRMÉ (SDKs officiels Zernio) : DELETE .../{commentId}/hide. */
+  unhideComment(providerPostId: string, accountId: string, commentId: string): Promise<void>;
 }

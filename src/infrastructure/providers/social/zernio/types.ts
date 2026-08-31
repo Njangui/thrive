@@ -86,3 +86,46 @@ export interface ZernioAnalyticsEntry {
 export interface ZernioAnalyticsResponse {
   posts: ZernioAnalyticsEntry[];
 }
+
+/**
+ * Types Zernio — Comments API (Lot I). Confirmés via docs.zernio.com
+ * ("Get post comments" - API Reference, "Social Media Comments API",
+ * "Social Media Inbox") et les SDKs officiels zernio-php/zernio-dotnet
+ * (endpoints hide/unhide), consultés le 31 août 2026.
+ *
+ * CONFIRMÉ :
+ * - GET /v1/inbox/comments/{postId}?accountId=... -> { comments: [...] },
+ *   chaque commentaire expose `canReply`/`canHide` calculés par Zernio
+ *   selon les permissions réelles du compte connecté.
+ * - POST /v1/inbox/comments/{postId} avec { accountId, commentId, message }
+ *   -> répond à un commentaire.
+ * - POST /v1/inbox/comments/{postId}/{commentId}/hide avec { accountId } —
+ *   DELETE (même URL) pour "unhide". Facebook/Instagram/Threads uniquement
+ *   (FAQ "Social Media Comments API").
+ *
+ * NON EXPLOITÉ EN V1 (existe, documenté, mais hors périmètre du cahier Lot
+ * I qui ne demande que lecture + réponse — voir docs/ZERNIO_INTEGRATION.md) :
+ * webhook `comment.received` (temps réel), `like`/`unlike`, `delete`,
+ * "private reply" (Facebook/Instagram uniquement), comment-to-DM.
+ */
+export interface ZernioInboxCommentAuthor {
+  id?: string;
+  name?: string;
+  username?: string;
+  picture?: string;
+}
+
+export interface ZernioInboxComment {
+  id: string;
+  message: string;
+  createdTime?: string;
+  from?: ZernioInboxCommentAuthor;
+  canReply?: boolean;
+  canHide?: boolean;
+  isHidden?: boolean;
+}
+
+export interface ZernioInboxCommentsResponse {
+  status?: string;
+  comments: ZernioInboxComment[];
+}

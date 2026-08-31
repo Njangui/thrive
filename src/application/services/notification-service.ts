@@ -1,15 +1,24 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { sendPush } from "./push-service";
 
 /**
- * Notifications admin in-app (Lot D, section 28).
+ * Notifications admin in-app (Lot D, section 28), étendues Lot I, Partie 1
+ * avec un second canal best-effort (notifications push réelles).
  *
- * Hors scope V1 (voir cahier des charges) : notifications push réelles
- * (PWA/service worker — Lot E) et préférences granulaires par type —
- * tout owner/admin reçoit tout, sans configuration. Ne PAS passer par le
- * port `NotificationProvider` (domain/ports/notification-provider.ts) :
- * ce port sert aux canaux de livraison externes (email/sms/push/whatsapp),
- * pas à l'inbox in-app du dashboard, qui est une simple table lue par les
- * admins connectés.
+ * FUSION (Lot I) : le commentaire d'origine de ce fichier indiquait
+ * "notifications push réelles (PWA/service worker) : hors scope V1" —
+ * c'était vrai avant ce lot (aucun `push-service.ts` n'existait). Ne PAS
+ * passer par le port `NotificationProvider`
+ * (domain/ports/notification-provider.ts) pour autant : ce port sert aux
+ * canaux de livraison externes vers le CONTACT final (email/sms/whatsapp),
+ * pas aux notifications internes destinées aux admins du dashboard — la
+ * distinction reste valable, `push-service.ts` est délibérément un fichier
+ * séparé, pas une implémentation de ce port.
+ *
+ * Préférences granulaires par type de notification : toujours hors scope,
+ * tout owner/admin reçoit tout (in-app ET push, sans configuration fine) —
+ * seul le canal push dans son ensemble est activable/désactivable, par
+ * appareil (voir dashboard/notifications/push-toggle.tsx).
  */
 
 export interface NotifyOrgAdminsInput {
@@ -18,6 +27,19 @@ export interface NotifyOrgAdminsInput {
   body: string;
   relatedEntityType?: string;
   relatedEntityId?: string;
+}
+
+/**
+ * Construit l'URL de destination d'une notification, uniquement quand une
+ * page de détail existe réellement dans le dashboard — partagé entre
+ * `notifyOrgAdmins` (payload push) et la page /dashboard/notifications
+ * (lien cliquable), pour ne jamais avoir deux définitions divergentes de
+ * "quelles notifications sont cliquables".
+ */
+export function buildRelatedEntityUrl(type: string | null, id: string | null): string | null {
+  if (!type || !id) return null;
+  if (type === "conversation") return `/dashboard/conversations/${id}`;
+  return null;
 }
 
 /**
@@ -68,6 +90,21 @@ export async function notifyOrgAdmins(input: NotifyOrgAdminsInput): Promise<void
         insertError.message,
       );
     }
+
+    // Canal secondaire best-effort (Lot I) : `sendPush` ne lève déjà
+    // jamais par construction (voir push-service.ts), mais on garde le
+    // `.catch()` explicite ici — c'est le contrat documenté par le cahier
+    // Lot I ("best-effort, .catch(), jamais de throw") et une défense en
+    // profondeur si cette garantie interne venait à changer un jour. On
+    // l'ATTEND (plutôt qu'une promesse détachée) : en environnement
+    // serverless, une promesse non attendue peut être interrompue dès que
+    // la réponse est renvoyée à l'appelant — l'attendre ici est ce qui
+    // garantit réellement l'envoi, sans jamais faire échouer
+    // `notifyOrgAdmins` elle-même si ça tourne mal.
+    const url = buildRelatedEntityUrl(input.relatedEntityType ?? null, input.relatedEntityId ?? null);
+    await sendPush(input.organizationId, input.title, input.body, url ?? undefined).catch((err) =>
+      console.warn(`[notifications] échec canal push (org ${input.organizationId}):`, err),
+    );
   } catch (err) {
     console.warn(`[notifications] erreur inattendue notifyOrgAdmins (org ${input.organizationId}):`, err);
   }

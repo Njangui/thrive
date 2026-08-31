@@ -24,6 +24,27 @@ et sont protégées par RLS (`is_member_of_org()` — voir migration 0002).
 | `0015_platform_admins.sql` | `platform_admins` — console Super Admin (Lot C), RLS activée sans aucune policy client (service-role uniquement) |
 | `0016_conversation_memory.sql` | `conversations.last_mentioned_product_ids` (Lot D) — mémoire courte des derniers produits mentionnés |
 | `0017_phone_numbers.sql` | `phone_numbers` — inventaire des numéros dédiés (Lot C, stub minimal en l'absence d'un Lot A construisant déjà cette table). Renumérotée de `0016` à `0017` à la fusion, collision avec la migration Lot D ci-dessus — voir `RAPPORT_FUSION.md` |
+| `0018_whatsapp_groups.sql` | `whatsapp_groups`, `group_broadcasts`, `group_broadcast_targets`, `group_broadcast_products` (Lot F) — voir `RAPPORT_LOT_F.md` pour l'état réel de l'intégration Zernio (envoi partiel, hors scope tant que la réception de messages de groupe n'est pas câblée) |
+| `0019`-`0021` | Réservées au Lot G (non fusionné à ce jour) |
+| `0022_seo_fields.sql` | `organizations.seo_title`/`seo_description`/`seo_og_image_url`, `products.seo_title`/`seo_description` (Lot H) — repli géré par `src/lib/seo.ts`, jamais lu comme source de vérité brute |
+| `0023_analytics_events.sql` | `analytics_events` (Lot H) — événements bruts (vue de page, clic CTA, lead/commande créés, publication diffusée...), écriture service-role uniquement, voir `analytics-service.ts` |
+| `0024_push_subscriptions.sql` | `push_subscriptions` (Lot I) — souscriptions Web Push par utilisateur/organisation |
+| `0025_onboarding_progress.sql` | `organizations.onboarding_step`/`onboarding_completed_at` (Lot I) — inclut un `UPDATE` rétroactif pour les organisations déjà existantes, voir `RAPPORT_LOT_I.md` |
+| `0026_social_comments.sql` | `social_comments` (Lot I) — lecture/réponse aux commentaires sociaux, capacités confirmées Facebook/Instagram/Threads uniquement |
+| `0030_performance_indexes.sql` | 5 index ciblés sur des requêtes réelles (voir `RAPPORT_OPTIMISATION.md`) — numérotée hors de la plage 0018-0026 réservée aux Lots F-J pour ne provoquer aucune collision |
+
+> **Schéma des groupes WhatsApp (Lot F)** :
+> ```
+>   whatsapp_groups ── group_broadcasts ── group_broadcast_targets
+>                              └── group_broadcast_products
+> ```
+> Statuts : `whatsapp_groups.status` = `connected` ⇄ `disconnected` (action
+> du commerçant) / `error` (disparu côté Zernio, détecté par
+> synchronisation) ; `group_broadcasts.status` = `scheduled` →
+> `processing` → `completed`/`failed`, ou `cancelled` (uniquement depuis
+> `scheduled`) ; `group_broadcast_targets.status` = `pending` →
+> `sent`/`failed` (une ligne par GROUPE ciblé, jamais par produit — voir
+> `RAPPORT_LOT_F.md`).
 
 > **`organizations.plan`/`organizations.trial_end` sont vestigiaux depuis
 > Lot B** : toujours présentes en base (aucune migration ne les
@@ -36,10 +57,15 @@ et sont protégées par RLS (`is_member_of_org()` — voir migration 0002).
 
 > Note numérotation : ce projet est développé en plusieurs lots parallèles
 > (voir `00_CONVENTIONS_COMMUNES.md`). Après fusion de B/C/D/E (Lot A
-> absent des livraisons reçues), la séquence 0001-0017 est complète sans
-> trou ni collision restante — une seule renumérotation a été nécessaire
-> (`0016_phone_numbers.sql` → `0017`, collision avec Lot D), voir
-> `RAPPORT_FUSION.md`.
+> absent des livraisons reçues), la séquence 0001-0017 était complète sans
+> trou ni collision restante — une seule renumérotation avait été
+> nécessaire (`0016_phone_numbers.sql` → `0017`, collision avec Lot D),
+> voir `RAPPORT_FUSION.md`. Une seconde vague de lots (F à J) a ensuite
+> reçu des plages de numéros disjointes assignées à l'avance
+> (`00_CONVENTIONS_COMMUNES_V2.md`) pour éviter de reproduire cette
+> collision — Lots F, H, I fusionnés à ce jour (0018, 0022-0023,
+> 0024-0026), Lots G et J restent réservés/en attente (0019-0021,
+> au-delà de 0026).
 
 ## Entités centrales
 

@@ -4,9 +4,11 @@ import { ValidationError } from "@/lib/errors";
 
 /**
  * Types de médias gérés par le Lot E (section 29/52-56/76-77 du master
- * prompt). Sert de sous-dossier dans le bucket — voir buildTenantObjectPath.
+ * prompt) + Lot H (`seo_og`, section 18 — image Open Graph par défaut de
+ * l'organisation, 0022_seo_fields.sql). Sert de sous-dossier dans le
+ * bucket — voir buildTenantObjectPath.
  */
-export type MediaType = "logo" | "banner" | "favicon" | "product";
+export type MediaType = "logo" | "banner" | "favicon" | "product" | "seo_og";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 Mo — large mais borné (section 54 : échouer fort plutôt que silencieusement)
 

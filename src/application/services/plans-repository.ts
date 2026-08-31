@@ -204,12 +204,31 @@ export async function listPlans(): Promise<PlanSummary[]> {
  * appartenir à un autre lot pas encore fusionné). Utilisé pour les
  * clés d'entitlement "cumulatives" (voir entitlements-service.ts).
  */
-export async function countOrganizationRows(table: string, organizationId: string): Promise<number> {
+/**
+ * `statusIn` (Lot F) : filtre optionnel et rétrocompatible — sans lui,
+ * comportement strictement identique à avant (compte toutes les lignes de
+ * l'org). Permet à une table cumulative avec une colonne `status` (ex:
+ * whatsapp_groups: 'connected' | 'disconnected' | 'error') de ne compter
+ * que les lignes réellement actives contre le quota — sinon désactiver
+ * une ressource ne libérerait jamais son quota, ce qui piégerait
+ * durablement un tenant (voir entitlements-service.ts, CUMULATIVE_TABLE_BY_KEY).
+ */
+export async function countOrganizationRows(
+  table: string,
+  organizationId: string,
+  statusIn?: string[],
+): Promise<number> {
   const supabase = getSupabaseServiceClient();
-  const { count, error } = await supabase
+  let query = supabase
     .from(table)
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId);
+
+  if (statusIn && statusIn.length > 0) {
+    query = query.in("status", statusIn);
+  }
+
+  const { count, error } = await query;
 
   if (error) {
     console.warn(`countOrganizationRows("${table}") impossible (${error.message}), used=0 par défaut.`);

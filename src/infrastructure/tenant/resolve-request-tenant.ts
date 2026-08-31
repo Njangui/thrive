@@ -17,6 +17,10 @@ export interface TenantContext {
   bannerUrl: string | null;
   faviconUrl: string | null;
   currency: string;
+  /** Lot H, Partie 1 — repli géré par src/lib/seo.ts::resolveOrganizationSeo, pas ici. */
+  seoTitle: string | null;
+  seoDescription: string | null;
+  seoOgImageUrl: string | null;
 }
 
 interface RawOrganizationRow {
@@ -36,6 +40,9 @@ interface RawOrganizationRow {
   favicon_url: string | null;
   currency: string;
   status: string;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_og_image_url: string | null;
 }
 
 /**
@@ -71,7 +78,7 @@ export async function resolveRequestTenant(): Promise<TenantContext | null> {
 
   const supabase = getSupabaseServiceClient();
   const ORG_COLUMNS =
-    "id, name, slug, industry, description, phone, whatsapp_number, email, address, opening_hours, social_links, logo_url, banner_url, favicon_url, currency, status";
+    "id, name, slug, industry, description, phone, whatsapp_number, email, address, opening_hours, social_links, logo_url, banner_url, favicon_url, currency, status, seo_title, seo_description, seo_og_image_url";
 
   let org: RawOrganizationRow | null = null;
 
@@ -106,7 +113,30 @@ export async function resolveRequestTenant(): Promise<TenantContext | null> {
     bannerUrl: org.banner_url,
     faviconUrl: org.favicon_url,
     currency: org.currency,
+    seoTitle: org.seo_title,
+    seoDescription: org.seo_description,
+    seoOgImageUrl: org.seo_og_image_url,
   };
+}
+
+/**
+ * Origine (protocole + host) de la requête courante — Lot H, Partie 1.
+ * Sert à construire des URLs ABSOLUES correctes pour le tenant réellement
+ * visité (canonical, Open Graph, JSON-LD, sitemap.xml) : contrairement à
+ * `env.NEXT_PUBLIC_APP_URL` (déjà utilisé ailleurs dans le projet, ex.
+ * marketing-service.ts, pour les liens WhatsApp), qui pointe vers le
+ * domaine générique de la plateforme et ne reflète JAMAIS le sous-domaine
+ * ni le domaine custom d'un tenant, ceci lit le header `host` déjà propagé
+ * par `src/middleware.ts` pour CETTE requête précise — indispensable pour
+ * qu'un sitemap.xml ou une URL canonique pointent vers le bon domaine.
+ * `https` par défaut (tous les domaines tenant en production le sont),
+ * `http` uniquement en local (hostname commençant par localhost/127.0.0.1).
+ */
+export async function resolveRequestOrigin(): Promise<string> {
+  const headerList = await headers();
+  const host = headerList.get("host") ?? "localhost:3000";
+  const protocol = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
+  return `${protocol}://${host}`;
 }
 
 /** Construit un lien wa.me avec message pré-rempli (section 12 : CTA WhatsApp). */

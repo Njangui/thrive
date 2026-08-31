@@ -7,6 +7,7 @@ import {
   changeOrganizationPlan,
   grantAiCreditsToOrganization,
 } from "@/application/services/admin-organizations-service";
+import { getPlatformUsageByOrganization } from "@/application/services/admin-observability-service";
 import { AppError } from "@/lib/errors";
 
 async function toggleStatusAction(formData: FormData) {
@@ -78,7 +79,14 @@ export default async function AdminOrganizationsPage({
 }) {
   const { error } = await searchParams;
   await requirePlatformAdmin();
-  const [organizations, plans] = await Promise.all([listOrganizationsForAdmin(), listPlansForAdmin()]);
+  // Lot H, Partie 3 — étend l'affichage existant sans dupliquer sa logique
+  // (compteurs d'usage bruts par entreprise, voir admin-observability-service.ts).
+  const [organizations, plans, usage] = await Promise.all([
+    listOrganizationsForAdmin(),
+    listPlansForAdmin(),
+    getPlatformUsageByOrganization(),
+  ]);
+  const usageByOrg = new Map(usage.map((u) => [u.organizationId, u]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -136,6 +144,20 @@ export default async function AdminOrganizationsPage({
               {org.connectedChannels.length > 0 ? org.connectedChannels.join(", ") : "aucun"}
               {" · "}Crédits IA : {formatCredits(org.creditStatus)}
             </p>
+
+            {(() => {
+              const orgUsage = usageByOrg.get(org.id);
+              if (!orgUsage) return null;
+              return (
+                <p className="mt-1 text-xs text-muted">
+                  {orgUsage.productsCount} produit{orgUsage.productsCount !== 1 ? "s" : ""}
+                  {" · "}
+                  {orgUsage.conversationsCount} conversation{orgUsage.conversationsCount !== 1 ? "s" : ""}
+                  {" · "}
+                  {orgUsage.whatsappGroupsCount} groupe{orgUsage.whatsappGroupsCount !== 1 ? "s" : ""} WhatsApp
+                </p>
+              );
+            })()}
 
             <div className="mt-4 flex flex-wrap gap-3 border-t border-ink/10 pt-3">
               <form action={toggleStatusAction}>

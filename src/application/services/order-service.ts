@@ -1,6 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { decrementStock } from "./catalog-service";
 import { notifyOrgAdmins } from "./notification-service";
+import { trackEvent } from "./analytics-service";
 
 export interface CreateOrderItemInput {
   productId: string;
@@ -60,6 +61,11 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
     relatedEntityType: "order",
     relatedEntityId: order.id,
   });
+
+  // Lot H, Partie 2 (master prompt §55) — à la création de la commande,
+  // pas à sa complétion (markOrderCompleted a un autre rôle : générer un
+  // revenu, pas re-tracker le même événement).
+  await trackEvent(input.organizationId, "order_created", "order", order.id, { total });
 
   return { orderId: order.id, total };
 }

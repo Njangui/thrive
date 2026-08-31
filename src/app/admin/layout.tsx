@@ -9,6 +9,8 @@ const NAV_ITEMS = [
   { href: "/admin/domains", label: "Domaines" },
   { href: "/admin/numbers", label: "Numéros" },
   { href: "/admin/channels", label: "Canaux" },
+  // Lot H, Partie 3.
+  { href: "/admin/logs", label: "Logs" },
 ];
 
 /**

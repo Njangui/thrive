@@ -27,8 +27,23 @@ export interface EntitlementCheckResult {
  * getCreditStatus) car son usage est suivi dans sa propre table
  * (ai_credit_balances), pas comptable par un simple `count(*)`.
  */
-const CUMULATIVE_TABLE_BY_KEY: Record<string, string> = {
-  whatsapp_groups: "whatsapp_groups",
+interface CumulativeTableConfig {
+  table: string;
+  /**
+   * Lot F : si la table a une colonne `status`, ne compter que ces
+   * valeurs contre le quota. Sans ce filtre, désactiver une ressource
+   * (ex: déconnecter un groupe WhatsApp) ne libérerait jamais son quota —
+   * la ligne resterait comptée indéfiniment (`countOrganizationRows`
+   * compte toutes les lignes de l'org par défaut). Omis = comportement
+   * historique (aucun filtre, toutes les lignes comptent).
+   */
+  activeStatuses?: string[];
+}
+
+const CUMULATIVE_TABLE_BY_KEY: Record<string, CumulativeTableConfig> = {
+  // whatsapp_groups.status ∈ {'connected','disconnected','error'} — seul
+  // 'connected' doit peser sur le quota (Lot F, voir whatsapp-group-service.ts).
+  whatsapp_groups: { table: "whatsapp_groups", activeStatuses: ["connected"] },
   // NB: 'social_accounts' n'est PAS traité ici en mode cumulatif : il
   // n'existe aujourd'hui aucune table "comptes sociaux connectés" dans le
   // code fourni (provider_connections est une ligne par (org, type,
@@ -76,8 +91,13 @@ export async function canUseFeature(
   const planKey = await getOrganizationPlanKey(organizationId);
   const limit = await getEntitlementLimit(planKey, entitlementKey);
 
-  const cumulativeTable = CUMULATIVE_TABLE_BY_KEY[entitlementKey];
-  const used = limit === -1 ? 0 : cumulativeTable ? await countOrganizationRows(cumulativeTable, organizationId) : 0;
+  const cumulative = CUMULATIVE_TABLE_BY_KEY[entitlementKey];
+  const used =
+    limit === -1
+      ? 0
+      : cumulative
+        ? await countOrganizationRows(cumulative.table, organizationId, cumulative.activeStatuses)
+        : 0;
 
   return evaluateEntitlement(limit, used, requestedAmount);
 }

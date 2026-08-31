@@ -1,6 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import type { LeadScoreResult } from "@/domain/entities/lead";
 import { notifyOrgAdmins } from "./notification-service";
+import { trackEvent } from "./analytics-service";
 
 /**
  * V1 : scoring RULE-BASED, explicitement pas de l'IA (section 12 : "ne pas
@@ -123,6 +124,11 @@ export async function findOrCreateOpenLead(organizationId: string, contactId: st
     relatedEntityType: "lead",
     relatedEntityId: created.id,
   });
+
+  // Lot H, Partie 2 (master prompt §55) — uniquement dans la branche de
+  // CRÉATION (pas quand un lead ouvert existant est réutilisé un peu plus
+  // haut), cohérent avec le nom de l'événement `lead_created`.
+  await trackEvent(organizationId, "lead_created", "lead", created.id, { source });
 
   return created;
 }

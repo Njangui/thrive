@@ -3,6 +3,7 @@ import { getSocialPublishingProvider } from "@/infrastructure/providers/registry
 import type { SocialPostTarget } from "@/domain/ports/social-publishing-provider";
 import { env } from "@/lib/env";
 import { canUseFeature } from "./entitlements-service";
+import { trackEvent } from "./analytics-service";
 import { QuotaExceededError } from "@/lib/errors";
 
 export interface CreateCampaignFromProductsInput {
@@ -177,6 +178,19 @@ export async function createCampaignFromProducts(
       );
 
       scheduled.push(product.id);
+
+      // Lot H, Partie 2 (master prompt §55) — ⚠️ ce projet n'a PAS encore de
+      // sync webhook `post.*` qui confirmerait qu'une publication programmée
+      // a réellement été diffusée (docs/ROADMAP.md, point 2 : ce sync
+      // n'existe pas). `publication_published` est donc déclenché ici, au
+      // moment où la PROGRAMMATION auprès de Zernio réussit (le "job de
+      // publication" du point de vue de cette app), pas au moment de la
+      // diffusion réelle en aval. Décision documentée plutôt que de laisser
+      // planer l'ambiguïté — à corriger (déplacer vers le futur handler
+      // webhook) quand ce sync sera construit.
+      await trackEvent(input.organizationId, "publication_published", "social_post", postRow.id, {
+        productId: product.id,
+      });
     } catch (providerError) {
       // Section 43 : une erreur Zernio isolée ne doit jamais casser le
       // reste de la campagne — on marque CE post en échec et on continue.

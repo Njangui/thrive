@@ -3,6 +3,7 @@ import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tena
 import { buildWhatsAppLink } from "@/infrastructure/tenant/resolve-request-tenant";
 import type { CatalogProductSummary } from "@/application/services/catalog-service";
 import { ProductCard } from "./product-card";
+import { TrackedCtaLink } from "./tracked-cta-link";
 
 const DAY_ORDER = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
 
@@ -45,14 +46,16 @@ export function TenantLanding({
           {tenant.description && <p className="mt-3 text-muted">{tenant.description}</p>}
         </div>
         {whatsappHref && (
-          <a
+          <TrackedCtaLink
             href={whatsappHref}
+            organizationId={tenant.organizationId}
+            ctaId="whatsapp_landing"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex w-fit items-center gap-2 rounded-brand bg-leaf px-5 py-3 font-medium text-white transition-opacity hover:opacity-90"
           >
             Discuter sur WhatsApp
-          </a>
+          </TrackedCtaLink>
         )}
       </header>
 

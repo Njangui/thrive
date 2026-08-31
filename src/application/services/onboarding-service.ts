@@ -45,6 +45,12 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
       slug,
       industry: input.industry ?? null,
       currency: input.currency ?? "XAF",
+      // Lot I, Partie 2 (onboarding reprenable) : l'étape 1 (celle-ci) vient
+      // d'être complétée avec succès, donc onboarding_step=1 dès la
+      // création — jamais 0 (0 = "jamais commencé", faux pour une
+      // organisation qui vient d'être créée). Les étapes suivantes du
+      // wizard avancent cette valeur via updateOnboardingStep ci-dessous.
+      onboarding_step: 1,
     })
     .select("id")
     .single();
@@ -97,6 +103,68 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
   await initializeCreditBalance(org.id);
 
   return { organizationId: org.id };
+}
+
+export interface OnboardingStatus {
+  step: number;
+  completedAt: string | null;
+}
+
+/**
+ * Lot I, Partie 2 — persistance de la progression du wizard. Best-effort
+ * côté appelant (voir onboarding-actions.ts) : ne jamais transformer une
+ * étape métier réussie (produit créé, logo uploadé...) en échec juste
+ * parce que la progression n'a pas pu être enregistrée — au pire, une
+ * reprise imparfaite (retour à une étape légèrement antérieure) est un
+ * dégradé acceptable, jamais une donnée métier perdue.
+ */
+export async function updateOnboardingStep(organizationId: string, step: number): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ onboarding_step: step })
+    .eq("id", organizationId);
+
+  if (error) {
+    throw new Error(`Impossible de mettre à jour la progression de l'onboarding: ${error.message}`);
+  }
+}
+
+export async function markOnboardingComplete(organizationId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ onboarding_completed_at: new Date().toISOString() })
+    .eq("id", organizationId);
+
+  if (error) {
+    throw new Error(`Impossible de finaliser l'onboarding: ${error.message}`);
+  }
+}
+
+/**
+ * Lecture défensive (jamais levée) : appelée depuis /onboarding et
+ * dashboard/layout.tsx sur CHAQUE navigation — une erreur de lecture
+ * transitoire ici ne doit jamais empêcher un utilisateur déjà onboardé
+ * d'accéder à son tableau de bord. En cas d'erreur, on retourne un état
+ * "jamais commencé" plutôt que de faire planter la page ; le pire cas
+ * concret est un utilisateur redirigé une fois de trop vers /onboarding,
+ * jamais un blocage total.
+ */
+export async function getOnboardingStatus(organizationId: string): Promise<OnboardingStatus> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("onboarding_step, onboarding_completed_at")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn(`getOnboardingStatus(${organizationId}): lecture impossible, valeur par défaut retournée:`, error?.message);
+    return { step: 0, completedAt: null };
+  }
+
+  return { step: data.onboarding_step ?? 0, completedAt: data.onboarding_completed_at };
 }
 
 async function generateUniqueSlug(name: string): Promise<string> {

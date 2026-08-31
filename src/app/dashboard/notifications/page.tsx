@@ -5,23 +5,12 @@ import {
   listNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  buildRelatedEntityUrl,
 } from "@/application/services/notification-service";
+import { isPushConfigured } from "@/application/services/push-service";
 import { AppError } from "@/lib/errors";
-
-/**
- * Construit le lien vers l'entité liée à une notification, uniquement
- * quand une page de détail existe réellement dans le dashboard (section
- * "Dashboard : inbox de notifications" du cahier des charges Lot D — "si
- * related_entity_type/related_entity_id permettent de construire une
- * URL"). Pas de lien plutôt qu'un lien mort : "lead", "order" et
- * "product" n'ont pas encore de page de détail dans le périmètre livré à
- * ce lot (probablement porté par d'autres lots CRM/commandes/catalogue).
- */
-function buildRelatedEntityUrl(type: string | null, id: string | null): string | null {
-  if (!type || !id) return null;
-  if (type === "conversation") return `/dashboard/conversations/${id}`;
-  return null;
-}
+import { env } from "@/lib/env";
+import { PushToggle } from "./push-toggle";
 
 async function markReadAction(formData: FormData) {
   "use server";
@@ -82,6 +71,14 @@ export default async function NotificationsPage({
       {error && (
         <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
       )}
+
+      {/* Lot I, Partie 1 — masqué automatiquement si VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
+          ne sont pas configurées sur cet environnement (voir isPushConfigured).
+          La clé publique est lue ici côté serveur et transmise en prop : elle
+          n'a pas besoin d'un préfixe NEXT_PUBLIC_ (pas de duplication de
+          variable d'env), ce composant serveur est le seul pont vers le
+          client qui en a besoin. */}
+      {isPushConfigured() && <PushToggle organizationId={organizationId} vapidPublicKey={env.VAPID_PUBLIC_KEY!} />}
 
       {notifications.length === 0 ? (
         <p className="text-sm text-muted">Aucune notification pour l&apos;instant.</p>

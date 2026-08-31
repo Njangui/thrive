@@ -1,7 +1,14 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { resolveRequestTenant, buildWhatsAppLink } from "@/infrastructure/tenant/resolve-request-tenant";
+import {
+  resolveRequestTenant,
+  resolveRequestOrigin,
+  buildWhatsAppLink,
+} from "@/infrastructure/tenant/resolve-request-tenant";
 import { getProductBySlug } from "@/application/services/catalog-service";
+import { trackEvent } from "@/application/services/analytics-service";
+import { resolveProductSeo, buildProductJsonLd, type ProductJsonLdAvailability } from "@/lib/seo";
+import { TrackedCtaLink } from "@/app/_components/tracked-cta-link";
 
 function formatPrice(amount: number): string {
   return `${amount.toLocaleString("fr-FR")} FCFA`;
@@ -14,6 +21,17 @@ const STATUS_LABELS: Record<string, { label: string; available: boolean }> = {
   inactive: { label: "Indisponible", available: false },
 };
 
+/** Section 18 (Lot H) -> disponibilité schema.org, seulement pour un produit actif (voir plus bas). */
+const JSON_LD_AVAILABILITY: Record<string, ProductJsonLdAvailability> = {
+  active: "InStock",
+  out_of_stock: "OutOfStock",
+};
+
+/**
+ * Lot H, Partie 1 — title/description/Open Graph/Twitter Card via
+ * `src/lib/seo.ts::resolveProductSeo` : repli produit -> organisation ->
+ * nom de l'entreprise, jamais de balise vide (critère d'acceptation Lot H).
+ */
 export async function generateMetadata({
   params,
 }: {
@@ -26,9 +44,34 @@ export async function generateMetadata({
   const product = await getProductBySlug(tenant.organizationId, slug);
   if (!product) return {};
 
+  const origin = await resolveRequestOrigin();
+  const canonicalUrl = `${origin}/produits/${slug}`;
+  const seo = resolveProductSeo({
+    productName: product.name,
+    productSeoTitle: product.seoTitle,
+    productSeoDescription: product.seoDescription,
+    productDescription: product.description,
+    productImageUrl: product.images[0],
+    organization: tenant,
+  });
+
   return {
-    title: `${product.name} — ${tenant.name}`,
-    description: product.description ?? undefined,
+    title: seo.title,
+    description: seo.description,
+    alternates: { canonical: canonicalUrl },
+    openGraph: {
+      type: "website",
+      title: seo.title,
+      description: seo.description,
+      url: canonicalUrl,
+      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
+    },
+    twitter: {
+      card: seo.ogImageUrl ? "summary_large_image" : "summary",
+      title: seo.title,
+      description: seo.description,
+      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
+    },
     icons: tenant.faviconUrl ? { icon: tenant.faviconUrl } : undefined,
   };
 }
@@ -41,6 +84,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const product = await getProductBySlug(tenant.organizationId, slug);
   if (!product) notFound();
 
+  // Lot H, Partie 2 (master prompt §55) — best-effort, ne fait jamais
+  // échouer le rendu si l'insert échoue (voir analytics-service.ts).
+  // Démarré avant de calculer le reste, `await`é juste avant de rendre.
+  const trackProductView = trackEvent(tenant.organizationId, "product_view", "product", product.id);
+
   const statusInfo = STATUS_LABELS[product.status] ?? { label: product.status, available: false };
   const hasPromo = product.compareAtPrice !== null && product.compareAtPrice > product.unitPrice;
 
@@ -51,8 +99,30 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       )
     : null;
 
+  // JSON-LD Product/Offer (Lot H, section 18) — uniquement pour un produit
+  // ACTIF : on ne fait pas la promotion structurée auprès de Google d'un
+  // produit draft/inactif/en rupture retiré volontairement, même si la
+  // page reste consultable par un lien direct déjà partagé (section 40).
+  const jsonLdAvailability = JSON_LD_AVAILABILITY[product.status];
+  const origin = await resolveRequestOrigin();
+  const jsonLd = jsonLdAvailability
+    ? buildProductJsonLd({
+        name: product.name,
+        description: product.description,
+        images: product.images,
+        url: `${origin}/produits/${slug}`,
+        unitPrice: product.unitPrice,
+        currency: tenant.currency,
+        availability: jsonLdAvailability,
+      })
+    : null;
+
+  await trackProductView;
+
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-5 py-10 sm:py-16">
+      {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />}
+
       {product.images.length > 0 ? (
         <div className="flex flex-col gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -111,8 +181,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       </div>
 
       {whatsappHref && (
-        <a
+        <TrackedCtaLink
           href={whatsappHref}
+          organizationId={tenant.organizationId}
+          ctaId="whatsapp_product"
           target="_blank"
           rel="noopener noreferrer"
           className={`inline-flex w-fit items-center gap-2 rounded-brand px-5 py-3 font-medium text-white transition-opacity ${
@@ -120,7 +192,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           }`}
         >
           {statusInfo.available ? "Commander sur WhatsApp" : "Nous contacter sur WhatsApp"}
-        </a>
+        </TrackedCtaLink>
       )}
     </main>
   );

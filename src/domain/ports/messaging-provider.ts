@@ -42,6 +42,19 @@ export interface NormalizedConversation {
   channel: string;
 }
 
+/**
+ * Lot F — un groupe WhatsApp tel que renvoyé par le provider. CONFIRMÉ
+ * (docs.zernio.com/whatsapp/list-whatsapp-group-chats) : seuls ces trois
+ * champs sont garantis par l'API de listing — pas de nombre de
+ * participants (voir whatsapp-group-service.ts et
+ * docs/ZERNIO_INTEGRATION.md).
+ */
+export interface WhatsAppGroupSummary {
+  externalId: string;
+  name: string;
+  createdAt: string | null;
+}
+
 export interface MessagingProvider {
   /** Nom du provider concret, pour logs et provider_connections */
   readonly providerName: string;
@@ -59,4 +72,13 @@ export interface MessagingProvider {
   ): Promise<NormalizedContact | null>;
 
   markAsRead(organizationId: string, externalMessageId: string): Promise<void>;
+
+  /**
+   * Lot F (section 39/40 master prompt) — liste les groupes WhatsApp
+   * visibles sur le compte connecté. Optionnelle : tous les
+   * MessagingProvider n'ont pas de notion de "groupe" (ex: un futur
+   * provider SMS) — un appelant doit vérifier sa présence avant utilisation
+   * plutôt que supposer qu'elle existe (voir whatsapp-group-service.ts).
+   */
+  listWhatsAppGroups?(organizationId: string): Promise<WhatsAppGroupSummary[]>;
 }

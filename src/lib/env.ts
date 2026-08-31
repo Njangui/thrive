@@ -29,6 +29,24 @@ const EnvSchema = z.object({
 
   ENABLE_AI_INSIGHTS: z.coerce.boolean().default(true),
   ENABLE_AUTOMATION_ENGINE: z.coerce.boolean().default(false),
+
+  // Lot F — secret partagé pour protéger /api/cron/* (le déclencheur cron
+  // externe — cron-job.org, Vercel Cron... — l'envoie en
+  // `Authorization: Bearer <CRON_SECRET>`). Optionnel : en son absence la
+  // route reste accessible en clair, avec un avertissement bruyant au
+  // démarrage plutôt qu'un blocage silencieux — cohérent avec le reste de
+  // ce fichier (section 54 : échouer fort, pas en silence — voir route.ts).
+  CRON_SECRET: z.string().optional(),
+
+  // Lot I, Partie 1 — Web Push (notifications PWA). Optionnelles : en leur
+  // absence, push-service.ts::sendPush() ne fait rien (pas d'erreur, pas de
+  // notification envoyée) et le toggle de dashboard/notifications reste
+  // masqué — cohérent avec le reste du projet (IA, paiement... désactivés
+  // proprement tant que non configurés, jamais un crash). Générer une paire
+  // avec `npx web-push generate-vapid-keys`.
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default("mailto:support@sme-os.app"),
 });
 
 function loadEnv() {

@@ -6,6 +6,7 @@ import type {
   SocialPostStatus,
   SocialPostResult,
   SocialPublishingProvider,
+  SocialComment,
 } from "@/domain/ports/social-publishing-provider";
 import { ZernioSocialClient } from "./client";
 
@@ -98,6 +99,33 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
       shares: entry.shares,
       clicks: entry.clicks,
     }));
+  }
+
+  async listComments(providerPostId: string, accountId: string): Promise<SocialComment[]> {
+    const response = await this.client.listInboxComments(providerPostId, accountId);
+    return (response.comments ?? []).map((c) => ({
+      id: c.id,
+      authorName: c.from?.name ?? c.from?.username ?? null,
+      content: c.message,
+      createdAt: c.createdTime ?? null,
+      // Absence explicite -> true par défaut (comportement historique de la
+      // plupart des plateformes avant l'introduction de ces flags par
+      // Zernio) plutôt que de masquer silencieusement une action possible.
+      canReply: c.canReply ?? true,
+      canHide: c.canHide ?? false,
+    }));
+  }
+
+  async replyToComment(providerPostId: string, accountId: string, commentId: string, message: string): Promise<void> {
+    await this.client.replyToInboxComment(providerPostId, accountId, commentId, message);
+  }
+
+  async hideComment(providerPostId: string, accountId: string, commentId: string): Promise<void> {
+    await this.client.hideInboxComment(providerPostId, accountId, commentId);
+  }
+
+  async unhideComment(providerPostId: string, accountId: string, commentId: string): Promise<void> {
+    await this.client.unhideInboxComment(providerPostId, accountId, commentId);
   }
 }
 

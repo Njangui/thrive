@@ -44,6 +44,15 @@ async function updateProductAction(formData: FormData) {
       currentStock: Number(formData.get("stock") ?? 0),
       status: String(formData.get("status") ?? "draft") as "draft" | "active" | "out_of_stock" | "inactive",
       imageUrl: imageChanged ? imageUrl! : undefined,
+      // Lot H, Partie 1 — pas explicitement listés par le cahier pour cette
+      // page, mais ajoutés ici : sans eux, seo_title/seo_description du
+      // produit (étendus côté backend, voir catalog-service.ts) ne seraient
+      // réglables par AUCUNE interface, ce qui viderait de son sens le
+      // critère d'acceptation "reflètent seo_title/seo_description du
+      // produit s'ils sont renseignés" (personne ne pourrait jamais les
+      // renseigner).
+      seoTitle: String(formData.get("seoTitle") ?? "").trim(),
+      seoDescription: String(formData.get("seoDescription") ?? "").trim(),
     });
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour du produit";
@@ -149,6 +158,37 @@ export default async function EditProductPage({
         </label>
 
         <ImageUploadField name="image" label="Photo du produit" currentUrl={product.imageUrl} />
+
+        <div className="flex flex-col gap-3 rounded-brand border border-ink/15 p-4">
+          <div>
+            <p className="text-sm font-medium">Référencement sur Google (optionnel)</p>
+            <p className="text-xs text-muted">
+              Laissez vide pour utiliser automatiquement le nom du produit et celui de votre entreprise.
+            </p>
+          </div>
+
+          <label className="flex flex-col gap-1 text-sm">
+            Titre pour Google
+            <input
+              name="seoTitle"
+              maxLength={70}
+              defaultValue={product.seoTitle ?? ""}
+              placeholder={`${product.name} — ...`}
+              className="rounded-brand border border-ink/15 px-4 py-3"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            Description pour Google
+            <textarea
+              name="seoDescription"
+              rows={2}
+              maxLength={160}
+              defaultValue={product.seoDescription ?? ""}
+              className="rounded-brand border border-ink/15 px-4 py-3"
+            />
+          </label>
+        </div>
 
         <SubmitButton pendingLabel="Enregistrement...">Enregistrer les modifications</SubmitButton>
       </form>
