@@ -38,7 +38,7 @@ export function DonutChart({
                 cy={SIZE / 2}
                 r={RADIUS}
                 fill="none"
-                stroke={PALETTE[i % PALETTE.length]}
+                stroke={PALETTE[i % PALETTE.length] ?? "#7C3AED"}
                 strokeWidth={STROKE}
                 strokeDasharray={`${dash} ${CIRCUMFERENCE - dash}`}
                 strokeDashoffset={-offset}
@@ -58,7 +58,7 @@ export function DonutChart({
             <span className="flex min-w-0 items-center gap-2">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
+                style={{ backgroundColor: PALETTE[i % PALETTE.length] ?? "#7C3AED" }}
               />
               <span className="truncate text-ink/80">{slice.label}</span>
             </span>

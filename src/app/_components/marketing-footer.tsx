@@ -21,7 +21,15 @@ const COLUMNS = [
     title: "Entreprise",
     links: [
       { label: "Avis clients", href: "/#avis" },
-      { label: "Contact", href: "/#avis" },
+      { label: "Contact", href: "/contact" },
+    ],
+  },
+  {
+    title: "Légal",
+    links: [
+      { label: "Conditions d'utilisation", href: "/conditions-utilisation" },
+      { label: "Politique de confidentialité", href: "/confidentialite" },
+      { label: "Mentions légales", href: "/mentions-legales" },
     ],
   },
 ];
@@ -30,7 +38,7 @@ export function MarketingFooter() {
   return (
     <footer className="bg-sidebar-dark text-white/60">
       <div className="mx-auto max-w-6xl px-5 py-14">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-6">
           <div className="col-span-2">
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white">

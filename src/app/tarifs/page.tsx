@@ -108,7 +108,7 @@ export default async function TarifsPage() {
 
           <p className="mt-10 text-sm text-muted">
             Besoin de quelque chose sur mesure ?{" "}
-            <a href="/#avis" className="font-medium text-primary hover:underline">
+            <a href="/contact" className="font-medium text-primary hover:underline">
               Contactez-nous
             </a>
             .
