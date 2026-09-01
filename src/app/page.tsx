@@ -4,7 +4,7 @@ import { listActiveProductsForStorefront } from "@/application/services/catalog-
 import { trackEvent } from "@/application/services/analytics-service";
 import { resolveOrganizationSeo, buildOrganizationJsonLd } from "@/lib/seo";
 import { TenantLanding } from "./_components/tenant-landing";
-import { InternalStatus } from "./_components/internal-status";
+import { PlatformLanding } from "./_components/platform-landing";
 
 /**
  * Favicon PAR TENANT pour la vitrine publique (cahier Lot E, Partie 1) —
@@ -23,7 +23,13 @@ import { InternalStatus } from "./_components/internal-status";
  */
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await resolveRequestTenant();
-  if (!tenant) return {};
+  if (!tenant) {
+    return {
+      title: "Thrive — Gérez et automatisez votre commerce",
+      description:
+        "Catalogue, commandes, clients, WhatsApp et IA : tout ce dont une PME a besoin pour vendre, sur une seule plateforme.",
+    };
+  }
 
   const origin = await resolveRequestOrigin();
   const seo = resolveOrganizationSeo(tenant);
@@ -53,7 +59,7 @@ export default async function RootPage() {
   const tenant = await resolveRequestTenant();
 
   if (!tenant) {
-    return <InternalStatus />;
+    return <PlatformLanding />;
   }
 
   // Lot H, Partie 2 (master prompt §55) — démarré en parallèle du reste,
