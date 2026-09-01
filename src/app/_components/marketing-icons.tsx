@@ -11,6 +11,7 @@ const PATHS: Record<string, string> = {
   shield: "M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3Z",
   globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 0c2.5 2.4 3.8 5.4 3.8 9s-1.3 6.6-3.8 9c-2.5-2.4-3.8-5.4-3.8-9S9.5 5.4 12 3ZM3.5 9h17M3.5 15h17",
   headset: "M4 13v-1a8 8 0 1 1 16 0v1M4 13a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v-6H4Zm16 0h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1v-6Zm-1 6v1a2 2 0 0 1-2 2h-3",
+  chevronDown: "M6 9l6 6 6-6",
 };
 
 export function MIcon({ name, className = "h-5 w-5" }: { name: keyof typeof PATHS; className?: string }) {

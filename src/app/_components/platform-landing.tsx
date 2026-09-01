@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MarketingNav } from "./marketing-nav";
 import { MarketingFooter } from "./marketing-footer";
+import { MarketingFaq } from "./marketing-faq";
 import { MIcon } from "./marketing-icons";
 
 const FEATURES = [
@@ -28,6 +29,42 @@ const FEATURES = [
     title: "IA & automatisation",
     description: "Répondez automatiquement à vos clients sur WhatsApp et qualifiez vos leads pendant que vous travaillez.",
   },
+];
+
+const TRUST_POINTS = [
+  { icon: "chat" as const, label: "WhatsApp + réseaux sociaux" },
+  { icon: "sparkle" as const, label: "Assistant IA dès le plan gratuit" },
+  { icon: "globe" as const, label: "Pensé pour le Cameroun (FCFA)" },
+  { icon: "shield" as const, label: "Sans engagement" },
+];
+
+const STEPS = [
+  {
+    title: "Créez votre compte",
+    description: "Inscription gratuite, sans carte bancaire. Votre boutique est prête en quelques minutes.",
+  },
+  {
+    title: "Ajoutez votre catalogue et connectez WhatsApp",
+    description: "Importez vos produits ou services, puis connectez votre numéro WhatsApp Business.",
+  },
+  {
+    title: "Vendez et laissez l'IA vous assister",
+    description:
+      "Vos clients commandent et posent leurs questions sur WhatsApp — l'assistant répond aux questions courantes et vous alerte pour le reste.",
+  },
+];
+
+const CHANNELS = [
+  { label: "WhatsApp", color: "bg-success/15 text-success" },
+  { label: "Facebook", color: "bg-primary/15 text-primary-dark" },
+  { label: "Instagram", color: "bg-accent-pink/15 text-accent-pink" },
+  { label: "TikTok", color: "bg-ink/10 text-ink" },
+  { label: "YouTube", color: "bg-danger/15 text-danger" },
+  { label: "LinkedIn", color: "bg-primary/15 text-primary-dark" },
+  { label: "Threads", color: "bg-ink/10 text-ink" },
+  { label: "X", color: "bg-ink/10 text-ink" },
+  { label: "Reddit", color: "bg-danger/15 text-danger" },
+  { label: "Bluesky", color: "bg-primary/15 text-primary-dark" },
 ];
 
 /**
@@ -61,7 +98,8 @@ export function PlatformLanding() {
 
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-b from-primary-light/40 to-white px-5 py-20 text-center">
-        <div className="mx-auto max-w-3xl">
+        <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative mx-auto max-w-3xl">
           <span className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-primary/20 bg-white px-3 py-1 text-xs font-medium text-primary-dark shadow-sm">
             <MIcon name="diamond" className="h-3.5 w-3.5" />
             La plateforme tout-en-un pour votre commerce
@@ -155,6 +193,16 @@ export function PlatformLanding() {
             </div>
           </div>
         </div>
+
+        {/* Bandeau de confiance — capacités réelles du produit, pas des statistiques inventées */}
+        <div className="relative mx-auto mt-16 flex max-w-4xl flex-wrap items-center justify-center gap-x-10 gap-y-4 border-t border-ink/5 pt-8 text-sm text-muted">
+          {TRUST_POINTS.map((p) => (
+            <span key={p.label} className="flex items-center gap-2">
+              <MIcon name={p.icon} className="h-4 w-4 text-primary" />
+              {p.label}
+            </span>
+          ))}
+        </div>
       </section>
 
       {/* Fonctionnalités */}
@@ -167,7 +215,10 @@ export function PlatformLanding() {
 
           <div className="mt-12 grid grid-cols-1 gap-5 text-left sm:grid-cols-2 lg:grid-cols-4">
             {FEATURES.map((f) => (
-              <div key={f.title} className="rounded-2xl border border-ink/5 bg-white p-5 shadow-sm">
+              <div
+                key={f.title}
+                className="rounded-2xl border border-ink/5 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+              >
                 <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${f.color}`}>
                   <MIcon name={f.icon} className="h-5 w-5" />
                 </span>
@@ -179,7 +230,58 @@ export function PlatformLanding() {
         </div>
       </section>
 
-      {/* Avis — remplace la section tarifs (déplacée sur /tarifs) */}
+      {/* Comment ça marche */}
+      <section id="comment-ca-marche" className="bg-surface px-5 py-20">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="font-display text-3xl font-bold tracking-tight text-ink">Comment ça marche</h2>
+          <p className="mt-2 text-sm text-muted">Trois étapes pour commencer à vendre.</p>
+
+          <div className="mt-12 grid grid-cols-1 gap-8 text-left sm:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <div key={step.title} className="relative rounded-2xl border border-ink/5 bg-white p-6 shadow-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary font-display text-sm font-bold text-white">
+                  {i + 1}
+                </span>
+                <p className="mt-4 font-display text-base font-semibold text-ink">{step.title}</p>
+                <p className="mt-1.5 text-sm text-muted">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Canaux connectés */}
+      <section id="canaux" className="px-5 py-20">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="font-display text-3xl font-bold tracking-tight text-ink">Vendez là où sont vos clients</h2>
+          <p className="mt-2 text-sm text-muted">
+            WhatsApp comme canal principal, et vos réseaux sociaux pour vous faire découvrir.
+          </p>
+
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            {CHANNELS.map((c) => (
+              <span
+                key={c.label}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${c.color}`}
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/70 text-[10px] font-bold">
+                  {c.label.slice(0, 1)}
+                </span>
+                {c.label}
+              </span>
+            ))}
+          </div>
+          <p className="mt-4 text-xs text-muted">
+            La disponibilité de chaque canal dépend de votre plan —{" "}
+            <Link href="/tarifs" className="font-medium text-primary hover:underline">
+              voir le détail des plans
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
+      {/* Avis */}
       <section id="avis" className="bg-surface px-5 py-20">
         <div className="mx-auto max-w-5xl text-center">
           <h2 className="font-display text-3xl font-bold tracking-tight text-ink">Ils utilisent Thrive au quotidien</h2>
@@ -205,6 +307,34 @@ export function PlatformLanding() {
             className="mt-10 inline-flex items-center gap-1.5 rounded-full bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary-dark"
           >
             Voir les tarifs
+            <MIcon name="arrowRight" className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="px-5 py-20">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="font-display text-3xl font-bold tracking-tight text-ink">Questions fréquentes</h2>
+          <p className="mt-2 text-sm text-muted">Tout ce qu&apos;il faut savoir avant de commencer.</p>
+          <MarketingFaq />
+        </div>
+      </section>
+
+      {/* CTA final */}
+      <section className="px-5 py-16">
+        <div className="mx-auto max-w-4xl rounded-3xl bg-gradient-to-r from-primary to-accent-pink px-8 py-14 text-center shadow-lg">
+          <h2 className="font-display text-3xl font-bold tracking-tight text-white">
+            Prêt à faire grandir votre commerce ?
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-white/85">
+            Créez votre compte gratuitement et connectez votre WhatsApp en quelques minutes.
+          </p>
+          <Link
+            href="/onboarding"
+            className="mt-7 inline-flex items-center gap-1.5 rounded-full bg-white px-6 py-3 text-sm font-medium text-primary-dark shadow-sm hover:bg-white/90"
+          >
+            Démarrer gratuitement
             <MIcon name="arrowRight" className="h-4 w-4" />
           </Link>
         </div>

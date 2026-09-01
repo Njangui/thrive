@@ -17,14 +17,14 @@ export function MarketingNav() {
           <a href="/#fonctionnalites" className="hover:text-ink">
             Fonctionnalités
           </a>
+          <a href="/#canaux" className="hover:text-ink">
+            Canaux
+          </a>
           <Link href="/tarifs" className="hover:text-ink">
             Tarifs
           </Link>
-          <a href="/#fonctionnalites" className="hover:text-ink">
-            Ressources
-          </a>
-          <a href="/#avis" className="hover:text-ink">
-            À propos
+          <a href="/#faq" className="hover:text-ink">
+            FAQ
           </a>
         </nav>
 
