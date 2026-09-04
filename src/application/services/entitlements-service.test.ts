@@ -10,14 +10,26 @@ vi.mock("./ai-credits-service", () => ({
   getCreditStatus: vi.fn(),
 }));
 
+vi.mock("./addons-service", () => ({
+  getOrganizationAddonBonus: vi.fn(),
+}));
+
+vi.mock("./phone-number-repository", () => ({
+  hasDedicatedPhoneNumber: vi.fn(),
+}));
+
 import { canUseFeature, evaluateEntitlement } from "./entitlements-service";
 import { getOrganizationPlanKey, getEntitlementLimit, countOrganizationRows } from "./plans-repository";
 import { getCreditStatus } from "./ai-credits-service";
+import { getOrganizationAddonBonus } from "./addons-service";
+import { hasDedicatedPhoneNumber } from "./phone-number-repository";
 
 const mockGetOrganizationPlanKey = vi.mocked(getOrganizationPlanKey);
 const mockGetEntitlementLimit = vi.mocked(getEntitlementLimit);
 const mockCountOrganizationRows = vi.mocked(countOrganizationRows);
 const mockGetCreditStatus = vi.mocked(getCreditStatus);
+const mockGetOrganizationAddonBonus = vi.mocked(getOrganizationAddonBonus);
+const mockHasDedicatedPhoneNumber = vi.mocked(hasDedicatedPhoneNumber);
 
 describe("evaluateEntitlement (fonction pure)", () => {
   it("autorise toujours quand la limite est illimitée (-1)", () => {
@@ -53,6 +65,14 @@ describe("evaluateEntitlement (fonction pure)", () => {
 describe("canUseFeature", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Défaut pour tous les tests pré-existants (chemin générique, hors
+    // ai_credits) qui ne testent pas spécifiquement les add-ons — évite
+    // de devoir amender chacun d'eux individuellement (Lot G).
+    mockGetOrganizationAddonBonus.mockResolvedValue(0);
+    // Lot 4 : idem pour le bonus "numéro dédié" — par défaut aucune
+    // organisation n'a de numéro assigné, comportement identique à avant
+    // ce lot pour tous les tests qui ne le testent pas explicitement.
+    mockHasDedicatedPhoneNumber.mockResolvedValue(false);
   });
 
   it("délègue entièrement à getCreditStatus() pour la clé 'ai_credits'", async () => {
@@ -158,5 +178,131 @@ describe("canUseFeature", () => {
 
     const result = await canUseFeature("org-1", "tiktok");
     expect(result.allowed).toBe(false); // 0 + 1 > 0
+  });
+
+  // --- Lot G : bonus add-ons (limite plan + somme des add-ons actifs) ---
+
+  it("Lot G : additionne le bonus add-ons à la limite du plan (clé cumulative)", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetEntitlementLimit.mockResolvedValue(3); // limite plan starter, ex: whatsapp_groups
+    mockGetOrganizationAddonBonus.mockResolvedValue(2); // 1 add-on "+2 groupes" acheté
+    mockCountOrganizationRows.mockResolvedValue(4);
+
+    const result = await canUseFeature("org-1", "whatsapp_groups", 1);
+
+    expect(mockGetOrganizationAddonBonus).toHaveBeenCalledWith("org-1", "whatsapp_groups");
+    // limite effective = 3 (plan) + 2 (add-on) = 5 ; used=4 ; +1 reste <= 5 -> autorisé
+    expect(result).toEqual({ allowed: true, limit: 5, used: 4, remaining: 1 });
+  });
+
+  it("Lot G : sans add-on possédé (bonus=0), le comportement est identique à avant ce lot", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetEntitlementLimit.mockResolvedValue(3);
+    mockGetOrganizationAddonBonus.mockResolvedValue(0);
+    mockCountOrganizationRows.mockResolvedValue(3);
+
+    const result = await canUseFeature("org-1", "whatsapp_groups", 1);
+    expect(result).toEqual({ allowed: false, limit: 3, used: 3, remaining: 0 });
+  });
+
+  it("Lot G : n'interroge jamais le bonus add-ons quand le plan est déjà illimité (-1)", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("pro");
+    mockGetEntitlementLimit.mockResolvedValue(-1);
+
+    const result = await canUseFeature("org-1", "whatsapp_groups", 100);
+
+    expect(mockGetOrganizationAddonBonus).not.toHaveBeenCalled();
+    expect(result).toEqual({ allowed: true, limit: -1, used: 0, remaining: -1 });
+  });
+
+  it("Lot G : le bonus add-ons s'applique aussi à une clé 'par action' (broadcast_contacts)", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetEntitlementLimit.mockResolvedValue(50);
+    mockGetOrganizationAddonBonus.mockResolvedValue(100); // add-on "+100 contacts"
+
+    const result = await canUseFeature("org-1", "broadcast_contacts", 120);
+    // limite effective = 50 + 100 = 150 ; requestedAmount=120 <= 150 -> autorisé
+    // (aurait été refusé sans le bonus : 120 > 50)
+    expect(result).toEqual({ allowed: true, limit: 150, used: 0, remaining: 150 });
+  });
+
+  it("Lot G : ai_credits ne consulte jamais getOrganizationAddonBonus (délégué entièrement à getCreditStatus)", async () => {
+    mockGetCreditStatus.mockResolvedValue({
+      organizationId: "org-1",
+      includedCredits: 600, // suppose déjà topé par un addon via grantCredits, hors scope de canUseFeature
+      usedCredits: 100,
+      remainingCredits: 500,
+    });
+
+    await canUseFeature("org-1", "ai_credits", 1);
+
+    expect(mockGetOrganizationAddonBonus).not.toHaveBeenCalled();
+  });
+
+  // --- Lot 4 : bonus "numéro dédié" (section 55 du master prompt) ---
+
+  it("Lot 4 : ajoute le bonus numéro dédié à la limite de whatsapp_groups quand un numéro est assigné", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetEntitlementLimit.mockResolvedValueOnce(2); // limite de base du plan starter
+    mockHasDedicatedPhoneNumber.mockResolvedValue(true);
+    mockGetEntitlementLimit.mockResolvedValueOnce(1); // bonus starter (+1)
+    mockCountOrganizationRows.mockResolvedValue(2);
+
+    const result = await canUseFeature("org-1", "whatsapp_groups", 1);
+
+    expect(mockHasDedicatedPhoneNumber).toHaveBeenCalledWith("org-1");
+    expect(mockGetEntitlementLimit).toHaveBeenNthCalledWith(2, "starter", "whatsapp_groups_dedicated_bonus");
+    // limite effective = 2 (plan) + 0 (add-on) + 1 (bonus numéro dédié) = 3 ; used=2 ; +1 <= 3 -> autorisé
+    // (aurait été refusé sans le bonus : 2 + 1 > 2)
+    expect(result).toEqual({ allowed: true, limit: 3, used: 2, remaining: 1 });
+  });
+
+  it("Lot 4 : n'ajoute aucun bonus numéro dédié à une clé différente de whatsapp_groups", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetEntitlementLimit.mockResolvedValue(50); // broadcast_contacts
+    mockHasDedicatedPhoneNumber.mockResolvedValue(true); // même avec un numéro dédié assigné
+
+    const result = await canUseFeature("org-1", "broadcast_contacts", 50);
+
+    expect(mockHasDedicatedPhoneNumber).not.toHaveBeenCalled();
+    expect(result).toEqual({ allowed: true, limit: 50, used: 0, remaining: 50 });
+  });
+
+  it("Lot 4 : sans numéro dédié assigné (défaut), le comportement whatsapp_groups est identique à avant ce lot", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetEntitlementLimit.mockResolvedValue(2);
+    mockCountOrganizationRows.mockResolvedValue(2);
+
+    const result = await canUseFeature("org-1", "whatsapp_groups", 1);
+
+    expect(mockHasDedicatedPhoneNumber).toHaveBeenCalledWith("org-1");
+    // Un seul appel à getEntitlementLimit : jamais la clé de bonus, puisque hasDedicatedPhoneNumber() = false.
+    expect(mockGetEntitlementLimit).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ allowed: false, limit: 2, used: 2, remaining: 0 });
+  });
+
+  it("Lot 4 : n'interroge jamais le bonus numéro dédié quand le plan whatsapp_groups est déjà illimité (-1)", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("pro");
+    mockGetEntitlementLimit.mockResolvedValue(-1);
+
+    const result = await canUseFeature("org-1", "whatsapp_groups", 100);
+
+    expect(mockHasDedicatedPhoneNumber).not.toHaveBeenCalled();
+    expect(result).toEqual({ allowed: true, limit: -1, used: 0, remaining: -1 });
+  });
+
+  it("Lot 4 : un bonus numéro dédié non configuré (absence de ligne, -1) est traité comme 0, jamais illimité", async () => {
+    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetEntitlementLimit.mockResolvedValueOnce(2);
+    mockHasDedicatedPhoneNumber.mockResolvedValue(true);
+    // getEntitlementLimit renvoie -1 pour "clé non configurée" (plans-repository.ts) — ne doit
+    // jamais être interprété comme un bonus illimité.
+    mockGetEntitlementLimit.mockResolvedValueOnce(-1);
+    mockCountOrganizationRows.mockResolvedValue(2);
+
+    const result = await canUseFeature("org-1", "whatsapp_groups", 1);
+
+    // Sans le garde-fou, limit serait -1 (illimité) ou 1 (2 + -1) au lieu de 2.
+    expect(result).toEqual({ allowed: false, limit: 2, used: 2, remaining: 0 });
   });
 });

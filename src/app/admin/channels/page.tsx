@@ -21,7 +21,7 @@ export default async function AdminChannelsPage() {
         la reconnexion elle-même se fait depuis son propre compte, pas depuis cette console.
       </p>
 
-      <div className="overflow-hidden rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
         {channels.length === 0 ? (
           <p className="p-6 text-sm text-muted">Aucun canal enregistré.</p>
         ) : (

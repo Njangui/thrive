@@ -1,4 +1,8 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { getPlatformSettingNumber } from "./platform-settings-service";
+
+/** Filet de sécurité si platform_settings.trial_days est illisible/absent — voir createTrialSubscription. */
+const FALLBACK_TRIAL_DAYS = 14;
 
 /**
  * Lot B — accès bas niveau aux tables `plans` / `plan_entitlements` /
@@ -118,11 +122,16 @@ export async function getOrganizationSubscription(organizationId: string): Promi
 export async function createTrialSubscription(
   organizationId: string,
   planKey: PlanKey = "starter",
-  trialDays = 14,
+  trialDays?: number,
 ): Promise<void> {
   const supabase = getSupabaseServiceClient();
+  // Lot G : durée d'essai configurable depuis /admin/addons
+  // (platform_settings.trial_days) au lieu de la constante 14 en dur —
+  // `trialDays` explicite (ex: un appelant qui veut forcer une durée
+  // précise) reste toujours prioritaire sur le réglage plateforme.
+  const effectiveTrialDays = trialDays ?? (await getPlatformSettingNumber("trial_days", FALLBACK_TRIAL_DAYS));
   const trialStart = new Date();
-  const trialEnd = new Date(trialStart.getTime() + trialDays * 24 * 60 * 60 * 1000);
+  const trialEnd = new Date(trialStart.getTime() + effectiveTrialDays * 24 * 60 * 60 * 1000);
 
   const { error } = await supabase.from("organization_subscriptions").upsert(
     {

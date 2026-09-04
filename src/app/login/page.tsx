@@ -1,9 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/infrastructure/supabase/browser-client";
 
-export default function LoginPage() {
+/**
+ * Lot L — `next` (ex: `/invite/accept?token=...`) doit survivre le
+ * round-trip magic link : porté ici en query param jusqu'à
+ * `emailRedirectTo`, relu par `/auth/callback` (voir route.ts) pour
+ * rediriger un utilisateur SANS organisation vers l'invitation plutôt que
+ * vers /onboarding par défaut — sinon un nouvel utilisateur invité se
+ * retrouverait à créer sa PROPRE organisation au lieu de rejoindre celle
+ * qui l'a invité.
+ */
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
+
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -14,9 +27,12 @@ export default function LoginPage() {
     setErrorMessage(null);
 
     const supabase = getSupabaseBrowserClient();
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+    if (next) callbackUrl.searchParams.set("next", next);
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: callbackUrl.toString() },
     });
 
     if (error) {
@@ -28,13 +44,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-5">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Connexion</h1>
-        <p className="mt-1 text-sm text-muted">
-          Pas de mot de passe — on vous envoie un lien de connexion par email.
+    <>
+      {next && (
+        <p className="rounded-brand border border-ink/10 bg-ink/5 px-4 py-3 text-sm text-muted">
+          Connectez-vous pour accepter votre invitation.
         </p>
-      </div>
+      )}
 
       {status === "sent" ? (
         <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">
@@ -60,6 +75,22 @@ export default function LoginPage() {
           {errorMessage && <p className="text-sm text-clay">{errorMessage}</p>}
         </form>
       )}
+    </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-5">
+      <div>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Connexion</h1>
+        <p className="mt-1 text-sm text-muted">
+          Pas de mot de passe — on vous envoie un lien de connexion par email.
+        </p>
+      </div>
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
     </main>
   );
 }

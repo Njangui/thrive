@@ -1,26 +1,10 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { getUnreadNotificationCount } from "@/application/services/notification-service";
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
-import { getCreditStatus } from "@/application/services/ai-credits-service";
-import { Sidebar } from "./_components/sidebar";
-import { Topbar } from "./_components/topbar";
-
-/**
- * Dérive un nom d'affichage depuis l'email — aucune colonne "nom complet"
- * n'existe dans le schéma actuel (ni sur `auth.users`, ni de table
- * `profiles` séparée), donc rien d'autre à afficher honnêtement ici.
- */
-function displayNameFromEmail(email: string): string {
-  const local = email.split("@")[0] ?? email;
-  return local
-    .replace(/[._-]+/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
+import { DashboardSidebar, MobileNavDrawer } from "./_components/dashboard-nav";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await getSupabaseServerSessionClient();
@@ -45,28 +29,55 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const onboardingStatus = await getOnboardingStatus(currentOrg.organizationId);
   if (!onboardingStatus.completedAt) redirect("/onboarding");
 
-  const [unreadCount, creditStatus] = await Promise.all([
-    getUnreadNotificationCount(currentOrg.organizationId, user.id),
-    getCreditStatus(currentOrg.organizationId),
-  ]);
-
-  const userName = displayNameFromEmail(user.email ?? "");
+  const unreadCount = await getUnreadNotificationCount(currentOrg.organizationId, user.id);
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar
-        organizationName={currentOrg.organizationName}
-        aiCreditsUsed={creditStatus.usedCredits}
-        aiCreditsLimit={creditStatus.includedCredits === -1 ? 0 : creditStatus.includedCredits}
-        userName={userName}
-        userRole={currentOrg.role}
-        userEmail={user.email ?? ""}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar unreadCount={unreadCount} userName={userName} userRole={currentOrg.role} />
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="mx-auto max-w-6xl">{children}</div>
-        </main>
+    <div className="min-h-screen bg-paper">
+      {/* Lot 2 (§48-50) : barre fine toujours visible (logo + menu mobile +
+          cloche) au-dessus d'une mise en page à deux colonnes — la sidebar
+          desktop et le tiroir mobile partagent le même contenu de nav
+          (dashboard-nav.tsx), jamais dupliqué. */}
+      <header className="sticky top-0 z-40 border-b border-ink/10 bg-white px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <MobileNavDrawer />
+            <div>
+              <p className="font-display text-sm font-semibold leading-tight">{currentOrg.organizationName}</p>
+              <p className="text-xs capitalize leading-tight text-muted">{currentOrg.role}</p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/notifications"
+            className="relative flex h-9 w-9 items-center justify-center rounded-brand text-muted hover:bg-ink/5 hover:text-ink"
+            aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : "Notifications"}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15 17h5l-1.4-2.1a2 2 0 0 1-.35-1.13V10a6.25 6.25 0 1 0-12.5 0v3.77c0 .4-.12.79-.35 1.13L4 17h5m6 0a3 3 0 1 1-6 0m6 0H9"
+              />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Link>
+        </div>
+      </header>
+
+      <div className="mx-auto flex max-w-6xl">
+        <DashboardSidebar />
+        <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
       </div>
     </div>
   );

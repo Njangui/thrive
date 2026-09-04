@@ -19,7 +19,8 @@ export type DomainEventType =
   | "LEAD_CREATED"
   | "APPOINTMENT_CREATED"
   | "INVENTORY_LOW"
-  | "RECEIVABLE_OVERDUE";
+  | "RECEIVABLE_OVERDUE"
+  | "SOCIAL_POST_STATUS_UPDATED";
 
 export interface DomainEventBase {
   type: DomainEventType;
@@ -63,8 +64,44 @@ export interface InventoryLowEvent extends DomainEventBase {
 }
 
 /**
+ * Lot M, Partie 2 — confirmation (webhook `post.*` Zernio) qu'une
+ * publication programmée a réellement été diffusée, échouée, ou
+ * partiellement diffusée. Distinct de `MESSAGE_RECEIVED` : ce n'est pas
+ * un événement conversationnel, `handlePostStatusWebhook`
+ * (marketing-service.ts) est le seul consommateur.
+ */
+export interface SocialPostPlatformStatusUpdate {
+  platform: string;
+  accountId: string;
+  status: "published" | "failed";
+  platformPostId?: string;
+  platformPostUrl?: string;
+  errorMessage?: string;
+}
+
+export interface SocialPostStatusUpdatedEvent extends DomainEventBase {
+  type: "SOCIAL_POST_STATUS_UPDATED";
+  payload: {
+    providerPostId: string;
+    /**
+     * Statut agrégé du post entier — présent pour les events post-level
+     * (post.published/failed/partial/cancelled), absent pour un event
+     * post.platform.* isolé qui ne concerne qu'UNE plateforme (voir
+     * `targets` dans ce cas).
+     */
+    overallStatus?: "published" | "failed" | "partial" | "cancelled";
+    overallErrorMessage?: string;
+    targets: SocialPostPlatformStatusUpdate[];
+  };
+}
+
+/**
  * Union à étendre au fur et à mesure (Phase 7+). Volontairement pas
  * exhaustive dès Phase 0 — seuls les événements réellement câblés au
  * workflow central (section 64) ont un payload typé pour l'instant.
  */
-export type DomainEvent = MessageReceivedEvent | PaymentReceivedEvent | InventoryLowEvent;
+export type DomainEvent =
+  | MessageReceivedEvent
+  | PaymentReceivedEvent
+  | InventoryLowEvent
+  | SocialPostStatusUpdatedEvent;

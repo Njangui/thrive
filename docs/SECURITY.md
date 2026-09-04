@@ -55,12 +55,22 @@ et non `requireMembership()`.
 - `ZERNIO_API_KEY`, `MISTRAL_API_KEY`, etc. : uniquement lues côté serveur
   (`src/lib/env.ts`, `secrets-resolver.ts`).
 - `provider_connections.credential_reference` : **jamais** de clé en
-  clair dans cette colonne. Actuellement, les credentials vivent en
-  variables d'environnement serveur (un compte Zernio/IA par déploiement
-  — cohérent avec un seul tenant pilote). Avant d'onboarder plusieurs
-  tenants avec des comptes Zernio DIFFÉRENTS chacun, il faut remplacer ça
-  par une vraie résolution per-tenant (Supabase Vault ou secret manager
-  externe) — voir le commentaire dans `secrets-resolver.ts`.
+  clair dans cette colonne — c'est un id Supabase Vault
+  (`vault_create_secret`/`vault_read_secret`/`vault_update_secret`/
+  `vault_delete_secret`, migration `0037_tenant_credentials.sql`,
+  réservées à `service_role` uniquement, jamais `anon`/`authenticated`).
+  Résolution per-tenant réelle et câblée (`secrets-resolver.ts::resolveCredential`,
+  utilisée par `getMessagingProvider`/`getSocialPublishingProvider`/
+  `getAiProvider` dans `registry.ts`) : un tenant avec un compte
+  Zernio/IA dédié utilise SON credential ; en son absence, repli
+  automatique vers la clé plateforme (`ZERNIO_API_KEY` etc., un seul
+  compte pilote partagé) — comportement inchangé pour tous les tenants
+  qui n'ont pas encore configuré de compte dédié. **Point vérifié à jour
+  lors de l'audit Lot 1** (nouveau master prompt) : ce paragraphe
+  indiquait auparavant que cette résolution per-tenant restait à
+  construire — c'est fait depuis le Lot N, cette note documentait un état
+  passé du code, pas l'état réel au moment de la lecture (section 98/81
+  du master prompt : le code est la source de vérité, la doc doit suivre).
 
 ## Erreurs — jamais de détail interne exposé
 

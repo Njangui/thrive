@@ -162,7 +162,7 @@ export default async function AppointmentsPage({
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
         {appointments.length === 0 ? (
           <p className="p-6 text-sm text-muted">Aucun rendez-vous pour l&apos;instant.</p>
         ) : (

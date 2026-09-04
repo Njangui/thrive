@@ -17,12 +17,14 @@ import { AppError } from "@/lib/errors";
 import { SubmitButton } from "@/app/_components/submit-button";
 
 /**
- * Lot F — Groupes WhatsApp & diffusion groupée. Voir
- * docs/ZERNIO_INTEGRATION.md ("Groupes WhatsApp") pour ce qui est
- * confirmé côté API avant de toucher à cette page : en particulier, une
- * diffusion vers un groupe fraîchement connecté échouera honnêtement tant
- * qu'aucune conversation Zernio n'a été établie avec lui (voir la colonne
- * "Diffusable" ci-dessous, et whatsapp-group-service.ts).
+ * Lot F — Groupes WhatsApp & diffusion groupée. Lot M — ferme la boucle :
+ * un groupe fraîchement connecté est "en attente d'activation" tant
+ * qu'aucun message n'a été reçu depuis lui (voir docs/ZERNIO_INTEGRATION.md,
+ * "Groupes WhatsApp" — conversationId Zernio == id du groupe, mais la
+ * conversation elle-même n'existe pas tant que personne n'a écrit dedans).
+ * `createBroadcast` (whatsapp-group-service.ts) refuse maintenant À LA
+ * CRÉATION toute diffusion vers un groupe encore en attente — jamais un
+ * échec silencieux découvert après coup.
  */
 
 const GROUP_STATUS_LABELS: Record<string, string> = {
@@ -201,6 +203,9 @@ export default async function GroupsPage({
   const connectableAvailable = available.groups.filter((g) => !g.alreadyConnected);
   const defaultScheduledAt = nowInCameroonAsDatetimeLocal();
   const minScheduledAt = nowInCameroonAsDatetimeLocal(5);
+  // Lot M — file d'attente d'activation : groupes connectés côté SME-OS
+  // mais dont aucun message n'a encore été reçu (voir en-tête de fichier).
+  const pendingActivationGroups = connectedGroups.filter((g) => g.status === "connected" && !g.isSendable);
 
   return (
     <div className="flex flex-col gap-6">
@@ -240,7 +245,7 @@ export default async function GroupsPage({
                 <th className="px-2 py-2">Groupe</th>
                 <th className="px-2 py-2">Participants</th>
                 <th className="px-2 py-2">Statut</th>
-                <th className="px-2 py-2">Diffusable</th>
+                <th className="px-2 py-2">Activation</th>
                 <th className="px-2 py-2" />
               </tr>
             </thead>
@@ -258,11 +263,16 @@ export default async function GroupsPage({
                       {GROUP_STATUS_LABELS[g.status] ?? g.status}
                     </span>
                   </td>
-                  <td className="px-2 py-2 text-xs text-muted" title="Une diffusion ne peut atteindre ce groupe que si Zernio a déjà une conversation active avec lui (voir docs/ZERNIO_INTEGRATION.md).">
+                  <td
+                    className="px-2 py-2"
+                    title="Une diffusion ne peut atteindre ce groupe que si Zernio a déjà une conversation active avec lui (voir docs/ZERNIO_INTEGRATION.md)."
+                  >
                     {g.isSendable ? (
-                      <span className="text-leaf">Oui</span>
+                      <span className="rounded-full bg-leaf/10 px-2 py-0.5 text-xs text-leaf">Prêt</span>
                     ) : (
-                      <span>Pas encore</span>
+                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600">
+                        En attente d&apos;activation
+                      </span>
                     )}
                   </td>
                   <td className="px-2 py-2 text-right">
@@ -282,9 +292,33 @@ export default async function GroupsPage({
             </tbody>
           </table>
         )}
-      </section>
 
-      {/* Groupes disponibles côté Zernio */}
+        {pendingActivationGroups.length > 0 && (
+          <div className="flex flex-col gap-3 rounded-brand border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+            <div>
+              <p className="font-medium text-amber-700">
+                {pendingActivationGroups.length > 1
+                  ? `${pendingActivationGroups.length} groupes en attente d'activation`
+                  : "1 groupe en attente d'activation"}{" "}
+                : {pendingActivationGroups.map((g) => g.name).join(", ")}
+              </p>
+              <p className="mt-1 text-amber-700/90">
+                Envoyez n&apos;importe quel message dans ce groupe WhatsApp depuis votre téléphone (une seule
+                fois) pour l&apos;activer — vos futures diffusions fonctionneront automatiquement après.
+              </p>
+            </div>
+            <form action={syncGroupsAction}>
+              <input type="hidden" name="organizationId" value={organizationId} />
+              <SubmitButton
+                pendingLabel="Vérification..."
+                className="w-fit rounded-brand border border-amber-600/40 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-500/10 disabled:opacity-60"
+              >
+                Vérifier maintenant
+              </SubmitButton>
+            </form>
+          </div>
+        )}
+      </section>
       <section className="flex flex-col gap-3 rounded-brand border border-ink/10 bg-white p-4">
         <h2 className="font-display text-lg font-semibold">Connecter un groupe</h2>
 

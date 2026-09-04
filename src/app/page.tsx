@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
-import { listActiveProductsForStorefront } from "@/application/services/catalog-service";
 import { trackEvent } from "@/application/services/analytics-service";
 import { resolveOrganizationSeo, buildOrganizationJsonLd } from "@/lib/seo";
 import { TenantLanding } from "./_components/tenant-landing";
-import { PlatformLanding } from "./_components/platform-landing";
+import { MarketingLanding } from "./_components/marketing-landing";
 
 /**
  * Favicon PAR TENANT pour la vitrine publique (cahier Lot E, Partie 1) —
@@ -23,11 +22,20 @@ import { PlatformLanding } from "./_components/platform-landing";
  */
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await resolveRequestTenant();
+
+  // Lot 2 — sans tenant résolu, cette route sert la landing marketing de
+  // SME-OS lui-même (avant ce lot : aucune métadonnée du tout, `{}`).
   if (!tenant) {
     return {
-      title: "Thrive — Gérez et automatisez votre commerce",
+      title: "SME-OS — Gérez votre entreprise depuis un seul endroit",
       description:
-        "Catalogue, commandes, clients, WhatsApp et IA : tout ce dont une PME a besoin pour vendre, sur une seule plateforme.",
+        "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés. SME-OS aide les commerçants et prestataires à organiser leur activité, sans compétences techniques.",
+      openGraph: {
+        type: "website",
+        title: "SME-OS — Gérez votre entreprise depuis un seul endroit",
+        description:
+          "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés, pour les commerçants et prestataires.",
+      },
     };
   }
 
@@ -55,12 +63,23 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function RootPage() {
+export default async function RootPage({
+  searchParams,
+}: {
+  // Lot K : feedback de la demande de rendez-vous publique (voir
+  // landing-sections/booking-actions.ts) — mêmes noms de paramètres que
+  // le pattern success/error déjà utilisé ailleurs (dashboard/site,
+  // dashboard/appointments), préfixés "booking" pour ne jamais entrer en
+  // collision avec un futur paramètre de la landing publique.
+  searchParams: Promise<{ bookingSuccess?: string; bookingError?: string }>;
+}) {
   const tenant = await resolveRequestTenant();
 
   if (!tenant) {
-    return <PlatformLanding />;
+    return <MarketingLanding />;
   }
+
+  const { bookingSuccess, bookingError } = await searchParams;
 
   // Lot H, Partie 2 (master prompt §55) — démarré en parallèle du reste,
   // `await`é avant de rendre pour donner à l'insertion une vraie chance de
@@ -69,13 +88,7 @@ export default async function RootPage() {
   // autant sérialiser sa latence avec le reste du chargement de la page.
   const trackPageView = trackEvent(tenant.organizationId, "page_view", "organization");
 
-  const [products, origin] = await Promise.all([
-    // OPTIMISATION (fusion précédente) : demande directement 6 produits à
-    // la requête SQL au lieu de tout charger puis `.slice(0, 6)` en
-    // mémoire (voir le commentaire sur listActiveProductsForStorefront).
-    listActiveProductsForStorefront(tenant.organizationId, { limit: 6 }),
-    resolveRequestOrigin(),
-  ]);
+  const origin = await resolveRequestOrigin();
 
   await trackPageView;
 
@@ -97,7 +110,7 @@ export default async function RootPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <TenantLanding tenant={tenant} products={products} />
+      <TenantLanding tenant={tenant} bookingFeedback={{ success: bookingSuccess, error: bookingError }} />
     </>
   );
 }

@@ -6,11 +6,14 @@ import { AuthenticationError } from "@/lib/errors";
 const NAV_ITEMS = [
   { href: "/admin", label: "Vue globale" },
   { href: "/admin/organizations", label: "Entreprises" },
+  { href: "/admin/plans", label: "Plans" },
   { href: "/admin/domains", label: "Domaines" },
   { href: "/admin/numbers", label: "Numéros" },
   { href: "/admin/channels", label: "Canaux" },
+  { href: "/admin/payments", label: "Paiements" },
   // Lot H, Partie 3.
   { href: "/admin/logs", label: "Logs" },
+  { href: "/admin/addons", label: "Add-ons" },
 ];
 
 /**
@@ -40,12 +43,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-ink/10 bg-ink px-5 py-4 text-paper">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-display text-sm font-semibold">Console plateforme SME-OS</p>
             <p className="text-xs text-paper/60">Super admin</p>
           </div>
-          <nav className="flex gap-4 text-sm">
+          <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
             {NAV_ITEMS.map((item) => (
               <Link key={item.href} href={item.href} className="text-paper/70 hover:text-paper">
                 {item.label}

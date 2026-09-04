@@ -24,13 +24,26 @@ vi.mock("./notification-service", () => ({
  */
 const tableResults = new Map<string, { data: unknown; error: unknown }>();
 const insertCalls: { table: string; rows: unknown }[] = [];
+// Lot M — chaque appel `.update(...)` est aussi journalisé (avec les
+// filtres `.eq`/`.is` accumulés dans l'ordre) pour vérifier
+// `activateGroupFromInboundConversation` sans dépendre d'un mock Supabase
+// complet.
+const updateCalls: { table: string; values: unknown; filters: [string, unknown][] }[] = [];
 
 function makeBuilder(table: string) {
   const resultFor = () => tableResults.get(table) ?? { data: null, error: null };
+  let pendingUpdate: { values: unknown; filters: [string, unknown][] } | null = null;
   const builder: Record<string, unknown> = {
     select: vi.fn(() => builder),
-    eq: vi.fn(() => builder),
+    eq: vi.fn((column: string, value: unknown) => {
+      pendingUpdate?.filters.push([column, value]);
+      return builder;
+    }),
     in: vi.fn(() => builder),
+    is: vi.fn((column: string, value: unknown) => {
+      pendingUpdate?.filters.push([column, value]);
+      return builder;
+    }),
     order: vi.fn(() => builder),
     limit: vi.fn(() => builder),
     lte: vi.fn(() => builder),
@@ -38,7 +51,11 @@ function makeBuilder(table: string) {
       insertCalls.push({ table, rows });
       return builder;
     }),
-    update: vi.fn(() => builder),
+    update: vi.fn((values: unknown) => {
+      pendingUpdate = { values, filters: [] };
+      updateCalls.push({ table, values, filters: pendingUpdate.filters });
+      return builder;
+    }),
     upsert: vi.fn((rows: unknown) => {
       insertCalls.push({ table, rows });
       return builder;
@@ -57,7 +74,12 @@ vi.mock("@/infrastructure/supabase/server-client", () => ({
   getSupabaseServiceClient: () => ({ from: mockFrom }),
 }));
 
-import { createBroadcast, connectGroups, formatGroupBroadcastMessage } from "./whatsapp-group-service";
+import {
+  createBroadcast,
+  connectGroups,
+  formatGroupBroadcastMessage,
+  activateGroupFromInboundConversation,
+} from "./whatsapp-group-service";
 import { canUseFeature } from "./entitlements-service";
 
 const mockCanUseFeature = vi.mocked(canUseFeature);
@@ -70,6 +92,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   tableResults.clear();
   insertCalls.length = 0;
+  updateCalls.length = 0;
 });
 
 describe("formatGroupBroadcastMessage", () => {
@@ -138,7 +161,10 @@ describe("createBroadcast — intégrité IDOR (groupes/produits doivent apparte
   });
 
   it("refuse si un produit ciblé n'appartient pas à l'organisation", async () => {
-    tableResults.set("whatsapp_groups", { data: [{ id: "g1", status: "connected" }], error: null });
+    tableResults.set("whatsapp_groups", {
+      data: [{ id: "g1", name: "Groupe 1", status: "connected", zernio_conversation_id: "conv-g1" }],
+      error: null,
+    });
     tableResults.set("products", { data: [], error: null }); // aucun produit trouvé pour cette org
 
     await expect(createBroadcast("org-1", ["p1"], ["g1"], futureIso(), "user-1")).rejects.toThrow(/produits sélectionnés sont introuvables/i);
@@ -151,10 +177,10 @@ describe("createBroadcast — critère d'acceptation central : une ligne PAR GRO
   it("10 produits x 4 groupes créent 4 group_broadcast_targets, pas 40", async () => {
     tableResults.set("whatsapp_groups", {
       data: [
-        { id: "g1", status: "connected" },
-        { id: "g2", status: "connected" },
-        { id: "g3", status: "connected" },
-        { id: "g4", status: "connected" },
+        { id: "g1", name: "Groupe 1", status: "connected", zernio_conversation_id: "conv-g1" },
+        { id: "g2", name: "Groupe 2", status: "connected", zernio_conversation_id: "conv-g2" },
+        { id: "g3", name: "Groupe 3", status: "connected", zernio_conversation_id: "conv-g3" },
+        { id: "g4", name: "Groupe 4", status: "connected", zernio_conversation_id: "conv-g4" },
       ],
       error: null,
     });
@@ -187,7 +213,10 @@ describe("createBroadcast — critère d'acceptation central : une ligne PAR GRO
   });
 
   it("déduplique les groupes/produits envoyés en double avant de créer les lignes", async () => {
-    tableResults.set("whatsapp_groups", { data: [{ id: "g1", status: "connected" }], error: null });
+    tableResults.set("whatsapp_groups", {
+      data: [{ id: "g1", name: "Groupe 1", status: "connected", zernio_conversation_id: "conv-g1" }],
+      error: null,
+    });
     tableResults.set("products", {
       data: [{ id: "p1", name: "Produit", slug: "produit", unit_price: 1000, description: null, categories: null }],
       error: null,
@@ -198,6 +227,79 @@ describe("createBroadcast — critère d'acceptation central : une ligne PAR GRO
 
     expect(result.targetCount).toBe(1);
     expect(result.productCount).toBe(1);
+  });
+});
+
+describe("createBroadcast — Lot M, critère d'acceptation central : jamais de diffusion silencieusement ratée", () => {
+  it("refuse à la création un groupe connecté mais pas encore activé, sans rien écrire", async () => {
+    tableResults.set("whatsapp_groups", {
+      data: [{ id: "g1", name: "Amis du quartier", status: "connected", zernio_conversation_id: null }],
+      error: null,
+    });
+
+    await expect(createBroadcast("org-1", ["p1"], ["g1"], futureIso(), "user-1")).rejects.toThrow(
+      /pas encore activé/i,
+    );
+    // Le message doit nommer le groupe concerné — pas un échec générique.
+    await expect(createBroadcast("org-1", ["p1"], ["g1"], futureIso(), "user-1")).rejects.toThrow(
+      /Amis du quartier/,
+    );
+
+    expect(insertCalls.find((c) => c.table === "group_broadcasts")).toBeUndefined();
+  });
+
+  it("refuse si AU MOINS UN des groupes ciblés n'est pas activé, même si les autres le sont", async () => {
+    tableResults.set("whatsapp_groups", {
+      data: [
+        { id: "g1", name: "Groupe prêt", status: "connected", zernio_conversation_id: "conv-g1" },
+        { id: "g2", name: "Groupe en attente", status: "connected", zernio_conversation_id: null },
+      ],
+      error: null,
+    });
+
+    await expect(createBroadcast("org-1", ["p1"], ["g1", "g2"], futureIso(), "user-1")).rejects.toThrow(
+      /Groupe en attente/,
+    );
+    expect(insertCalls.find((c) => c.table === "group_broadcasts")).toBeUndefined();
+  });
+
+  it("accepte normalement un groupe déjà activé (zernio_conversation_id renseigné)", async () => {
+    tableResults.set("whatsapp_groups", {
+      data: [{ id: "g1", name: "Groupe prêt", status: "connected", zernio_conversation_id: "conv-g1" }],
+      error: null,
+    });
+    tableResults.set("products", {
+      data: [{ id: "p1", name: "Produit", slug: "produit", unit_price: 1000, description: null, categories: null }],
+      error: null,
+    });
+    tableResults.set("group_broadcasts", { data: { id: "broadcast-1" }, error: null });
+
+    const result = await createBroadcast("org-1", ["p1"], ["g1"], futureIso(), "user-1");
+    expect(result).toEqual({ broadcastId: "broadcast-1", targetCount: 1, productCount: 1 });
+  });
+});
+
+describe("activateGroupFromInboundConversation — Lot M, Partie 1", () => {
+  it("active (UPDATE whatsapp_groups) quand le conversation.id du webhook matche l'external_id d'un groupe non activé", async () => {
+    await activateGroupFromInboundConversation("org-1", "2237xxxxxxxx-1234567890@g.us");
+
+    const call = updateCalls.find((c) => c.table === "whatsapp_groups");
+    expect(call).toBeDefined();
+    expect(call!.values).toEqual({ zernio_conversation_id: "2237xxxxxxxx-1234567890@g.us" });
+    expect(call!.filters).toContainEqual(["organization_id", "org-1"]);
+    expect(call!.filters).toContainEqual(["external_id", "2237xxxxxxxx-1234567890@g.us"]);
+    expect(call!.filters).toContainEqual(["zernio_conversation_id", null]);
+  });
+
+  it("ne lève jamais, même si organizationId/conversationId est vide (best-effort)", async () => {
+    await expect(activateGroupFromInboundConversation("", "x")).resolves.toBeUndefined();
+    await expect(activateGroupFromInboundConversation("org-1", "")).resolves.toBeUndefined();
+    expect(updateCalls.find((c) => c.table === "whatsapp_groups")).toBeUndefined();
+  });
+
+  it("ne lève jamais si la mise à jour échoue côté DB (best-effort, jamais bloquant pour le webhook)", async () => {
+    tableResults.set("whatsapp_groups", { data: null, error: { message: "boom" } });
+    await expect(activateGroupFromInboundConversation("org-1", "conv-1")).resolves.toBeUndefined();
   });
 });
 

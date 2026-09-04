@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import { requirePlatformAdmin } from "@/application/services/platform-admin-service";
-import { listPhoneNumbersForAdmin, addPhoneNumber } from "@/application/services/admin-numbers-service";
+import {
+  listPhoneNumbersForAdmin,
+  addPhoneNumber,
+  assignPhoneNumberToOrganization,
+  unassignPhoneNumber,
+} from "@/application/services/admin-numbers-service";
+import { listOrganizationsForAdmin } from "@/application/services/admin-organizations-service";
 import { AppError } from "@/lib/errors";
 
 async function addPhoneNumberAction(formData: FormData) {
@@ -18,6 +24,45 @@ async function addPhoneNumberAction(formData: FormData) {
   redirect("/admin/numbers");
 }
 
+/**
+ * Lot 4 — voir RAPPORT_LOT_4.md. Assigne un numéro en pool à une
+ * entreprise ; débloque le bonus "+N groupes WhatsApp" (section 55)
+ * dès que la ligne `phone_numbers.status` passe à 'assigned'.
+ */
+async function assignPhoneNumberAction(formData: FormData) {
+  "use server";
+  const admin = await requirePlatformAdmin();
+  const numberId = String(formData.get("numberId") ?? "");
+  const organizationId = String(formData.get("organizationId") ?? "");
+
+  if (!organizationId) {
+    redirect(`/admin/numbers?error=${encodeURIComponent("Choisissez une entreprise avant d'assigner.")}`);
+    return;
+  }
+
+  try {
+    await assignPhoneNumberToOrganization(numberId, organizationId, admin.userId);
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors de l'assignation du numéro";
+    redirect(`/admin/numbers?error=${encodeURIComponent(message)}`);
+  }
+  redirect("/admin/numbers?success=" + encodeURIComponent("Numéro assigné."));
+}
+
+async function unassignPhoneNumberAction(formData: FormData) {
+  "use server";
+  const admin = await requirePlatformAdmin();
+  const numberId = String(formData.get("numberId") ?? "");
+
+  try {
+    await unassignPhoneNumber(numberId, admin.userId);
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors du retrait du numéro";
+    redirect(`/admin/numbers?error=${encodeURIComponent(message)}`);
+  }
+  redirect("/admin/numbers?success=" + encodeURIComponent("Numéro retiré — repli dans le pool disponible."));
+}
+
 const STATUS_LABELS: Record<string, string> = {
   available: "Disponible",
   assigned: "Assigné",
@@ -27,18 +72,26 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function AdminNumbersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, success } = await searchParams;
   await requirePlatformAdmin();
-  const numbers = await listPhoneNumbersForAdmin();
+  const [numbers, organizations] = await Promise.all([listPhoneNumbersForAdmin(), listOrganizationsForAdmin()]);
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Numéros</h1>
+      <div>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Numéros</h1>
+        <p className="mt-1 text-sm text-muted">
+          Un numéro assigné débloque le bonus &laquo;&nbsp;groupes WhatsApp&nbsp;&raquo; de son plan (section 55).
+        </p>
+      </div>
 
       {error && (
         <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+      )}
+      {success && (
+        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
       )}
 
       <form
@@ -73,7 +126,7 @@ export default async function AdminNumbersPage({
         </button>
       </form>
 
-      <div className="overflow-hidden rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
         {numbers.length === 0 ? (
           <p className="p-6 text-sm text-muted">Aucun numéro enregistré.</p>
         ) : (
@@ -84,6 +137,7 @@ export default async function AdminNumbersPage({
                 <th className="px-4 py-2">Pays</th>
                 <th className="px-4 py-2">Statut</th>
                 <th className="px-4 py-2">Entreprise</th>
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -101,6 +155,39 @@ export default async function AdminNumbersPage({
                     </span>
                   </td>
                   <td className="px-4 py-2 text-muted">{n.organizationName ?? "—"}</td>
+                  <td className="px-4 py-2 text-right">
+                    {n.organizationId ? (
+                      <form action={unassignPhoneNumberAction}>
+                        <input type="hidden" name="numberId" value={n.id} />
+                        <button type="submit" className="text-xs text-clay hover:underline">
+                          Retirer
+                        </button>
+                      </form>
+                    ) : n.status === "suspended" ? (
+                      <span className="text-xs text-muted">Suspendu</span>
+                    ) : (
+                      <form action={assignPhoneNumberAction} className="flex items-center justify-end gap-1">
+                        <input type="hidden" name="numberId" value={n.id} />
+                        <select
+                          name="organizationId"
+                          defaultValue=""
+                          className="rounded-brand border border-ink/15 px-2 py-1 text-xs"
+                        >
+                          <option value="" disabled>
+                            Choisir une entreprise…
+                          </option>
+                          {organizations.map((org) => (
+                            <option key={org.id} value={org.id}>
+                              {org.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className="rounded-brand bg-ink px-2 py-1 text-xs font-medium text-white">
+                          Assigner
+                        </button>
+                      </form>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

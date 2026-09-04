@@ -1,9 +1,6 @@
 import Link from "next/link";
 import type { CatalogProductSummary } from "@/application/services/catalog-service";
-
-function formatPrice(amount: number): string {
-  return `${amount.toLocaleString("fr-FR")} FCFA`;
-}
+import { formatPrice } from "@/lib/format";
 
 export function ProductCard({ product }: { product: CatalogProductSummary }) {
   const content = (

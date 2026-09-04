@@ -56,16 +56,26 @@ par numéro de téléphone (`POST /inbox/conversations` avec `participantId`,
 confirmé lui aussi mais réservé à un numéro individuel — jamais un
 identifiant de groupe), **aucun endpoint documenté ne permet d'obtenir ou
 de créer un `conversationId` pour un groupe qui n'a encore jamais envoyé
-de message entrant.** Conséquence assumée dans le code : `whatsapp_groups`
-a une colonne `zernio_conversation_id`, nullable, qui reste NULL pour tout
-groupe connecté par ce lot — et toute diffusion vers un tel groupe échoue
-explicitement (`group_broadcast_targets.status = 'failed'` avec un message
-clair) plutôt que de simuler un envoi qui n'a jamais eu lieu. Combler ce
-manque demanderait de construire la RÉCEPTION de messages de groupe
-(webhook `message.received`, déjà générique et confirmé — "les messages
-de groupe de tous les participants apparaissent dans l'Inbox") — **explicitement
-hors scope du cahier Lot F** ("réception de messages/réponses DANS un
-groupe" est listé dans sa section "Hors scope").
+de message entrant.**
+
+**CONFIRMÉ (Lot M, docs.zernio.com/platforms/whatsapp/groups)** — fait
+central qui débloque tout : *"Each group has its own conversation thread
+identified by the group ID"* — pour un groupe, `conversationId ===
+l'id du groupe lui-même` (`external_id` côté SME-OS). La conversation
+Zernio n'existe simplement pas tant que personne n'a écrit dedans, mais
+son id est connu D'AVANCE : c'est le même que celui du groupe. Le Lot F
+avait laissé `zernio_conversation_id` NULL pour toujours ("hors scope"
+explicitement pour la réception de messages de groupe) ; **le Lot M ferme
+ce trou** : le webhook `message.received` (générique, déjà confirmé et
+câblé) est maintenant écouté pour CE cas précis —
+`activateGroupFromInboundConversation` (whatsapp-group-service.ts) matche
+le `conversation.id` reçu contre `whatsapp_groups.external_id` de
+l'organisation et renseigne `zernio_conversation_id` dès le premier
+message reçu du groupe, quel qu'il soit (texte ou média). `createBroadcast`
+refuse maintenant explicitement, À LA CRÉATION, toute diffusion vers un
+groupe encore NULL sur cette colonne — voir `/dashboard/groups`, qui
+distingue "Prêt" de "En attente d'activation" et guide le commerçant
+(envoyer un message une fois, depuis son téléphone, dans le groupe).
 
 **3. Webhook dédié aux événements de groupe (nouveaux membres...) : NON
 SUPPORTÉ.** La liste complète des événements webhook Zernio (`message.*`,
@@ -78,12 +88,56 @@ adhésion/participants. La gestion des participants (`POST`/`DELETE
 notifiée par webhook — hors scope de ce lot de toute façon (gestion des
 participants explicitement exclue par le cahier).
 
-**En résumé** : la synchronisation des groupes (lecture) est une
-intégration réelle et complète. La diffusion, elle, est honnêtement
-câblée de bout en bout (modèle de données, quota, UI, cron) mais ne
-pourra réellement délivrer un message tant qu'un lot futur ne branche pas
-la réception des messages de groupe pour peupler `zernio_conversation_id`
-— voir `RAPPORT_LOT_F.md` pour le détail des décisions prises.
+**En résumé (mis à jour Lot M)** : la synchronisation des groupes
+(lecture) ET la diffusion sont maintenant une intégration réelle et
+complète de bout en bout — modèle de données, quota, UI, cron, ET
+activation automatique via le webhook inbox. Plus aucun "TODO" sur ce
+point : voir `RAPPORT_LOT_M.md` pour le détail. `RAPPORT_LOT_F.md` reste
+la référence historique de pourquoi ce trou existait au départ.
+
+## Publications sociales — synchronisation des résultats (Lot M, Partie 2)
+
+Le Lot H avait laissé `docs/ZERNIO_INTEGRATION.md` avec un point
+explicitement "à confirmer" (voir ancienne section "Ce qui reste à
+confirmer" ci-dessous, maintenant résolue) : le nom exact du champ
+contenant le résultat par plateforme d'une publication. **CONFIRMÉ (Lot
+M, docs.zernio.com, pages "Facebook API"/"Threads API" — exemples de
+réponse `POST /posts`/`GET /posts/{id}` — et le blog officiel "How we
+built an API for AI content tools")** : le champ s'appelle réellement
+`platforms` (tableau), **pas** `platformResults` comme le code l'avait
+supposé. Forme confirmée par élément :
+`{ platform, accountId, status, platformPostId?, platformPostUrl?, error? }`.
+
+**Événements webhook confirmés (docs.zernio.com/webhooks, table
+"Available events", recoupé avec le SDK officiel `zernio-php` et
+`zernio-dev/n8n-nodes-zernio`)** : `post.scheduled`, `post.published`,
+`post.failed`, `post.partial` (publié sur certaines plateformes, échoué
+sur d'autres), `post.cancelled`, `post.recycled`, `post.platform.published`,
+`post.platform.failed` — les deux derniers au niveau d'UNE plateforme,
+les autres au niveau agrégé du post entier.
+
+**ENCORE NON CONFIRMÉ** (voir types.ts pour le détail) : la forme EXACTE
+de l'enveloppe webhook `post.*` elle-même (est-ce littéralement
+`{ post: {...} }` comme la ressource REST, ou un sous-ensemble de champs à
+plat au niveau racine ?). Le blog officiel confirme au minimum que le
+payload contient l'id du post, son statut final, et un message d'erreur
+en cas d'échec — `mapZernioPostEventToDomainEvent` (mapper.ts) reste
+volontairement tolérant à cette incertitude précise (accepte `post._id`,
+`post.id`, OU `postId` à la racine) plutôt que de deviner puis planter en
+production. **À vérifier avec un vrai payload avant mise en prod**, via la
+fonctionnalité "Test webhook" du dashboard Zernio (compte de production
+réel, hors de portée de ce lot — voir RAPPORT_LOT_M.md).
+
+**Routage tenant** : contrairement aux événements inbox (`account.id`,
+mappé via `provider_connections.metadata.accountId`), un post peut cibler
+plusieurs comptes/plateformes à la fois — `account.id` seul n'est donc
+pas fiable comme clé de routage pour cette catégorie, et
+`getSocialPublishingProvider()` ne stocke aujourd'hui aucun
+`profileId`/`accountId` distinctif pour la connexion `social` d'une
+organisation. Décision prise plutôt que de deviner un champ non confirmé
+du payload : router via `social_posts.provider_post_id` (nos propres
+données, déjà organisation-scopées) — voir
+`resolveOrganizationIdByProviderPostId` (resolve-organization.ts).
 
 ## Commentaires sociaux (Lot I, Partie 3)
 
@@ -140,7 +194,12 @@ d'intégration. **Verdict : les deux sont CONFIRMÉES.**
   webhooks inbox (la doc consultée référence des types nommés sans lister
   tous leurs champs en clair) — utiliser la fonctionnalité "Test webhook"
   du dashboard Zernio pour capturer un vrai payload avant d'aller en prod.
-- Détail exact du champ `platformResults` dans `GET /posts/{id}`.
+- ~~Détail exact du champ `platformResults` dans `GET /posts/{id}`~~ —
+  **RÉSOLU (Lot M)** : le champ s'appelle `platforms`, forme confirmée —
+  voir section "Publications sociales" ci-dessus.
+- **Lot M** : forme EXACTE de l'enveloppe webhook `post.*` (racine plate
+  vs `{ post: {...} }`) — voir section "Publications sociales" ci-dessus,
+  `mapZernioPostEventToDomainEvent` reste tolérant en attendant.
 - Le compte WhatsApp business doit être réellement connecté et vérifié
   côté Zernio (numéro, template messages approuvés si utilisés hors
   fenêtre des 24h).
@@ -164,9 +223,12 @@ infrastructure/providers/social/zernio/      Social publishing + commentaires (L
   méthodes listComments/replyToComment/hideComment/unhideComment ajoutées
   au Lot I sans toucher aux méthodes de publication existantes)
 
-application/services/whatsapp-group-service.ts   Lot F — groupes + diffusions (voir en-tête du fichier)
-app/dashboard/groups/                            UI (connexion, diffusion, historique)
+application/services/whatsapp-group-service.ts   Lot F/M — groupes + diffusions + activation (voir en-tête du fichier)
+app/dashboard/groups/                            UI (connexion, diffusion, historique, activation — Lot M)
 app/api/cron/process-broadcasts/route.ts         Traitement des diffusions dues
+
+application/services/marketing-service.ts        Lot D/M — campagnes + handlePostStatusWebhook (sync des résultats)
+app/dashboard/marketing/                         UI (Lot M — statut réel par plateforme)
 
 application/services/social-comment-service.ts appelle
 `getSocialPublishingProvider()` (ProviderRegistry) — jamais l'adapter
@@ -181,9 +243,12 @@ ne peut pas être supprimé par cette route (Zernio protège l'historique de
 publication, cohérent avec notre propre règle de ne jamais supprimer
 l'historique).
 
-La diffusion vers un groupe WhatsApp fraîchement connecté échouera
-toujours (`group_broadcast_targets.status = 'failed'`) tant qu'aucun
-message n'a été reçu de ce groupe — voir la section "Groupes WhatsApp"
-ci-dessus. Ce n'est pas un bug : c'est la limite réelle et documentée de
-l'API Zernio pour ce cas d'usage précis, pas une supposition de notre
-part.
+**Mis à jour Lot M** — ce n'est plus une limitation ouverte : la diffusion
+vers un groupe WhatsApp fraîchement connecté est refusée EXPLICITEMENT à
+la création (jamais un échec silencieux) tant qu'aucun message n'a été
+reçu de ce groupe, et le commerçant est guidé pour lever ce blocage en une
+action (envoyer un message une fois) — voir la section "Groupes WhatsApp"
+ci-dessus et `activateGroupFromInboundConversation`. Ce n'était pas un bug
+avant Lot M : c'était la limite réelle et documentée de l'API Zernio pour
+ce cas d'usage précis ; le Lot M construit la solution côté application
+que cette limite appelait, plutôt que de la contourner par une simulation.

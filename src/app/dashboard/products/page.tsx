@@ -63,7 +63,7 @@ export default async function ProductsPage({
 
       <CsvImportForm organizationId={organizationId} />
 
-      <div className="overflow-hidden rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
         {(products ?? []).length === 0 ? (
           <p className="p-6 text-sm text-muted">Aucun produit pour l&apos;instant.</p>
         ) : (

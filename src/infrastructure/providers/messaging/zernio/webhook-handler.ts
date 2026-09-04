@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { ZernioInboxWebhookEvent } from "./types";
+import type { ZernioWebhookEvent } from "./types";
 
 /**
  * Vérifie la signature HMAC du webhook entrant.
@@ -26,11 +26,14 @@ export function verifyZernioSignature(
   return crypto.timingSafeEqual(a, b);
 }
 
-export function parseZernioWebhookPayload(rawBody: string): ZernioInboxWebhookEvent[] {
+export function parseZernioWebhookPayload(rawBody: string): ZernioWebhookEvent[] {
   const parsed = JSON.parse(rawBody);
   // Un seul événement par delivery d'après la doc (pas de batch confirmé) —
   // on normalise quand même vers un tableau pour rester robuste si ça
-  // change, et pour garder l'appelant simple.
+  // change, et pour garder l'appelant simple. Lot M : le même webhook
+  // reçoit maintenant deux catégories d'événements (inbox ET post.*) —
+  // voir ZernioWebhookEvent (types.ts) et isZernioPostEvent pour les
+  // distinguer côté appelant.
   return Array.isArray(parsed) ? parsed : [parsed];
 }
 

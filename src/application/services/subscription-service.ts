@@ -43,14 +43,25 @@ export interface SubscriptionOverview {
   plans: PlanComparisonRow[];
 }
 
-const USAGE_GAUGES: { key: string; label: string; mode: "cumulative" | "capped" }[] = [
+/**
+ * Lot 4 : exporté (n'était qu'un détail interne de ce fichier jusqu'ici)
+ * pour qu'`admin-plans-service.ts` réutilise EXACTEMENT le même
+ * catalogue de clés/libellés côté Super Admin plutôt que d'en tenir une
+ * seconde liste qui pourrait diverger (section 100 du master prompt :
+ * "ne pas dupliquer la logique... une seule source de vérité par
+ * responsabilité"). 'ai_credits' délègue à getCreditStatus() pour la
+ * LECTURE d'usage (voir canUseFeature ci-dessous) mais sa limite de base
+ * reste bien une ligne `plan_entitlements` comme les autres clés — donc
+ * éditable au même titre depuis /admin/plans.
+ */
+export const USAGE_GAUGES: { key: string; label: string; mode: "cumulative" | "capped" }[] = [
   { key: "ai_credits", label: "Crédits IA", mode: "cumulative" },
   { key: "whatsapp_groups", label: "Groupes WhatsApp", mode: "cumulative" },
   { key: "broadcast_contacts", label: "Contacts par campagne de diffusion", mode: "capped" },
   { key: "social_accounts", label: "Comptes réseaux sociaux par publication", mode: "capped" },
 ];
 
-const FEATURE_FLAGS: { key: string; label: string }[] = [
+export const FEATURE_FLAGS: { key: string; label: string }[] = [
   { key: "facebook_messenger", label: "Messages Facebook Messenger" },
   { key: "instagram_messages", label: "Messages Instagram" },
   { key: "linkedin", label: "Publications LinkedIn" },

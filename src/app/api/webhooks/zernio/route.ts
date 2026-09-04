@@ -6,12 +6,21 @@ import {
   parseZernioWebhookPayload,
   verifyZernioSignature,
 } from "@/infrastructure/providers/messaging/zernio/webhook-handler";
-import { mapZernioEventToDomainEvent } from "@/infrastructure/providers/messaging/zernio/mapper";
-import { resolveOrganizationIdByZernioAccount } from "@/infrastructure/providers/messaging/zernio/resolve-organization";
+import {
+  mapZernioEventToDomainEvent,
+  mapZernioPostEventToDomainEvent,
+} from "@/infrastructure/providers/messaging/zernio/mapper";
+import { isZernioPostEvent } from "@/infrastructure/providers/messaging/zernio/types";
+import {
+  resolveOrganizationIdByZernioAccount,
+  resolveOrganizationIdByProviderPostId,
+} from "@/infrastructure/providers/messaging/zernio/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
 import { routeMessage } from "@/application/services/conversation-orchestrator";
 import { escalateToHuman } from "@/application/services/handoff-service";
 import { getMessagingProvider } from "@/infrastructure/providers/registry";
+import { activateGroupFromInboundConversation } from "@/application/services/whatsapp-group-service";
+import { handlePostStatusWebhook } from "@/application/services/marketing-service";
 
 /**
  * Pipeline (section 37) :
@@ -20,6 +29,13 @@ import { getMessagingProvider } from "@/infrastructure/providers/registry";
  *
  * Toujours répondre 200 rapidement même en cas d'événement ignoré/dupliqué,
  * pour éviter que Zernio ne retente indéfiniment (section 38).
+ *
+ * Lot M — ce même webhook reçoit maintenant deux catégories d'événements
+ * qui partagent l'enveloppe/la signature/la déduplication mais divergent
+ * ensuite : inbox (`message.*`/`reaction.*`/`comment.*`/`review.*`,
+ * routées par `account.id`) et publications (`post.*`, routées par
+ * `social_posts.provider_post_id` — voir resolve-organization.ts pour le
+ * détail de pourquoi `account.id` n'est pas fiable pour cette catégorie).
  */
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -36,13 +52,18 @@ export async function POST(request: Request) {
 
   for (const rawEvent of rawEvents) {
     // CONFIRMÉ : `id` (racine du payload) est la clé de déduplication
-    // officielle (== header X-Zernio-Event-Id). `account.id` est la clé de
-    // routage tenant pour les events inbox (guide multi-tenant Zernio).
+    // officielle (== header X-Zernio-Event-Id), pour TOUTE catégorie
+    // d'événement.
     const externalEventId = rawEvent.id;
-    const organizationId = await resolveOrganizationIdByZernioAccount(rawEvent.account.id);
+
+    const organizationId = isZernioPostEvent(rawEvent)
+      ? await resolveOrganizationIdByProviderPostId(
+          rawEvent.post?._id ?? rawEvent.post?.id ?? rawEvent.postId ?? "",
+        )
+      : await resolveOrganizationIdByZernioAccount(rawEvent.account.id);
 
     if (!organizationId) {
-      console.warn(`Zernio webhook: aucun tenant pour account.id=${rawEvent.account.id}, ignoré.`);
+      console.warn(`Zernio webhook: aucun tenant résolu pour l'événement ${rawEvent.event} (${externalEventId}), ignoré.`);
       continue;
     }
 
@@ -68,6 +89,24 @@ export async function POST(request: Request) {
     }
 
     try {
+      if (isZernioPostEvent(rawEvent)) {
+        const postEvent = mapZernioPostEventToDomainEvent(rawEvent, organizationId);
+        if (postEvent) {
+          await handlePostStatusWebhook(postEvent);
+        }
+        await markWebhookEvent(externalEventId, "processed");
+        continue;
+      }
+
+      // Lot M, Partie 1 — active un groupe WhatsApp connecté dès qu'un
+      // premier message EN provient, indépendamment du fait que ce
+      // message produise ou non un DomainEvent complet ci-dessous (un
+      // message de groupe purement média, sans texte, établit quand même
+      // la conversation côté Zernio). Best-effort, jamais bloquant.
+      if (rawEvent.event === "message.received" && rawEvent.conversation?.id) {
+        await activateGroupFromInboundConversation(organizationId, rawEvent.conversation.id);
+      }
+
       const domainEvent = mapZernioEventToDomainEvent(rawEvent, organizationId);
       if (!domainEvent) {
         await markWebhookEvent(externalEventId, "ignored_duplicate");

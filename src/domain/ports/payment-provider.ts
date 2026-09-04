@@ -10,6 +10,8 @@ export interface CreatePaymentRequest {
   amount: number;
   currency: string;
   customerPhone?: string;
+  /** Ajout Lot G : NotchPay accepte email OU phone OU customer — voir adapter. */
+  customerEmail?: string;
   description?: string;
 }
 
@@ -34,4 +36,14 @@ export interface PaymentProvider {
   verifyPayment(providerReference: string): Promise<PaymentStatusResult>;
 
   getPaymentStatus(providerReference: string): Promise<PaymentStatusResult>;
+
+  /**
+   * Annule un paiement encore `pending` côté provider (jamais un paiement
+   * déjà `succeeded`/`failed` — capacité confirmée côté NotchPay
+   * uniquement en `pending`, voir adapter). Optionnelle : un futur
+   * provider qui ne supporterait pas l'annulation reste conforme au port
+   * sans avoir à lever une erreur "non supporté" à l'exécution.
+   * Ajout Lot G (premier implémenteur réel de ce port).
+   */
+  cancelPayment?(providerReference: string): Promise<void>;
 }

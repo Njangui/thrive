@@ -1,7 +1,22 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { decrementStock } from "./catalog-service";
+import { pauseScheduledPostsForProduct } from "./marketing-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { trackEvent } from "./analytics-service";
+import { NotFoundError } from "@/lib/errors";
+
+/** Statuts réels — `orders_status_check` (0009_align_orders_status.sql). */
+export const ORDER_STATUSES = ["pending", "confirmed", "completed", "cancelled"] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+/** Forme de retour de `complete_order_transaction()` — voir 0038_atomic_order_stock_transaction.sql. */
+interface CompleteOrderTransactionRow {
+  already_completed: boolean;
+  result_order_id: string;
+  total_amount: number;
+  currency: string;
+  newly_out_of_stock_product_ids: string[] | null;
+}
+
 
 export interface CreateOrderItemInput {
   productId: string;
@@ -76,9 +91,22 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
  *  2. décrément de stock par article (bascule OUT_OF_STOCK si nécessaire)
  *  3. entrée `revenues` automatique (section 27 : Order -> Revenue)
  *
- * Logique en couche application plutôt qu'un trigger DB, pour rester
- * explicite, testable, et éviter un effet de bord invisible en lisant
- * juste le schéma (section 43 : error handling clair par étape).
+ * Lot 1 (audit sécurité/DB/stock) — ces trois étapes passent maintenant
+ * par `complete_order_transaction()`, une fonction SQL unique exécutée
+ * dans UNE seule transaction Postgres avec verrouillage de ligne (`FOR
+ * UPDATE` sur `orders` ET sur chaque `products` décrémenté) — voir
+ * migration 0038_atomic_order_stock_transaction.sql pour le détail et le
+ * bug réel que ça corrige (double complétion / double décrément sous
+ * appels concurrents, section 19/71 du master prompt). Ce n'est PLUS une
+ * suite d'appels Supabase séparés : soit tout est appliqué, soit rien ne
+ * l'est (rollback automatique sur erreur SQL).
+ *
+ * Les effets de bord qui ne sont PAS des mutations de données (notifier
+ * les admins, mettre en pause des publications programmées) restent ici,
+ * déclenchés APRÈS le commit de la transaction, pour chaque produit que
+ * la fonction SQL signale comme venant de basculer en rupture — jamais
+ * dans le SQL lui-même (ces appels touchent d'autres services/tables
+ * sans lien avec l'atomicité stock/commande/revenu).
  */
 export async function markOrderCompleted(
   organizationId: string,
@@ -87,57 +115,46 @@ export async function markOrderCompleted(
 ): Promise<void> {
   const supabase = getSupabaseServiceClient();
 
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .select("id, status, total_amount, currency")
-    .eq("id", orderId)
-    .eq("organization_id", organizationId)
-    .single();
+  const { data, error } = await supabase.rpc("complete_order_transaction", {
+    p_order_id: orderId,
+    p_organization_id: organizationId,
+    p_actor_user_id: actorUserId ?? null,
+  });
 
-  if (orderError || !order) {
+  if (error) {
+    // P0002 = "no_data_found" côté Postgres, levé explicitement par la
+    // fonction SQL quand la commande n'existe pas pour cette organisation
+    // (défense en profondeur IDOR — jamais faire confiance à orderId sans
+    // vérifier organizationId, section 70).
+    if (error.code === "P0002") {
+      throw new Error(`Commande introuvable: ${orderId}`);
+    }
+    throw new Error(`Impossible de finaliser la commande ${orderId}: ${error.message}`);
+  }
+
+  const result = (data as CompleteOrderTransactionRow[] | null)?.[0];
+  if (!result) {
     throw new Error(`Commande introuvable: ${orderId}`);
   }
-  if (order.status === "completed") return; // idempotent — pas de double comptage
+  if (result.already_completed) return; // idempotent — pas de double comptage, pas de double notification
 
-  const { data: items, error: itemsError } = await supabase
-    .from("order_items")
-    .select("product_id, quantity, label")
-    .eq("order_id", orderId);
+  for (const productId of result.newly_out_of_stock_product_ids ?? []) {
+    await pauseScheduledPostsForProduct(organizationId, productId);
 
-  if (itemsError) {
-    throw new Error(`Impossible de lire les articles de la commande ${orderId}: ${itemsError.message}`);
-  }
+    const { data: product } = await supabase
+      .from("products")
+      .select("name")
+      .eq("id", productId)
+      .maybeSingle();
 
-  for (const item of items ?? []) {
-    if (!item.product_id) continue; // article libre non catalogué — pas de décrément
-    await decrementStock(
+    await notifyOrgAdmins({
       organizationId,
-      item.product_id,
-      Number(item.quantity),
-      `Vente — commande ${orderId}`,
-      actorUserId,
-    );
+      title: "Produit en rupture de stock.",
+      body: `Le produit "${product?.name ?? productId}" est en rupture de stock.`,
+      relatedEntityType: "product",
+      relatedEntityId: productId,
+    });
   }
-
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({ status: "completed" })
-    .eq("id", orderId);
-
-  if (updateError) {
-    throw new Error(`Impossible de finaliser la commande ${orderId}: ${updateError.message}`);
-  }
-
-  await supabase.from("revenues").insert({
-    organization_id: organizationId,
-    order_id: orderId,
-    amount: order.total_amount,
-    currency: order.currency,
-    category: "vente",
-    source: "order",
-    reference: orderId,
-    created_by: actorUserId,
-  });
 }
 
 export async function cancelOrder(organizationId: string, orderId: string): Promise<void> {
@@ -152,4 +169,121 @@ export async function cancelOrder(organizationId: string, orderId: string): Prom
   if (error) {
     throw new Error(`Impossible d'annuler la commande ${orderId}: ${error.message}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Lot L, Partie 3 — écran /dashboard/orders (lecture paginée + détail)
+// ---------------------------------------------------------------------------
+
+export interface OrderListItem {
+  id: string;
+  status: OrderStatus;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  contactName: string | null;
+  contactPhone: string | null;
+}
+
+export interface ListOrdersOptions {
+  status?: OrderStatus;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListOrdersResult {
+  orders: OrderListItem[];
+  totalCount: number;
+}
+
+interface OrderRow {
+  id: string;
+  status: string;
+  total_amount: number;
+  currency: string;
+  created_at: string;
+  contacts?: { full_name?: string | null; phone_e164?: string | null } | null;
+}
+
+/** Pagination `.range()` — même convention que products/page.tsx et lead-service.ts::listLeadsForOrg. */
+export async function listOrdersForOrg(organizationId: string, options: ListOrdersOptions): Promise<ListOrdersResult> {
+  const supabase = getSupabaseServiceClient();
+  const from = (options.page - 1) * options.pageSize;
+  const to = from + options.pageSize - 1;
+
+  let query = supabase
+    .from("orders")
+    .select("id, status, total_amount, currency, created_at, contacts(full_name, phone_e164)", { count: "exact" })
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (options.status) {
+    query = query.eq("status", options.status);
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(`Erreur lecture des commandes: ${error.message}`);
+
+  const rows = (data ?? []) as unknown as OrderRow[];
+  return {
+    orders: rows.map((row) => ({
+      id: row.id,
+      status: row.status as OrderStatus,
+      totalAmount: Number(row.total_amount),
+      currency: row.currency,
+      createdAt: row.created_at,
+      contactName: row.contacts?.full_name ?? null,
+      contactPhone: row.contacts?.phone_e164 ?? null,
+    })),
+    totalCount: count ?? 0,
+  };
+}
+
+export interface OrderDetail extends OrderListItem {
+  notes: string | null;
+  items: { id: string; label: string; unitPrice: number; quantity: number }[];
+}
+
+/** Détail d'une commande (cahier UI : "clic vers un détail (order_items, total, client)"). */
+export async function getOrderDetail(organizationId: string, orderId: string): Promise<OrderDetail> {
+  const supabase = getSupabaseServiceClient();
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("id, status, total_amount, currency, notes, created_at, contacts(full_name, phone_e164)")
+    .eq("id", orderId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (orderError) throw new Error(`Erreur lecture commande: ${orderError.message}`);
+  if (!order) throw new NotFoundError("Commande introuvable.");
+
+  const { data: items, error: itemsError } = await supabase
+    .from("order_items")
+    .select("id, label, unit_price, quantity")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true });
+
+  if (itemsError) throw new Error(`Erreur lecture des articles: ${itemsError.message}`);
+
+  const contact = (order as unknown as { contacts?: { full_name?: string | null; phone_e164?: string | null } })
+    .contacts;
+
+  return {
+    id: order.id,
+    status: order.status as OrderStatus,
+    totalAmount: Number(order.total_amount),
+    currency: order.currency,
+    notes: order.notes,
+    createdAt: order.created_at,
+    contactName: contact?.full_name ?? null,
+    contactPhone: contact?.phone_e164 ?? null,
+    items: (items ?? []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      unitPrice: Number(item.unit_price),
+      quantity: Number(item.quantity),
+    })),
+  };
 }

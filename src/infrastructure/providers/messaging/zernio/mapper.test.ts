@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapZernioEventToDomainEvent } from "./mapper";
+import { mapZernioEventToDomainEvent, mapZernioPostEventToDomainEvent } from "./mapper";
 import type { ZernioInboxWebhookEvent } from "./types";
 
 const ORG_ID = "org_123";
@@ -68,5 +68,82 @@ describe("mapZernioEventToDomainEvent", () => {
     } else {
       throw new Error("event attendu");
     }
+  });
+});
+
+describe("mapZernioPostEventToDomainEvent — Lot M, Partie 2", () => {
+  it("post.published (agrégé, avec platforms[] CONFIRMÉ) -> SOCIAL_POST_STATUS_UPDATED", () => {
+    const event = mapZernioPostEventToDomainEvent(
+      {
+        id: "evt_post_1",
+        event: "post.published",
+        post: {
+          _id: "zpost_1",
+          status: "published",
+          platforms: [
+            { platform: "facebook", accountId: { _id: "acc_1", username: "MaBoutique" }, status: "published", platformPostUrl: "https://facebook.com/x" },
+          ],
+        },
+        timestamp: "2026-08-31T09:00:00.000Z",
+      },
+      ORG_ID,
+    );
+
+    expect(event).not.toBeNull();
+    expect(event?.type).toBe("SOCIAL_POST_STATUS_UPDATED");
+    expect(event?.payload.providerPostId).toBe("zpost_1");
+    expect(event?.payload.overallStatus).toBe("published");
+    expect(event?.payload.targets).toEqual([
+      { platform: "facebook", accountId: "acc_1", status: "published", platformPostId: undefined, platformPostUrl: "https://facebook.com/x", errorMessage: undefined },
+    ]);
+  });
+
+  it("post.failed sans platforms[] détaillé -> statut agrégé quand même reflété, targets vide", () => {
+    const event = mapZernioPostEventToDomainEvent(
+      { id: "evt_post_2", event: "post.failed", post: { id: "zpost_2", status: "failed", error: "Compte déconnecté" }, timestamp: "2026-08-31T09:00:00.000Z" },
+      ORG_ID,
+    );
+
+    expect(event?.payload.providerPostId).toBe("zpost_2");
+    expect(event?.payload.overallStatus).toBe("failed");
+    expect(event?.payload.overallErrorMessage).toBe("Compte déconnecté");
+    expect(event?.payload.targets).toEqual([]);
+  });
+
+  it("post.platform.failed (granularité fine, un seul résultat) -> un seul target", () => {
+    const event = mapZernioPostEventToDomainEvent(
+      {
+        id: "evt_post_3",
+        event: "post.platform.failed",
+        postId: "zpost_3",
+        platform: "tiktok",
+        accountId: "acc_3",
+        error: "video too short for Reels",
+        timestamp: "2026-08-31T09:00:00.000Z",
+      },
+      ORG_ID,
+    );
+
+    expect(event?.payload.providerPostId).toBe("zpost_3");
+    expect(event?.payload.overallStatus).toBeUndefined();
+    expect(event?.payload.targets).toEqual([
+      { platform: "tiktok", accountId: "acc_3", status: "failed", platformPostUrl: undefined, errorMessage: "video too short for Reels" },
+    ]);
+  });
+
+  it("ignore post.scheduled (déjà reflété par nos propres actions, pas par le webhook)", () => {
+    const event = mapZernioPostEventToDomainEvent(
+      { id: "evt_post_4", event: "post.scheduled", post: { id: "zpost_4", status: "scheduled" }, timestamp: "2026-08-31T09:00:00.000Z" },
+      ORG_ID,
+    );
+    expect(event).toBeNull();
+  });
+
+  it("ignore un événement post.* sans id de post exploitable (jamais deviné)", () => {
+    const event = mapZernioPostEventToDomainEvent(
+      { id: "evt_post_5", event: "post.published", timestamp: "2026-08-31T09:00:00.000Z" },
+      ORG_ID,
+    );
+    expect(event).toBeNull();
   });
 });

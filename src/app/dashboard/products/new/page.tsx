@@ -26,6 +26,7 @@ async function createProductAction(formData: FormData) {
       description: String(formData.get("description") ?? "") || undefined,
       categoryName: String(formData.get("category") ?? "") || undefined,
       unitPrice: Number(formData.get("price") ?? 0),
+      compareAtPrice: formData.get("compareAtPrice") ? Number(formData.get("compareAtPrice")) : undefined,
       currentStock: Number(formData.get("stock") ?? 0),
       imageUrl: imageUrl ?? undefined,
     });
@@ -64,6 +65,21 @@ export default async function NewProductPage({
         <label className="flex flex-col gap-1 text-sm">
           Prix (FCFA)
           <input name="price" type="number" min="0" required className="rounded-brand border border-ink/15 px-4 py-3" />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          Prix barré avant promotion (optionnel)
+          <input
+            name="compareAtPrice"
+            type="number"
+            min="0"
+            placeholder="Laissez vide si pas de promotion"
+            className="rounded-brand border border-ink/15 px-4 py-3"
+          />
+          <span className="text-xs text-muted">
+            Doit être supérieur au prix ci-dessus — affiché barré, avec un badge « Promo », sur la fiche produit et
+            dans la section Promotions de votre site.
+          </span>
         </label>
 
         <label className="flex flex-col gap-1 text-sm">

@@ -22,10 +22,22 @@ const EnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
 
-  PAYMENT_PROVIDER_DEFAULT: z.enum(["cinetpay", "notchpay"]).default("cinetpay"),
+  // Lot G : NotchPay est le seul adapter réellement implémenté — "cinetpay"
+  // ferait échouer getPaymentProvider() volontairement (voir registry.ts).
+  PAYMENT_PROVIDER_DEFAULT: z.enum(["cinetpay", "notchpay"]).default("notchpay"),
   CINETPAY_API_KEY: z.string().optional(),
   CINETPAY_SITE_ID: z.string().optional(),
   NOTCHPAY_API_KEY: z.string().optional(),
+  NOTCHPAY_WEBHOOK_SECRET: z.string().optional(),
+
+  // Lot N, Partie 2 — OpenProvider (registrar de domaines, voir
+  // RAPPORT_LOT_G.md pour l'évaluation initiale et RAPPORT_LOT_N.md pour
+  // l'intégration). Compte reseller UNIQUE pour toute la plateforme (même
+  // raisonnement que NotchPay : aucun commerçant n'a son propre compte
+  // OpenProvider). Optionnelles : en leur absence, registry.ts::getDomainProvider()
+  // retombe sur ManualDomainAdapter sans casser le flux existant.
+  OPENPROVIDER_USERNAME: z.string().optional(),
+  OPENPROVIDER_PASSWORD: z.string().optional(),
 
   ENABLE_AI_INSIGHTS: z.coerce.boolean().default(true),
   ENABLE_AUTOMATION_ENGINE: z.coerce.boolean().default(false),
@@ -47,6 +59,16 @@ const EnvSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:support@sme-os.app"),
+
+  // Lot L, Partie 1 — EmailProvider (invitations d'équipe). Optionnelle :
+  // en son absence, getEmailProvider() (registry.ts) retombe sur
+  // ConsoleLogEmailAdapter (log clair, jamais un crash ni un faux succès).
+  // ATTENTION (vérifié sur resend.com, voir infrastructure/providers/email/resend/types.ts) :
+  // tant qu'aucun domaine n'est vérifié dans le compte Resend, seule
+  // l'adresse resend.dev fonctionne, et UNIQUEMENT vers l'email du
+  // titulaire du compte — pas vers un vrai destinataire d'invitation.
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM_ADDRESS: z.string().default("SME-OS <onboarding@resend.dev>"),
 });
 
 function loadEnv() {

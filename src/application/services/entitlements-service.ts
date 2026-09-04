@@ -1,5 +1,7 @@
-import { getOrganizationPlanKey, getEntitlementLimit, countOrganizationRows } from "./plans-repository";
+import { getOrganizationPlanKey, getEntitlementLimit, countOrganizationRows, type PlanKey } from "./plans-repository";
 import { getCreditStatus } from "./ai-credits-service";
+import { getOrganizationAddonBonus } from "./addons-service";
+import { hasDedicatedPhoneNumber } from "./phone-number-repository";
 
 /**
  * Lot B — LA fonction centrale de vérification des droits (section 34-36,
@@ -74,6 +76,26 @@ export function evaluateEntitlement(limit: number, used: number, requestedAmount
   return { allowed, limit, used, remaining };
 }
 
+/**
+ * Bonus "numéro dédié" (section 55 du master prompt) : deux lectures
+ * séquentielles par nature (impossible de connaître la clé de bonus à
+ * appliquer avant de savoir si l'organisation a un numéro assigné) —
+ * isolées dans leur propre fonction pour que `canUseFeature()` puisse
+ * lancer toute cette chaîne EN PARALLÈLE de ses deux autres lectures
+ * indépendantes (add-ons, usage cumulatif) plutôt que de la bloquer
+ * derrière elles (voir le commentaire dans canUseFeature ci-dessous).
+ */
+async function resolveDedicatedNumberBonus(organizationId: string, planKey: PlanKey): Promise<number> {
+  const hasDedicated = await hasDedicatedPhoneNumber(organizationId);
+  if (!hasDedicated) return 0;
+  // `getEntitlementLimit` renvoie -1 pour "clé non configurée", ce qui
+  // signifie "illimité" pour une LIMITE mais n'a aucun sens pour un
+  // bonus additif : traité comme 0 ici (`> 0` garde), jamais un bonus
+  // négatif ni infini par accident.
+  const rawBonus = await getEntitlementLimit(planKey, "whatsapp_groups_dedicated_bonus");
+  return rawBonus > 0 ? rawBonus : 0;
+}
+
 export async function canUseFeature(
   organizationId: string,
   entitlementKey: string,
@@ -83,21 +105,52 @@ export async function canUseFeature(
   // (déjà rattachée au plan via initializeCreditBalance), pas une simple
   // limite statique — on délègue entièrement (section "Ce qui existe
   // déjà" du cahier : "pour ai_credits, déléguer à getCreditStatus()").
+  // Un add-on ciblant 'ai_credits' ne passe donc PAS par le bonus
+  // générique ci-dessous (Lot G) : il top-up directement
+  // `ai_credit_balances` via grantCredits() au moment du paiement
+  // confirmé (voir addons-service.ts::confirmAddonPurchase) —
+  // getCreditStatus() reflète alors déjà le bonus sans logique
+  // supplémentaire ici.
   if (entitlementKey === "ai_credits") {
     const status = await getCreditStatus(organizationId);
     return evaluateEntitlement(status.includedCredits, status.usedCredits, requestedAmount);
   }
 
   const planKey = await getOrganizationPlanKey(organizationId);
-  const limit = await getEntitlementLimit(planKey, entitlementKey);
+  const planLimit = await getEntitlementLimit(planKey, entitlementKey);
 
+  // Plan déjà illimité : `limit` vaudra -1 quoi qu'il arrive (aucun
+  // bonus, aucun usage ne peut changer ça) — retour immédiat, zéro
+  // requête DB supplémentaire sur le chemin le plus fréquent (plan
+  // "pro"). Comportement identique à l'ancien code (qui arrivait au
+  // même résultat après plusieurs lectures toutes court-circuitées à
+  // 0/ignorées), juste rendu explicite.
+  if (planLimit === -1) {
+    return evaluateEntitlement(-1, 0, requestedAmount);
+  }
+
+  // Optimisation (Lot 4) : ces trois lectures sont indépendantes les
+  // unes des autres — aucune ne dépend du RÉSULTAT d'une autre, chacune
+  // dépend seulement de `planLimit !== -1` (déjà acquis ci-dessus). Les
+  // lancer en parallèle plutôt qu'en séquence réduit le nombre
+  // d'allers-retours DB sur ce chemin, qui est appelé à CHAQUE
+  // vérification de droit (créer un groupe WhatsApp, lancer une
+  // diffusion, publier sur un réseau...), donc potentiellement très
+  // fréquent. Pire cas (whatsapp_groups, plan non illimité, numéro
+  // dédié assigné) : 4 allers-retours séquentiels au lieu de 6
+  // auparavant (planKey, planLimit, puis 2 lectures en parallèle au
+  // lieu de 4 empilées : add-ons ; numéro dédié, qui reste lui-même
+  // séquentiel en interne — voir resolveDedicatedNumberBonus — mais ne
+  // bloque plus les deux autres ; usage cumulatif).
   const cumulative = CUMULATIVE_TABLE_BY_KEY[entitlementKey];
-  const used =
-    limit === -1
-      ? 0
-      : cumulative
-        ? await countOrganizationRows(cumulative.table, organizationId, cumulative.activeStatuses)
-        : 0;
+  const [addonBonus, dedicatedNumberBonus, used] = await Promise.all([
+    getOrganizationAddonBonus(organizationId, entitlementKey),
+    // Ne concerne QUE 'whatsapp_groups' (seule clé pour laquelle le
+    // master prompt décrit ce bonus, section 55).
+    entitlementKey === "whatsapp_groups" ? resolveDedicatedNumberBonus(organizationId, planKey) : Promise.resolve(0),
+    cumulative ? countOrganizationRows(cumulative.table, organizationId, cumulative.activeStatuses) : Promise.resolve(0),
+  ]);
 
+  const limit = planLimit + addonBonus + dedicatedNumberBonus;
   return evaluateEntitlement(limit, used, requestedAmount);
 }

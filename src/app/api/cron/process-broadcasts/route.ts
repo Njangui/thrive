@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
+import { checkCronAuth } from "@/lib/cron-auth";
 import { processScheduledBroadcasts } from "@/application/services/whatsapp-group-service";
 
 /**
@@ -15,22 +15,16 @@ import { processScheduledBroadcasts } from "@/application/services/whatsapp-grou
  * timing à Zernio lui-même (`POST /posts` avec `scheduledAt`), il n'y a
  * jamais eu de cron applicatif à imiter ici. Cette route et sa protection
  * par secret sont donc introduites par ce lot — voir RAPPORT_LOT_F.md.
+ *
+ * Lot 1 (audit sécurité) — la vérification du secret est désormais
+ * partagée avec `process-subscription-renewals` via `checkCronAuth`
+ * (une seule source de vérité, section 100/101), et refuse désormais
+ * l'appel (fail-safe) plutôt que de continuer sans protection quand
+ * `CRON_SECRET` est absent EN PRODUCTION — voir src/lib/cron-auth.ts.
  */
 async function handle(request: Request) {
-  if (env.CRON_SECRET) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-  } else {
-    // Volontairement bruyant plutôt que silencieux (section 54 : échouer
-    // fort) — mais ne bloque pas l'exécution pour ne pas casser un
-    // environnement de démo/dev sans CRON_SECRET configuré.
-    console.warn(
-      "/api/cron/process-broadcasts appelé sans CRON_SECRET configuré — route non protégée. " +
-        "Configurez CRON_SECRET avant la mise en production (voir docs/DEPLOYMENT.md).",
-    );
-  }
+  const authError = checkCronAuth(request, "/api/cron/process-broadcasts");
+  if (authError) return authError;
 
   try {
     const result = await processScheduledBroadcasts();

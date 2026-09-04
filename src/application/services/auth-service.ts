@@ -69,6 +69,21 @@ export async function requireMembership(
 }
 
 /**
+ * Email de session de l'acteur courant — utilisé par les flows de
+ * paiement (Lot G : initiatePayment / purchaseAddon) qui doivent
+ * transmettre un identifiant de contact à NotchPay. Toujours disponible
+ * via Supabase Auth (contrairement à un numéro de téléphone), donc pas
+ * de valeur de repli à gérer côté appelant.
+ */
+export async function getCurrentUserEmail(): Promise<string | null> {
+  const supabase = await getSupabaseServerSessionClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.email ?? null;
+}
+
+/**
  * Liste les organisations du user courant — nécessaire pour /dashboard,
  * qui ne se résout PAS par sous-domaine (contrairement à la vitrine
  * publique) mais par appartenance : un admin se connecte sur un domaine

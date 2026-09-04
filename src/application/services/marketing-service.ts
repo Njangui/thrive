@@ -1,10 +1,12 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { getSocialPublishingProvider } from "@/infrastructure/providers/registry";
 import type { SocialPostTarget } from "@/domain/ports/social-publishing-provider";
+import type { SocialPostStatusUpdatedEvent } from "@/domain/events/domain-events";
 import { env } from "@/lib/env";
 import { canUseFeature } from "./entitlements-service";
 import { trackEvent } from "./analytics-service";
-import { NotFoundError, QuotaExceededError, ValidationError } from "@/lib/errors";
+import { notifyOrgAdmins } from "./notification-service";
+import { QuotaExceededError } from "@/lib/errors";
 
 export interface CreateCampaignFromProductsInput {
   organizationId: string;
@@ -179,18 +181,13 @@ export async function createCampaignFromProducts(
 
       scheduled.push(product.id);
 
-      // Lot H, Partie 2 (master prompt §55) — ⚠️ ce projet n'a PAS encore de
-      // sync webhook `post.*` qui confirmerait qu'une publication programmée
-      // a réellement été diffusée (docs/ROADMAP.md, point 2 : ce sync
-      // n'existe pas). `publication_published` est donc déclenché ici, au
-      // moment où la PROGRAMMATION auprès de Zernio réussit (le "job de
-      // publication" du point de vue de cette app), pas au moment de la
-      // diffusion réelle en aval. Décision documentée plutôt que de laisser
-      // planer l'ambiguïté — à corriger (déplacer vers le futur handler
-      // webhook) quand ce sync sera construit.
-      await trackEvent(input.organizationId, "publication_published", "social_post", postRow.id, {
-        productId: product.id,
-      });
+      // Lot M, Partie 2 (résout le TODO signalé par RAPPORT_LOT_H.md,
+      // §4/§TODO) : `trackEvent("publication_published")` ne se déclenche
+      // plus ici, à la PROGRAMMATION — il se déclenche maintenant dans
+      // `handlePostStatusWebhook` ci-dessous, au moment de la confirmation
+      // webhook réelle (`post.published`/`post.partial`/
+      // `post.platform.published`) que Zernio a effectivement diffusé la
+      // publication sur au moins une plateforme.
     } catch (providerError) {
       // Section 43 : une erreur Zernio isolée ne doit jamais casser le
       // reste de la campagne — on marque CE post en échec et on continue.
@@ -248,301 +245,204 @@ export async function pauseScheduledPostsForProduct(organizationId: string, prod
   }
 }
 
-// ============================================================
-// Lecture pour le dashboard — jusqu'ici `createCampaignFromProducts` et
-// `pauseScheduledPostsForProduct` n'étaient appelées que par l'API interne
-// (catalog-service) et aucun test manuel ; aucun écran `/dashboard/marketing`
-// n'existait pour les déclencher ou en voir le résultat (voir
-// docs/ROADMAP.md, point 3, pour `getAnalytics`). Ce qui suit est le
-// premier point d'entrée dashboard de ce module.
-// ============================================================
+// ---------------------------------------------------------------------------
+// Lot M — lecture pour l'UI (statut réel par plateforme, pas seulement
+// "programmé"). Ce lot ferme la synchronisation des RÉSULTATS ; le Lot H
+// n'avait jamais construit d'écran pour les publications (recherché dans
+// tout src/app, aucune route ne l'utilisait) — voir RAPPORT_LOT_M.md pour
+// le choix de scope : une liste, pas le constructeur de campagne
+// lui-même (sélection de produits/comptes), qui reste hors du périmètre
+// de CE lot ("groupes + synchronisation des publications").
+// ---------------------------------------------------------------------------
 
-export interface CampaignPostCounts {
-  draft: number;
-  scheduled: number;
-  published: number;
-  failed: number;
-  partial: number;
-  cancelled: number;
-  paused: number;
-}
-
-function emptyCounts(): CampaignPostCounts {
-  return { draft: 0, scheduled: 0, published: 0, failed: 0, partial: 0, cancelled: 0, paused: 0 };
-}
-
-export interface CampaignSummary {
-  id: string;
-  name: string;
-  status: string;
-  createdAt: string;
-  totalPosts: number;
-  counts: CampaignPostCounts;
-}
-
-export async function listCampaigns(organizationId: string): Promise<CampaignSummary[]> {
-  const supabase = getSupabaseServiceClient();
-  const { data: campaigns, error } = await supabase
-    .from("social_campaigns")
-    .select("id, name, status, created_at")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  if (error) throw new Error(`Erreur lecture campagnes: ${error.message}`);
-  if (!campaigns || campaigns.length === 0) return [];
-
-  const campaignIds = campaigns.map((c) => c.id);
-  const { data: posts, error: postsError } = await supabase
-    .from("social_posts")
-    .select("campaign_id, status")
-    .in("campaign_id", campaignIds);
-
-  if (postsError) throw new Error(`Erreur lecture publications: ${postsError.message}`);
-
-  return campaigns.map((c) => {
-    const ownPosts = (posts ?? []).filter((p) => p.campaign_id === c.id);
-    const counts = emptyCounts();
-    for (const p of ownPosts) {
-      if (p.status in counts) counts[p.status as keyof CampaignPostCounts]++;
-    }
-    return {
-      id: c.id,
-      name: c.name,
-      status: c.status,
-      createdAt: c.created_at,
-      totalPosts: ownPosts.length,
-      counts,
-    };
-  });
-}
-
-export interface CampaignPostTargetDetail {
+export interface PostTargetStatus {
   platform: string;
-  accountId: string;
   status: string;
   platformPostUrl: string | null;
   errorMessage: string | null;
 }
 
-export interface CampaignPostDetail {
+export interface PostListItem {
   id: string;
-  productId: string | null;
-  productName: string | null;
-  productSlug: string | null;
   content: string;
-  mediaUrls: string[];
   status: string;
   scheduledFor: string | null;
-  timezone: string | null;
-  providerPostId: string | null;
   errorMessage: string | null;
-  targets: CampaignPostTargetDetail[];
+  createdAt: string;
+  targets: PostTargetStatus[];
 }
 
-export interface CampaignDetail extends CampaignSummary {
-  posts: CampaignPostDetail[];
-}
-
-export async function getCampaignDetail(organizationId: string, campaignId: string): Promise<CampaignDetail> {
+export async function listRecentPosts(organizationId: string, limit = 30): Promise<PostListItem[]> {
   const supabase = getSupabaseServiceClient();
 
-  const { data: campaign, error: campaignError } = await supabase
-    .from("social_campaigns")
-    .select("id, name, status, created_at")
-    .eq("organization_id", organizationId)
-    .eq("id", campaignId)
-    .maybeSingle();
-
-  if (campaignError) throw new Error(`Erreur lecture campagne: ${campaignError.message}`);
-  if (!campaign) throw new NotFoundError("Campagne introuvable.");
-
-  const { data: postRows, error: postsError } = await supabase
+  const { data: posts, error } = await supabase
     .from("social_posts")
-    .select(
-      "id, product_id, content, media_urls, status, scheduled_for, timezone, provider_post_id, error_message, products(name, slug)",
-    )
+    .select("id, content, status, scheduled_for, error_message, created_at")
     .eq("organization_id", organizationId)
-    .eq("campaign_id", campaignId)
-    .order("scheduled_for", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
-  if (postsError) throw new Error(`Erreur lecture publications: ${postsError.message}`);
+  if (error) {
+    console.error(`listRecentPosts(${organizationId}) error:`, error.message);
+    return [];
+  }
+  if (!posts || posts.length === 0) return [];
 
-  const postIds = (postRows ?? []).map((p) => p.id);
-  const { data: targetRows, error: targetsError } =
-    postIds.length > 0
-      ? await supabase
-          .from("social_post_targets")
-          .select("post_id, platform, provider_account_id, status, platform_post_url, error_message")
-          .in("post_id", postIds)
-      : { data: [] as never[], error: null };
+  const postIds = posts.map((p) => p.id as string);
+  const { data: targets, error: targetsError } = await supabase
+    .from("social_post_targets")
+    .select("post_id, platform, status, platform_post_url, error_message")
+    .eq("organization_id", organizationId)
+    .in("post_id", postIds);
 
-  if (targetsError) throw new Error(`Erreur lecture cibles: ${targetsError.message}`);
+  if (targetsError) {
+    console.error(`listRecentPosts(${organizationId}) targets error:`, targetsError.message);
+  }
 
-  const counts = emptyCounts();
-  const posts: CampaignPostDetail[] = (postRows ?? []).map((p) => {
-    if (p.status in counts) counts[p.status as keyof CampaignPostCounts]++;
-    const product = (p as unknown as { products?: { name?: string; slug?: string } | null }).products;
-    return {
-      id: p.id,
-      productId: p.product_id,
-      productName: product?.name ?? null,
-      productSlug: product?.slug ?? null,
-      content: p.content,
-      mediaUrls: p.media_urls ?? [],
-      status: p.status,
-      scheduledFor: p.scheduled_for,
-      timezone: p.timezone,
-      providerPostId: p.provider_post_id,
-      errorMessage: p.error_message,
-      targets: (targetRows ?? [])
-        .filter((t) => t.post_id === p.id)
-        .map((t) => ({
-          platform: t.platform,
-          accountId: t.provider_account_id,
-          status: t.status,
-          platformPostUrl: t.platform_post_url,
-          errorMessage: t.error_message,
-        })),
-    };
-  });
+  const targetsByPost = new Map<string, PostTargetStatus[]>();
+  for (const t of targets ?? []) {
+    const list = targetsByPost.get(t.post_id as string) ?? [];
+    list.push({
+      platform: t.platform as string,
+      status: t.status as string,
+      platformPostUrl: (t.platform_post_url as string | null) ?? null,
+      errorMessage: (t.error_message as string | null) ?? null,
+    });
+    targetsByPost.set(t.post_id as string, list);
+  }
 
-  return {
-    id: campaign.id,
-    name: campaign.name,
-    status: campaign.status,
-    createdAt: campaign.created_at,
-    totalPosts: posts.length,
-    counts,
-    posts,
-  };
+  return posts.map((p) => ({
+    id: p.id as string,
+    content: p.content as string,
+    status: p.status as string,
+    scheduledFor: (p.scheduled_for as string | null) ?? null,
+    errorMessage: (p.error_message as string | null) ?? null,
+    createdAt: p.created_at as string,
+    targets: targetsByPost.get(p.id as string) ?? [],
+  }));
 }
+
+/** Statuts `social_posts`/`social_post_targets` que ce lot est capable de refléter (voir domain-events.ts). */
+const CONFIRMABLE_STATUSES = new Set(["published", "partial"]);
 
 /**
- * Annule une publication pas encore diffusée (brouillon ou programmée).
- * CONFIRMÉ (social-publishing-provider.ts::cancelPost) : un post déjà
- * publié ne peut pas être annulé — on applique la même garde ici plutôt
- * que de laisser Zernio renvoyer une erreur opaque à l'écran.
+ * Traite la confirmation webhook Zernio qu'une publication a été
+ * effectivement diffusée (ou a échoué) — voir mapper.ts::mapZernioPostEventToDomainEvent
+ * et app/api/webhooks/zernio/route.ts. Retrouve la ligne `social_posts`
+ * par `provider_post_id`, scopée par organisation (défense en profondeur,
+ * même si `provider_post_id` est déjà unique côté Zernio) — jamais par
+ * confiance aveugle dans `event.organizationId` seul.
+ *
+ * Idempotent par construction : chaque mise à jour est un UPDATE ciblé
+ * par clé (id de post / (post_id, platform, provider_account_id)),
+ * jamais un INSERT — un même état reçu plusieurs fois (webhook_events
+ * déduplique déjà l'event id exact côté route.ts ; ceci protège en plus
+ * contre deux events DIFFÉRENTS qui décriraient le même aboutissement,
+ * ex: un `post.published` agrégé ET un `post.platform.published` pour la
+ * même plateforme) aboutit au même état final, jamais dupliqué.
  */
-export async function cancelCampaignPost(organizationId: string, postId: string): Promise<void> {
+export async function handlePostStatusWebhook(
+  event: SocialPostStatusUpdatedEvent,
+): Promise<{ handled: boolean }> {
   const supabase = getSupabaseServiceClient();
+  const { organizationId, payload } = event;
 
-  const { data: post, error } = await supabase
+  const { data: postRow, error: postError } = await supabase
     .from("social_posts")
-    .select("id, status, provider_post_id")
+    .select("id, status")
     .eq("organization_id", organizationId)
-    .eq("id", postId)
+    .eq("provider_post_id", payload.providerPostId)
     .maybeSingle();
 
-  if (error) throw new Error(`Erreur lecture publication: ${error.message}`);
-  if (!post) throw new NotFoundError("Publication introuvable.");
-  if (post.status !== "draft" && post.status !== "scheduled") {
-    throw new ValidationError("Seule une publication en brouillon ou programmée peut être annulée.");
+  if (postError) {
+    console.error(
+      `handlePostStatusWebhook: lecture social_posts échouée (provider_post_id=${payload.providerPostId}):`,
+      postError.message,
+    );
+    return { handled: false };
+  }
+  if (!postRow) {
+    // Post inconnu de ce tenant (ou d'un autre tenant — la résolution en
+    // amont via resolveOrganizationIdByProviderPostId aurait déjà échoué
+    // dans ce cas précis, donc ce cas ne devrait normalement pas se
+    // produire ; gardé en défense en profondeur, pas une erreur bloquante).
+    console.warn(
+      `handlePostStatusWebhook: aucun social_posts pour provider_post_id=${payload.providerPostId} (org ${organizationId})`,
+    );
+    return { handled: false };
   }
 
-  if (post.provider_post_id) {
-    const socialProvider = await getSocialPublishingProvider(organizationId);
-    await socialProvider.cancelPost(post.provider_post_id);
+  const previousStatus = postRow.status as string;
+
+  if (payload.overallStatus) {
+    const { error: updateError } = await supabase
+      .from("social_posts")
+      .update({ status: payload.overallStatus, error_message: payload.overallErrorMessage ?? null })
+      .eq("id", postRow.id);
+    if (updateError) {
+      console.error(`handlePostStatusWebhook: échec update social_posts (${postRow.id}):`, updateError.message);
+    }
   }
 
-  await supabase.from("social_posts").update({ status: "cancelled" }).eq("id", postId);
-}
+  // Une ligne social_post_targets existe déjà par cible depuis la
+  // programmation (createCampaignFromProducts) — on la retrouve par clé
+  // plutôt que d'en insérer une nouvelle.
+  for (const target of payload.targets) {
+    const { error: targetError } = await supabase
+      .from("social_post_targets")
+      .update({
+        status: target.status,
+        platform_post_id: target.platformPostId ?? null,
+        platform_post_url: target.platformPostUrl ?? null,
+        error_message: target.errorMessage ?? null,
+      })
+      .eq("post_id", postRow.id)
+      .eq("platform", target.platform)
+      .eq("provider_account_id", target.accountId);
 
-/** Vérifie si un SocialPublishingProvider est connecté, sans lever — pour affichage proactif d'un bandeau côté écran plutôt que d'attendre l'échec à la soumission. */
-export async function checkSocialProviderConnected(organizationId: string): Promise<string | null> {
-  try {
-    await getSocialPublishingProvider(organizationId);
-    return null;
-  } catch (err) {
-    return err instanceof Error ? err.message : String(err);
-  }
-}
-
-export interface TopPublicationEntry {
-  providerPostId: string;
-  platform: string;
-  status: string | null;
-  productName: string | null;
-  productSlug: string | null;
-  campaignName: string | null;
-  contentPreview: string | null;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  clicks: number;
-  engagement: number;
-}
-
-export interface GetTopPublicationsResult {
-  entries: TopPublicationEntry[];
-  error: string | null;
-}
-
-/**
- * ROADMAP.md, point 3 : `getAnalytics` existe côté SocialPublishingProvider
- * mais aucun écran dashboard ne l'appelait — premier appel réel. Erreur
- * provider retournée honnêtement dans `error` plutôt que de faire planter
- * la page (même approche que `listAvailableGroupsFromZernio` côté groupes
- * WhatsApp).
- */
-export async function getTopPublications(organizationId: string, limit = 10): Promise<GetTopPublicationsResult> {
-  let socialProvider;
-  try {
-    socialProvider = await getSocialPublishingProvider(organizationId);
-  } catch (err) {
-    return { entries: [], error: err instanceof Error ? err.message : String(err) };
+    if (targetError) {
+      console.error(
+        `handlePostStatusWebhook: échec update social_post_targets (post ${postRow.id}, plateforme ${target.platform}):`,
+        targetError.message,
+      );
+    }
   }
 
-  let raw;
-  try {
-    raw = await socialProvider.getAnalytics({ sortBy: "engagement", limit });
-  } catch (err) {
-    return { entries: [], error: err instanceof Error ? err.message : String(err) };
+  const failedPlatforms = payload.targets.filter((t) => t.status === "failed").map((t) => t.platform);
+  const anyFailure = payload.overallStatus === "failed" || payload.overallStatus === "partial" || failedPlatforms.length > 0;
+
+  if (anyFailure) {
+    // Best-effort — notifyOrgAdmins ne lève jamais (notification-service.ts).
+    await notifyOrgAdmins({
+      organizationId,
+      title: payload.overallStatus === "failed" ? "Publication échouée" : "Publication partiellement échouée",
+      body:
+        failedPlatforms.length > 0
+          ? `Échec sur : ${failedPlatforms.join(", ")}.${payload.overallErrorMessage ? ` ${payload.overallErrorMessage}` : ""}`
+          : (payload.overallErrorMessage ?? "La publication a échoué chez le fournisseur."),
+      relatedEntityType: "social_post",
+      relatedEntityId: postRow.id,
+    });
   }
 
-  if (raw.length === 0) return { entries: [], error: null };
+  // `trackEvent("publication_published")` se déclenche ICI — la
+  // confirmation webhook réelle — plus à la programmation (voir
+  // createCampaignFromProducts ci-dessus). "partial" compte : au moins
+  // une plateforme a réellement été atteinte. Gardé par `previousStatus`
+  // pour ne compter qu'UNE fois par post même si plusieurs events
+  // différents (agrégé + par-plateforme) confirment le même aboutissement
+  // l'un après l'autre — webhook_events (route.ts) ne déduplique que
+  // l'event id exact, pas ce cas.
+  const trulyPublished =
+    payload.overallStatus === "published" ||
+    payload.overallStatus === "partial" ||
+    payload.targets.some((t) => t.status === "published");
 
-  const supabase = getSupabaseServiceClient();
-  const providerPostIds = raw.map((r) => r.providerPostId);
-  const { data: localPosts } = await supabase
-    .from("social_posts")
-    .select("provider_post_id, content, status, products(name, slug), social_campaigns(name)")
-    .eq("organization_id", organizationId)
-    .in("provider_post_id", providerPostIds);
+  if (trulyPublished && !CONFIRMABLE_STATUSES.has(previousStatus)) {
+    await trackEvent(organizationId, "publication_published", "social_post", postRow.id, {
+      providerPostId: payload.providerPostId,
+    });
+  }
 
-  const localByProviderId = new Map((localPosts ?? []).map((p) => [p.provider_post_id, p]));
-
-  const entries: TopPublicationEntry[] = raw.map((r) => {
-    const local = localByProviderId.get(r.providerPostId) as
-      | {
-          content?: string;
-          status?: string;
-          products?: { name?: string; slug?: string } | null;
-          social_campaigns?: { name?: string } | null;
-        }
-      | undefined;
-    const views = r.views ?? 0;
-    const likes = r.likes ?? 0;
-    const comments = r.comments ?? 0;
-    const shares = r.shares ?? 0;
-    const clicks = r.clicks ?? 0;
-    return {
-      providerPostId: r.providerPostId,
-      platform: r.platform,
-      status: local?.status ?? null,
-      productName: local?.products?.name ?? null,
-      productSlug: local?.products?.slug ?? null,
-      campaignName: local?.social_campaigns?.name ?? null,
-      contentPreview: local?.content ? local.content.slice(0, 120) : null,
-      views,
-      likes,
-      comments,
-      shares,
-      clicks,
-      engagement: likes + comments + shares + clicks,
-    };
-  });
-
-  return { entries, error: null };
+  return { handled: true };
 }

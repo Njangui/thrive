@@ -9,10 +9,9 @@ import { getProductBySlug } from "@/application/services/catalog-service";
 import { trackEvent } from "@/application/services/analytics-service";
 import { resolveProductSeo, buildProductJsonLd, type ProductJsonLdAvailability } from "@/lib/seo";
 import { TrackedCtaLink } from "@/app/_components/tracked-cta-link";
-
-function formatPrice(amount: number): string {
-  return `${amount.toLocaleString("fr-FR")} FCFA`;
-}
+import { formatPrice } from "@/lib/format";
+import { getTenantBrandingStyle, resolveTenantFontClassName } from "@/lib/tenant-branding";
+import { getLandingConfig } from "@/application/services/landing-config-service";
 
 const STATUS_LABELS: Record<string, { label: string; available: boolean }> = {
   active: { label: "Disponible", available: true },
@@ -105,6 +104,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   // page reste consultable par un lien direct déjà partagé (section 40).
   const jsonLdAvailability = JSON_LD_AVAILABILITY[product.status];
   const origin = await resolveRequestOrigin();
+  // Lot K : couleurs/police de marque, même wrapper que /produits et la
+  // landing page (cohérence visuelle de la vitrine publique).
+  const landingConfig = await getLandingConfig(tenant.organizationId, tenant.industry);
   const jsonLd = jsonLdAvailability
     ? buildProductJsonLd({
         name: product.name,
@@ -120,7 +122,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   await trackProductView;
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 px-5 py-10 sm:py-16">
+    <main
+      className={`mx-auto flex max-w-2xl flex-col gap-6 px-5 py-10 sm:py-16 ${resolveTenantFontClassName(landingConfig.fontChoice)}`}
+      style={getTenantBrandingStyle(landingConfig)}
+    >
       {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />}
 
       {product.images.length > 0 ? (

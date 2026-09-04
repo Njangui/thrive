@@ -118,3 +118,103 @@ export interface ZernioListWhatsAppGroupsResponse {
     };
   };
 }
+
+/**
+ * Lot M, Partie 2 — événements webhook `post.*` (synchronisation des
+ * publications sociales). CONFIRMÉ (docs.zernio.com/webhooks, table
+ * "Available events" ; recoupé avec le SDK officiel `zernio-php`,
+ * `WebhooksApi.md`, et `zernio-dev/n8n-nodes-zernio`, consultés le 31
+ * août 2026) : ces huit noms d'événement existent réellement, avec deux
+ * granularités distinctes —
+ * - agrégée (le POST tout entier, toutes plateformes confondues) :
+ *   `post.scheduled`, `post.published`, `post.failed`, `post.partial`
+ *   (publié sur certaines plateformes, échoué sur d'autres), `post.cancelled`,
+ *   `post.recycled` ;
+ * - par plateforme ciblée (une ligne social_post_targets) :
+ *   `post.platform.published`, `post.platform.failed`.
+ * Seuls published/failed/partial/platform.published/platform.failed sont
+ * traités par ce lot (voir marketing-service.ts::handlePostStatusWebhook) —
+ * scheduled/cancelled/recycled sont déjà couverts côté SME-OS par nos
+ * propres actions (schedulePost/cancelPost), pas par une confirmation
+ * webhook a posteriori.
+ */
+export type ZernioPostEventName =
+  | "post.scheduled"
+  | "post.published"
+  | "post.failed"
+  | "post.partial"
+  | "post.cancelled"
+  | "post.recycled"
+  | "post.platform.published"
+  | "post.platform.failed";
+
+/**
+ * CONFIRMÉ (docs.zernio.com, pages "Facebook API"/"Threads API" — exemple
+ * de réponse `POST /posts` et `GET /posts/{postId}` — et blog officiel
+ * "How we built an API for AI content tools", qui montre un post en statut
+ * `partial` avec un résultat par plateforme). C'est ici que se trouvait le
+ * point explicitement laissé "à confirmer" par le Lot H
+ * (docs/ZERNIO_INTEGRATION.md) : le champ s'appelle réellement `platforms`,
+ * **pas** `platformResults` comme le code précédent l'avait nommé par
+ * hypothèse.
+ */
+export interface ZernioPostPlatformResult {
+  platform: string;
+  // CONFIRMÉ : objet enrichi `{ _id, username }` en réponse de publication ;
+  // simple string en entrée de `POST /posts` (voir social/zernio/types.ts).
+  accountId: string | { _id: string; username?: string };
+  status: string; // valeurs confirmées observées : "published", "failed"
+  platformPostId?: string;
+  platformPostUrl?: string;
+  /** Présent uniquement si `status === "failed"` pour cette plateforme. */
+  error?: string;
+}
+
+/** CONFIRMÉ : forme de la ressource `post` renvoyée par l'API REST (`GET /posts/{id}`, `POST /posts`). */
+export interface ZernioPostResource {
+  _id?: string;
+  id?: string;
+  status: string;
+  platforms?: ZernioPostPlatformResult[];
+  /** Erreur globale (ex: post entièrement rejeté) — distincte des erreurs par plateforme dans `platforms[]`. */
+  error?: string;
+  publishedAt?: string;
+}
+
+/**
+ * Enveloppe d'un événement webhook `post.*`.
+ *
+ * ENCORE NON CONFIRMÉ AU NIVEAU EXACT DE L'ENVELOPPE (voir
+ * docs/ZERNIO_INTEGRATION.md) : que le webhook embarque littéralement
+ * `{ post: {...} }` plutôt qu'un sous-ensemble de champs à plat. Ce qui
+ * EST confirmé par le blog officiel Zernio ("How to Schedule Threads
+ * Posts — A Guide for Developers") : le payload contient au minimum
+ * l'id du post, son statut final, et un message d'erreur en cas
+ * d'échec. La forme ci-dessous suit par analogie l'enveloppe inbox déjà
+ * confirmée (`{id, event, message, conversation, account, timestamp}` —
+ * un objet nommé d'après la ressource) ; `mapZernioPostEventToDomainEvent`
+ * (mapper.ts) reste volontairement tolérant à un id de post exposé soit
+ * sous `post._id`/`post.id`, soit sous `postId` à la racine, plutôt que
+ * de planter si la forme réelle diffère légèrement une fois vérifiée
+ * avec un vrai payload de test (fonctionnalité "Test webhook" du
+ * dashboard Zernio, avant mise en production — voir RAPPORT_LOT_M.md).
+ */
+export interface ZernioPostWebhookEvent {
+  id: string;
+  event: ZernioPostEventName;
+  post?: ZernioPostResource;
+  postId?: string;
+  /** Résultat d'UNE SEULE plateforme — présent pour les events `post.platform.*`, absent pour les events agrégés. */
+  platform?: string;
+  accountId?: string;
+  platformPostUrl?: string;
+  error?: string;
+  timestamp: string;
+}
+
+export type ZernioWebhookEvent = ZernioInboxWebhookEvent | ZernioPostWebhookEvent;
+
+/** Distingue les deux catégories d'événements Zernio partageant le même webhook (voir app/api/webhooks/zernio/route.ts). */
+export function isZernioPostEvent(raw: { event: string }): raw is ZernioPostWebhookEvent {
+  return raw.event.startsWith("post.");
+}

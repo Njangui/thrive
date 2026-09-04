@@ -9,18 +9,25 @@ import { NotFoundError, QuotaExceededError, ValidationError } from "@/lib/errors
 
 /**
  * Lot F — Groupes WhatsApp & diffusion groupée (master prompt §39-40,
- * §43-44). Voir docs/ZERNIO_INTEGRATION.md ("Groupes WhatsApp") pour ce
- * qui est confirmé/limité côté API avant de modifier ce fichier.
+ * §43-44). Lot M — ferme la boucle d'activation (voir
+ * activateGroupFromInboundConversation ci-dessous) et refuse désormais
+ * toute diffusion vers un groupe non activé DÈS LA CRÉATION (voir
+ * createBroadcast). Voir docs/ZERNIO_INTEGRATION.md ("Groupes WhatsApp")
+ * pour ce qui est confirmé côté API avant de modifier ce fichier.
  *
  * Point central à garder en tête partout ci-dessous : CONFIRMÉ
  * (docs.zernio.com/platforms/whatsapp/groups) qu'envoyer un message dans
  * un groupe exige une conversation Zernio déjà établie, elle-même créée
  * "automatiquement quand un message de groupe est REÇU" — jamais par un
- * envoi à froid. La réception de messages DANS un groupe est hors scope
- * de ce lot (cahier, section "Hors scope"). Conséquence assumée et
- * honnête : `whatsapp_groups.zernio_conversation_id` reste NULL pour tout
- * groupe connecté par ce lot, et toute diffusion vers ce groupe échoue
- * explicitement plutôt que de simuler un envoi qui n'a jamais eu lieu.
+ * envoi à froid, ET que pour un groupe, `conversationId === l'id du
+ * groupe lui-même`. Le Lot F avait laissé `zernio_conversation_id`
+ * NULL pour toujours (réception de messages de groupe explicitement hors
+ * scope de son cahier). Le Lot M construit cette réception, spécifiquement
+ * pour ce cas d'usage précis (activation), via le webhook `message.received`
+ * générique déjà câblé — voir `activateGroupFromInboundConversation` et
+ * app/api/webhooks/zernio/route.ts. Un groupe reste "en attente
+ * d'activation" (jamais un échec silencieux : `createBroadcast` refuse
+ * explicitement) jusqu'à ce premier message.
  */
 
 // ---------------------------------------------------------------------------
@@ -191,6 +198,64 @@ export async function listAvailableGroupsFromZernio(organizationId: string): Pro
     })),
     error: null,
   };
+}
+
+/**
+ * Lot M, Partie 1 — ferme le trou documenté depuis le Lot F : jusqu'ici,
+ * rien dans ce projet n'écrivait jamais `zernio_conversation_id` (voir
+ * RAPPORT_LOT_F.md et l'en-tête de ce fichier). CONFIRMÉ
+ * (docs.zernio.com/platforms/whatsapp/groups, "Each group has its own
+ * conversation thread identified by the group ID") : pour un groupe,
+ * conversationId === l'id du groupe lui-même (`external_id` chez nous) —
+ * la conversation Zernio n'existe simplement pas tant qu'aucun message
+ * n'en a été REÇU. On matche donc, à chaque `message.received` entrant,
+ * le `conversation.id` du webhook contre `whatsapp_groups.external_id`
+ * de cette organisation ; si ça correspond à un groupe pas encore activé,
+ * on enregistre l'id — c'est cette écriture, et uniquement elle, qui fait
+ * passer un groupe de "en attente d'activation" à "prêt" pour de vrai
+ * (voir createBroadcast plus bas, qui refuse toute cible tant que cette
+ * colonne est NULL).
+ *
+ * Appelée depuis app/api/webhooks/zernio/route.ts pour CHAQUE événement
+ * `message.received`, qu'il produise ou non un DomainEvent complet côté
+ * conversation-service (un message de groupe purement média, sans texte,
+ * établit quand même la conversation côté Zernio — on ne doit donc pas
+ * dépendre de mapZernioEventToDomainEvent ici).
+ *
+ * Idempotent (UPDATE ciblé par `external_id` + `zernio_conversation_id
+ * IS NULL` — un même message reçu deux fois, ou un message reçu d'une
+ * conversation 1:1 normale qui ne matche aucun groupe, n'a aucun effet)
+ * et jamais bloquant pour le traitement du webhook (best-effort,
+ * `.catch()` implicite via le try/catch interne — même esprit que
+ * `notifyOrgAdmins`/`trackEvent`).
+ */
+export async function activateGroupFromInboundConversation(
+  organizationId: string,
+  conversationId: string,
+): Promise<void> {
+  if (!organizationId || !conversationId) return;
+
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { error } = await supabase
+      .from("whatsapp_groups")
+      .update({ zernio_conversation_id: conversationId })
+      .eq("organization_id", organizationId)
+      .eq("external_id", conversationId)
+      .is("zernio_conversation_id", null);
+
+    if (error) {
+      console.warn(
+        `activateGroupFromInboundConversation(${organizationId}, ${conversationId}): échec update whatsapp_groups:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `activateGroupFromInboundConversation(${organizationId}, ${conversationId}): erreur inattendue:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -450,17 +515,34 @@ export async function createBroadcast(
   // "Sécurité") : ne jamais faire confiance aux ids reçus du formulaire.
   const { data: groupRows, error: groupError } = await supabase
     .from("whatsapp_groups")
-    .select("id, status")
+    .select("id, name, status, zernio_conversation_id")
     .eq("organization_id", organizationId)
     .in("id", dedupedGroupIds);
 
   if (groupError) throw new Error(`Erreur lecture groupes: ${groupError.message}`);
-  const validGroupIds = (groupRows ?? []).filter((g) => g.status === "connected").map((g) => g.id);
-  if (validGroupIds.length !== dedupedGroupIds.length) {
+  const connectedGroups = (groupRows ?? []).filter((g) => g.status === "connected");
+  if (connectedGroups.length !== dedupedGroupIds.length) {
     throw new ValidationError(
       "Un ou plusieurs groupes sélectionnés sont introuvables ou déconnectés. Rafraîchissez la page et réessayez.",
     );
   }
+
+  // Lot M, Partie 1, critère d'acceptation central : refuser À LA
+  // CRÉATION, jamais seulement plus tard au traitement cron (voir
+  // processOneBroadcast, qui garde son propre filet de sécurité en
+  // défense en profondeur). Un groupe sans `zernio_conversation_id` ne
+  // PEUT PAS recevoir de diffusion — voir activateGroupFromInboundConversation
+  // et docs/ZERNIO_INTEGRATION.md.
+  const notActivated = connectedGroups.filter((g) => !g.zernio_conversation_id);
+  if (notActivated.length > 0) {
+    const names = notActivated.map((g) => g.name ?? g.id).join(", ");
+    throw new ValidationError(
+      `Diffusion refusée : ${notActivated.length > 1 ? "ces groupes ne sont" : "ce groupe n'est"} pas encore ` +
+        `activé${notActivated.length > 1 ? "s" : ""} (${names}). Demandez à quelqu'un d'envoyer un message ` +
+        `depuis un téléphone dans ce groupe WhatsApp (une seule fois), puis réessayez — voir /dashboard/groups.`,
+    );
+  }
+  const validGroupIds = connectedGroups.map((g) => g.id);
 
   const products = await getProductsByIds(organizationId, dedupedProductIds);
   if (products.length !== dedupedProductIds.length) {
@@ -534,8 +616,9 @@ export async function cancelBroadcast(organizationId: string, broadcastId: strin
  * Repasse les cibles en échec d'une diffusion terminée à `pending` et
  * reprogramme la diffusion immédiatement — utile après une erreur
  * transitoire du provider, ou dès qu'un groupe devient réellement
- * sendable (`zernio_conversation_id` renseigné par un futur lot). Ne
- * touche jamais aux cibles déjà `sent` : pas de renvoi en double.
+ * sendable (`zernio_conversation_id` renseigné, voir
+ * `activateGroupFromInboundConversation`, Lot M). Ne touche jamais aux
+ * cibles déjà `sent` : pas de renvoi en double.
  */
 export async function retryFailedTargets(
   organizationId: string,

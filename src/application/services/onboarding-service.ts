@@ -95,11 +95,13 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
 
   await seedDefaultExpenseCategories(org.id);
 
-  // Lot B (section 78) : plan "starter" + essai de 14 jours par défaut.
-  // Les crédits IA inclus sont résolus depuis ce plan (plan_entitlements,
-  // clé 'ai_credits') — createTrialSubscription doit s'exécuter avant
+  // Lot B (section 78) : plan "starter" + essai par défaut. Durée
+  // configurable depuis /admin/addons (Lot G, platform_settings.trial_days)
+  // — createTrialSubscription la lit elle-même si non précisée ici. Les
+  // crédits IA inclus sont résolus depuis ce plan (plan_entitlements, clé
+  // 'ai_credits') — createTrialSubscription doit s'exécuter avant
   // initializeCreditBalance pour que la résolution du plan soit correcte.
-  await createTrialSubscription(org.id, "starter", 14);
+  await createTrialSubscription(org.id, "starter");
   await initializeCreditBalance(org.id);
 
   return { organizationId: org.id };

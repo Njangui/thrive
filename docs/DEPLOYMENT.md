@@ -10,7 +10,7 @@
 ## 1. Base de données
 
 Exécuter les migrations de `supabase/migrations/` **dans l'ordre
-numérique** (0001 → 0018 à ce jour — voir `docs/DATABASE.md` et
+numérique** (0001 → 0026 à ce jour — voir `docs/DATABASE.md` et
 `RAPPORT_FUSION.md` pour le détail de la fusion multi-lots), via le SQL
 Editor Supabase ou la CLI :
 
@@ -72,6 +72,19 @@ les événements `post.*` — non encore branchés côté sync, voir
 Utiliser la fonctionnalité "Test webhook" du dashboard Zernio avant
 d'aller en prod, pour confirmer le format exact des payloads (voir
 `docs/ZERNIO_INTEGRATION.md`).
+
+## 3bis. Webhook NotchPay (Lot G)
+
+Configurer dans Settings > Webhooks du dashboard NotchPay
+(business.notchpay.co) une souscription pointant vers
+`https://votre-domaine.com/api/webhooks/notchpay`. Le secret de signature
+qui y est affiché va dans `NOTCHPAY_WEBHOOK_SECRET` (**distinct** de
+`NOTCHPAY_API_KEY`). Le webhook n'est jamais cru sur parole : chaque
+paiement confirmé est re-vérifié via l'API NotchPay avant tout crédit —
+voir `docs/PAYMENT_INTEGRATION.md` pour le détail des verdicts
+SUPPORTED/PARTIAL/NOT_SUPPORTED (paiement récurrent réel et remboursement
+via API : NOT_SUPPORTED, aucune ressource "subscription"/"refund" dans
+l'API NotchPay).
 
 ## 4. Déploiement Vercel
 
@@ -152,3 +165,9 @@ n'est pas dans cette table reçoit un 404 générique sur tout `/admin/*`
 - [ ] Configurer `CRON_SECRET` et le déclencheur externe pour
       `/api/cron/process-broadcasts` (Lot F, section 4bis) avant
       d'annoncer les diffusions groupées WhatsApp comme disponibles
+- [ ] Configurer le webhook NotchPay + `NOTCHPAY_WEBHOOK_SECRET` (Lot G,
+      section 3bis) avant d'annoncer le paiement d'abonnement/add-ons
+- [ ] Vérifier l'activation carte bancaire NotchPay dans le dashboard du
+      compte marchand de production (Mobile Money confirmé fonctionnel
+      dès l'intégration, carte bancaire à confirmer par pays — voir
+      `docs/PAYMENT_INTEGRATION.md`)

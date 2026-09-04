@@ -20,6 +20,8 @@ export interface AdminOrganizationListItem {
   trialEnd: string | null;
   createdAt: string;
   connectedChannels: string[];
+  /** Lot N, Partie 3 : "type:name" pour chaque provider ayant un compte dédié configuré (jamais le secret lui-même, voir requête ci-dessous). */
+  dedicatedCredentials: string[];
   lastActivityAt: string | null;
   creditStatus: CreditStatus;
 }
@@ -70,6 +72,7 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
   const [
     { data: orgs, error: orgsError },
     { data: connections },
+    { data: dedicatedCredentialRows },
     { data: recentMessages },
     { data: subscriptions },
     { data: creditBalances },
@@ -80,6 +83,14 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
       .select("id, name, slug, status, created_at")
       .order("created_at", { ascending: false }),
     supabase.from("provider_connections").select("organization_id, provider_name").eq("status", "connected"),
+    // Lot N, Partie 3 : JAMAIS credential_reference dans ce select — même
+    // discipline que admin-channels-service.ts ("ne jamais sélectionner
+    // credential_reference, même en lecture"). Le filtre `.not(...)`
+    // porte sur la colonne sans jamais la faire transiter en application.
+    supabase
+      .from("provider_connections")
+      .select("organization_id, provider_type, provider_name")
+      .not("credential_reference", "is", null),
     supabase
       .from("conversations")
       .select("organization_id, last_message_at")
@@ -98,6 +109,13 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
     const list = channelsByOrg.get(c.organization_id) ?? [];
     list.push(c.provider_name);
     channelsByOrg.set(c.organization_id, list);
+  }
+
+  const dedicatedCredentialsByOrg = new Map<string, string[]>();
+  for (const c of dedicatedCredentialRows ?? []) {
+    const list = dedicatedCredentialsByOrg.get(c.organization_id) ?? [];
+    list.push(`${c.provider_type}:${c.provider_name}`);
+    dedicatedCredentialsByOrg.set(c.organization_id, list);
   }
 
   // `recentMessages` est trié desc : la première occurrence par
@@ -149,6 +167,7 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
       trialEnd,
       createdAt: o.created_at,
       connectedChannels: channelsByOrg.get(o.id) ?? [],
+      dedicatedCredentials: dedicatedCredentialsByOrg.get(o.id) ?? [],
       lastActivityAt: lastActivityByOrg.get(o.id) ?? null,
       creditStatus,
     };
@@ -172,8 +191,15 @@ export async function listPlansForAdmin(): Promise<PlanSummary[]> {
 export async function writeAdminAuditLog(params: {
   actorUserId: string;
   organizationId: string | null;
-  /** Par défaut `organizationId` — à préciser explicitement quand l'entité modifiée n'est pas l'organisation elle-même (ex: un numéro de téléphone). */
-  entityId?: string;
+  /**
+   * Par défaut `organizationId` — à préciser explicitement quand l'entité
+   * modifiée n'est pas l'organisation elle-même (ex: un numéro de
+   * téléphone, un add-on). `entity_id` est typé `uuid` en base
+   * (0006_webhooks_and_audit.sql) — jamais une clé texte (ex: `addon.key`,
+   * un TLD) : ces clés-là vivent dans `before_state`/`after_state` à la
+   * place (remarque du Lot G, adoptée ici).
+   */
+  entityId?: string | null;
   action: string;
   entityType: string;
   beforeState?: Record<string, unknown> | null;
@@ -295,5 +321,158 @@ export async function grantAiCreditsToOrganization(
     action: "AI_CREDITS_GRANTED",
     entityType: "ai_credits",
     afterState: { amount },
+  });
+}
+
+// ------------------------------------------------------------
+// Lot N, Partie 3 — credentials dédiés par tenant. Réservé Super Admin
+// (jamais au commerçant lui-même, voir 10_LOT_J.../cahier N : "identifiants
+// sensibles d'infrastructure, pas un réglage produit"). Écrit dans
+// `provider_connections` (déjà existante, voir migration 0037) via les
+// fonctions Vault wrapper — jamais un secret en clair en base.
+// ------------------------------------------------------------
+
+const TENANT_CREDENTIAL_PROVIDERS: Record<string, readonly string[]> = {
+  messaging: ["zernio"],
+  social: ["zernio"],
+  ai: ["mistral", "claude", "openai"],
+};
+
+function assertValidTenantCredentialTarget(providerType: string, providerName: string): void {
+  const validNames = TENANT_CREDENTIAL_PROVIDERS[providerType];
+  if (!validNames || !validNames.includes(providerName)) {
+    throw new ValidationError(`Combinaison provider_type/provider_name invalide : ${providerType}/${providerName}`);
+  }
+}
+
+/**
+ * Configure (crée ou remplace) le compte dédié d'une organisation pour un
+ * provider donné. `secretValue` est écrit dans Supabase Vault — jamais en
+ * clair dans `provider_connections` (seule `credential_reference`, un id
+ * Vault, y est stockée). Si une ligne existe déjà SANS credential_reference
+ * (connexion créée par un autre flux, ex: onboarding Zernio du tenant
+ * lui-même), on y ajoute la référence plutôt que d'écraser ses autres
+ * colonnes (`metadata`, `status`).
+ */
+export async function configureTenantProviderCredential(
+  organizationId: string,
+  providerType: string,
+  providerName: string,
+  secretValue: string,
+  actorUserId: string,
+): Promise<void> {
+  assertValidTenantCredentialTarget(providerType, providerName);
+  if (!secretValue.trim()) {
+    throw new ValidationError("La valeur du credential est requise.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("provider_connections")
+    .select("id, credential_reference")
+    .eq("organization_id", organizationId)
+    .eq("provider_type", providerType)
+    .eq("provider_name", providerName)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(`Erreur lecture provider_connections: ${existingError.message}`);
+  }
+
+  const secretName = `${providerType}:${providerName}:${organizationId}`;
+
+  if (existing?.credential_reference) {
+    // Compte dédié déjà configuré -> on met à jour LE MÊME secret Vault
+    // (même id), pas un nouveau (évite d'accumuler des secrets orphelins
+    // à chaque reconfiguration).
+    const { error: vaultError } = await supabase.rpc("vault_update_secret", {
+      secret_id: existing.credential_reference,
+      new_secret_value: secretValue,
+    });
+    if (vaultError) throw new Error(`Erreur mise à jour du secret: ${vaultError.message}`);
+  } else {
+    const { data: newSecretId, error: vaultError } = await supabase.rpc("vault_create_secret", {
+      secret_value: secretValue,
+      secret_name: secretName,
+    });
+    if (vaultError) throw new Error(`Erreur création du secret: ${vaultError.message}`);
+
+    const { error: upsertError } = await supabase.from("provider_connections").upsert(
+      {
+        organization_id: organizationId,
+        provider_type: providerType,
+        provider_name: providerName,
+        status: "connected",
+        credential_reference: newSecretId,
+      },
+      { onConflict: "organization_id,provider_type,provider_name" },
+    );
+    if (upsertError) throw new Error(`Erreur écriture provider_connections: ${upsertError.message}`);
+  }
+
+  // JAMAIS secretValue dans l'audit log — seulement le fait qu'un compte
+  // dédié a été configuré (before/after ne portent qu'un booléen, jamais
+  // la valeur ni même la référence Vault).
+  await writeAdminAuditLog({
+    actorUserId,
+    organizationId,
+    action: "TENANT_PROVIDER_CREDENTIAL_CONFIGURED",
+    entityType: "provider_connection",
+    beforeState: { providerType, providerName, hadDedicatedCredential: !!existing?.credential_reference },
+    afterState: { providerType, providerName, hadDedicatedCredential: true },
+  });
+}
+
+/**
+ * Retire le compte dédié d'une organisation — supprime le secret Vault et
+ * vide `credential_reference` (la ligne `provider_connections` elle-même
+ * est conservée si elle porte d'autres données utiles, ex: `metadata`
+ * Zernio issu de l'onboarding tenant). L'organisation retombe alors sur
+ * la clé plateforme au prochain appel (resolveCredential).
+ */
+export async function removeTenantProviderCredential(
+  organizationId: string,
+  providerType: string,
+  providerName: string,
+  actorUserId: string,
+): Promise<void> {
+  assertValidTenantCredentialTarget(providerType, providerName);
+
+  const supabase = getSupabaseServiceClient();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("provider_connections")
+    .select("credential_reference")
+    .eq("organization_id", organizationId)
+    .eq("provider_type", providerType)
+    .eq("provider_name", providerName)
+    .maybeSingle();
+
+  if (existingError) throw new Error(`Erreur lecture provider_connections: ${existingError.message}`);
+  if (!existing?.credential_reference) {
+    throw new NotFoundError("Aucun compte dédié configuré pour ce provider.");
+  }
+
+  const { error: vaultError } = await supabase.rpc("vault_delete_secret", {
+    secret_id: existing.credential_reference,
+  });
+  if (vaultError) throw new Error(`Erreur suppression du secret: ${vaultError.message}`);
+
+  const { error: updateError } = await supabase
+    .from("provider_connections")
+    .update({ credential_reference: null })
+    .eq("organization_id", organizationId)
+    .eq("provider_type", providerType)
+    .eq("provider_name", providerName);
+  if (updateError) throw new Error(`Erreur mise à jour provider_connections: ${updateError.message}`);
+
+  await writeAdminAuditLog({
+    actorUserId,
+    organizationId,
+    action: "TENANT_PROVIDER_CREDENTIAL_REMOVED",
+    entityType: "provider_connection",
+    beforeState: { providerType, providerName, hadDedicatedCredential: true },
+    afterState: { providerType, providerName, hadDedicatedCredential: false },
   });
 }

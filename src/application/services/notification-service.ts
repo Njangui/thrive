@@ -39,6 +39,11 @@ export interface NotifyOrgAdminsInput {
 export function buildRelatedEntityUrl(type: string | null, id: string | null): string | null {
   if (!type || !id) return null;
   if (type === "conversation") return `/dashboard/conversations/${id}`;
+  // Lot M — pas de page de détail par publication en V1 (voir
+  // app/dashboard/marketing/page.tsx, une liste), donc pas de `${id}` dans
+  // l'URL : on renvoie vers la liste, où la ligne concernée est visible
+  // avec son statut à jour.
+  if (type === "social_post") return `/dashboard/marketing`;
   return null;
 }
 
