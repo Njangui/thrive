@@ -1,0 +1,65 @@
+name: CI
+
+# Lance typecheck/lint/test/build sur chaque push et pull request — rien
+# n'empêchait avant ça un changement cassé d'arriver jusqu'en production
+# (voir COMPARAISON_MASTER_PROMPT.md, section "Avant toute mise en
+# production réelle"). Volontairement SANS `test:integration` : ce test-là
+# parle à une vraie instance Supabase dédiée et n'a pas sa place dans un
+# pipeline qui tourne sur n'importe quelle PR (voir son en-tête de fichier).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: Typecheck, lint, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests unitaires
+        run: npm test
+
+  build:
+    name: Build Next.js
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build
+        # Le build Next.js valide/prérend les routes statiques mais n'a
+        # besoin d'aucune connectivité RÉELLE à Supabase pour réussir —
+        # seulement de variables au bon format (voir env.ts). Utilise les
+        # vrais secrets du repo s'ils sont configurés (Settings > Secrets
+        # > Actions), sinon des valeurs factices suffisent à vérifier que
+        # le build compile — exactement la méthode déjà utilisée pour
+        # chaque vérification manuelle de ce projet (voir les
+        # RAPPORT_FUSION_*.md).
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'ci-placeholder-service-role-key' }}
+        run: npm run build

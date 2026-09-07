@@ -1,0 +1,48 @@
+{
+  "name": "sme-os",
+  "version": "0.1.0-phase0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.6",
+    "@supabase/supabase-js": "2.115.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.4",
+    "next": "14.2.35",
+    "papaparse": "5.7.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "web-push": "^3.6.7",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.9",
+    "@types/papaparse": "5.5.2",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@types/web-push": "^3.6.4",
+    "autoprefixer": "10.5.5",
+    "dotenv": "16.4.5",
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.35",
+    "postcss": "8.5.28",
+    "tailwindcss": "3.4.7",
+    "tsx": "4.16.2",
+    "typescript": "5.4.5",
+    "vite-tsconfig-paths": "4.3.2",
+    "vitest": "1.6.1"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}
