@@ -28,3 +28,122 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * ===========================================================================
+ * LANDING MARKETING (mkt-*) + CONSOLE SUPER ADMIN (adm-*)
+ * ===========================================================================
+ * Réplique visuelle pixel par pixel d'une référence fournie par le porteur
+ * du projet (capture d'écran, sept. 2026) : landing SaaS violet/indigo +
+ * dashboard sidebar navy. Namespaces `mkt-`/`adm-` choisis pour ne jamais
+ * entrer en collision avec `.receipt-row`/`ink`/`paper`/`leaf` ci-dessus
+ * (thème fixe de la vitrine publique tenant) ni avec `brand-*` (personnalisable
+ * par tenant) — les trois systèmes de classes coexistent dans le même bundle
+ * sans jamais se toucher. Consomme les tokens `violet/magenta/navy/success/
+ * warning/danger` + `font-jakarta`/`font-inter` ajoutés à tailwind.config.ts.
+ */
+
+@layer components {
+  /* --- Landing marketing SME-OS --- */
+  .mkt-shell {
+    @apply bg-white font-inter text-navy-900;
+  }
+  .mkt-container {
+    @apply mx-auto max-w-6xl px-5;
+  }
+  .mkt-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wider text-violet-600;
+  }
+  .mkt-section-title {
+    @apply font-jakarta text-2xl font-bold tracking-tight text-navy-900 md:text-3xl;
+  }
+  .mkt-badge-pill {
+    @apply inline-flex items-center gap-2 rounded-full border border-violet-600/10 bg-violet-50 px-4 py-1.5 text-xs font-medium text-violet-700;
+  }
+  .mkt-btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-violet-600 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_-8px_rgba(91,33,229,0.55)] transition hover:bg-violet-700;
+  }
+  .mkt-btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-navy-900/10 bg-white px-6 py-3.5 text-sm font-semibold text-navy-900 transition hover:bg-navy-900/[0.03];
+  }
+  .mkt-card {
+    @apply rounded-2xl border border-navy-900/[0.06] bg-white p-6 shadow-[0_1px_3px_rgba(16,23,49,0.05)];
+  }
+  .mkt-check {
+    @apply flex items-center gap-2 text-xs font-medium text-navy-900/70;
+  }
+
+  /* --- Console Super Admin (/admin/*) --- */
+  .adm-shell {
+    @apply min-h-screen bg-[#F7F6FD] font-inter text-navy-900;
+  }
+  .adm-card {
+    @apply rounded-2xl border border-navy-900/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(16,23,49,0.04)];
+  }
+  .adm-heading-1 {
+    @apply font-jakarta text-2xl font-bold tracking-tight text-navy-900;
+  }
+  .adm-heading-2 {
+    @apply font-jakarta text-base font-semibold tracking-tight text-navy-900;
+  }
+  .adm-label {
+    @apply text-xs font-medium text-slate-500;
+  }
+  .adm-muted {
+    @apply text-slate-500;
+  }
+  .adm-value {
+    @apply font-jakarta text-xl font-bold text-navy-900;
+  }
+  .adm-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .adm-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-navy-900/10 bg-white px-4 py-2.5 text-sm font-medium text-navy-900 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .adm-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-danger-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-danger-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .adm-input {
+    @apply w-full rounded-xl border border-navy-900/10 bg-white px-3.5 py-2.5 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100;
+  }
+  .adm-table {
+    @apply w-full text-left text-sm;
+  }
+  .adm-table th {
+    @apply border-b border-navy-900/[0.06] px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-400;
+  }
+  .adm-table td {
+    @apply border-b border-navy-900/[0.05] px-4 py-3.5 align-middle text-navy-900;
+  }
+  .adm-table tr:last-child td {
+    @apply border-b-0;
+  }
+  .adm-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+  .adm-badge-success {
+    @apply inline-flex items-center rounded-full bg-success-50 px-2.5 py-1 text-xs font-semibold text-success-700;
+  }
+  .adm-badge-warning {
+    @apply inline-flex items-center rounded-full bg-warning-50 px-2.5 py-1 text-xs font-semibold text-warning-700;
+  }
+  .adm-badge-danger {
+    @apply inline-flex items-center rounded-full bg-danger-50 px-2.5 py-1 text-xs font-semibold text-danger-700;
+  }
+  .adm-badge-neutral {
+    @apply inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600;
+  }
+  .adm-badge-violet {
+    @apply inline-flex items-center rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700;
+  }
+  .adm-sidebar-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/60 transition hover:bg-white/[0.06] hover:text-white;
+  }
+  .adm-sidebar-link-active {
+    @apply flex items-center gap-3 rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-medium text-white shadow-[0_4px_12px_-2px_rgba(91,33,229,0.6)];
+  }
+  .adm-sidebar-group-label {
+    @apply px-3 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-wider text-white/30;
+  }
+}

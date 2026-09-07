@@ -41,10 +41,10 @@ export default async function AdminLogsPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Journal d&apos;activité</h1>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Journal d&apos;activité</h1>
         <Link
           href={exportHref}
-          className="rounded-brand border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5"
+          className="rounded-xl border border-navy-900/[0.09] px-3 py-1.5 text-xs font-medium text-navy-900 hover:bg-navy-900/[0.04]"
         >
           Exporter en CSV
         </Link>
@@ -52,14 +52,14 @@ export default async function AdminLogsPage({
 
       <form
         method="get"
-        className="flex flex-wrap items-end gap-3 rounded-brand border border-ink/10 bg-white p-4"
+        className="flex flex-wrap items-end gap-3 rounded-xl border border-navy-900/10 bg-white p-4"
       >
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1 text-xs text-slate-500">
           Action
           <select
             name="action"
             defaultValue={action ?? ""}
-            className="rounded-brand border border-ink/15 px-3 py-2 text-sm text-ink"
+            className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900"
           >
             <option value="">Toutes</option>
             {filterOptions.actions.map((a) => (
@@ -70,12 +70,12 @@ export default async function AdminLogsPage({
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1 text-xs text-slate-500">
           Type d&apos;entité
           <select
             name="entityType"
             defaultValue={entityType ?? ""}
-            className="rounded-brand border border-ink/15 px-3 py-2 text-sm text-ink"
+            className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900"
           >
             <option value="">Tous</option>
             {filterOptions.entityTypes.map((t) => (
@@ -86,20 +86,20 @@ export default async function AdminLogsPage({
           </select>
         </label>
 
-        <button type="submit" className="rounded-brand bg-ink px-4 py-2 text-sm font-medium text-white">
+        <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white">
           Filtrer
         </button>
 
         {(action || entityType) && (
-          <Link href="/admin/logs" className="text-xs text-muted underline">
+          <Link href="/admin/logs" className="text-xs text-slate-500 underline">
             Réinitialiser
           </Link>
         )}
       </form>
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
         <table className="w-full text-left text-xs">
-          <thead className="border-b border-ink/10 text-muted">
+          <thead className="border-b border-navy-900/10 text-slate-500">
             <tr>
               <th className="px-4 py-2 font-medium">Date</th>
               <th className="px-4 py-2 font-medium">Entreprise</th>
@@ -110,19 +110,19 @@ export default async function AdminLogsPage({
           </thead>
           <tbody>
             {logs.map((log) => (
-              <tr key={log.id} className="border-b border-ink/5 last:border-0">
-                <td className="whitespace-nowrap px-4 py-2 text-muted">{formatDate(log.createdAt)}</td>
-                <td className="px-4 py-2 text-ink">{log.organizationName ?? "—"}</td>
-                <td className="px-4 py-2 font-medium text-ink">{log.action}</td>
-                <td className="px-4 py-2 text-muted">{log.entityType ?? "—"}</td>
-                <td className="px-4 py-2 text-muted">{log.actorUserId ?? "—"}</td>
+              <tr key={log.id} className="border-b border-navy-900/[0.05] last:border-0">
+                <td className="whitespace-nowrap px-4 py-2 text-slate-500">{formatDate(log.createdAt)}</td>
+                <td className="px-4 py-2 text-navy-900">{log.organizationName ?? "—"}</td>
+                <td className="px-4 py-2 font-medium text-navy-900">{log.action}</td>
+                <td className="px-4 py-2 text-slate-500">{log.entityType ?? "—"}</td>
+                <td className="px-4 py-2 text-slate-500">{log.actorUserId ?? "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         {logs.length === 0 && (
-          <p className="p-6 text-sm text-muted">Aucune activité pour ces filtres.</p>
+          <p className="p-6 text-sm text-slate-500">Aucune activité pour ces filtres.</p>
         )}
       </div>
     </div>

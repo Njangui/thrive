@@ -62,11 +62,20 @@ describe("requirePlatformAdmin", () => {
   });
 
   it("retourne l'admin si présent dans platform_admins", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user_1" } } });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user_1", email: "admin@sme-os.test" } } });
     mockMaybeSingle.mockResolvedValue({ data: { role: "super_admin" }, error: null });
 
     const result = await requirePlatformAdmin();
 
-    expect(result).toEqual({ userId: "user_1", role: "super_admin" });
+    expect(result).toEqual({ userId: "user_1", role: "super_admin", email: "admin@sme-os.test" });
+  });
+
+  it("retourne email: null si l'utilisateur Supabase n'a pas d'email", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user_1" } } });
+    mockMaybeSingle.mockResolvedValue({ data: { role: "admin" }, error: null });
+
+    const result = await requirePlatformAdmin();
+
+    expect(result).toEqual({ userId: "user_1", role: "admin", email: null });
   });
 });

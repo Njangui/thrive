@@ -47,11 +47,11 @@ async function resolveDomainRequestAction(formData: FormData) {
 }
 
 const REQUEST_STATUS_LABEL: Record<string, { label: string; className: string }> = {
-  requested: { label: "En attente", className: "bg-clay/10 text-clay" },
-  processing: { label: "En cours", className: "bg-ink/10 text-ink" },
-  registered: { label: "Enregistré", className: "bg-leaf/10 text-leaf" },
-  failed: { label: "Échoué", className: "bg-clay/10 text-clay" },
-  cancelled: { label: "Annulé", className: "bg-ink/5 text-muted" },
+  requested: { label: "En attente", className: "bg-warning-50 text-warning-700" },
+  processing: { label: "En cours", className: "bg-navy-900/[0.06] text-navy-900" },
+  registered: { label: "Enregistré", className: "bg-success-50 text-success-700" },
+  failed: { label: "Échoué", className: "bg-danger-50 text-danger-700" },
+  cancelled: { label: "Annulé", className: "bg-navy-900/[0.04] text-slate-500" },
 };
 
 export default async function AdminDomainsPage({
@@ -69,21 +69,21 @@ export default async function AdminDomainsPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Domaines</h1>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Domaines</h1>
 
-      {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
+      {error && <p className="rounded-xl border border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-success-700">{success}</p>
       )}
 
       <section>
-        <h2 className="font-display text-lg font-semibold">Domaines branchés</h2>
-        <div className="mt-3 overflow-x-auto rounded-brand border border-ink/10 bg-white">
+        <h2 className="font-jakarta text-lg font-semibold">Domaines branchés</h2>
+        <div className="mt-3 overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
           {domains.length === 0 ? (
-            <p className="p-6 text-sm text-muted">Aucun domaine enregistré.</p>
+            <p className="p-6 text-sm text-slate-500">Aucun domaine enregistré.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+              <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-4 py-2">Domaine</th>
                   <th className="px-4 py-2">Entreprise</th>
@@ -93,14 +93,14 @@ export default async function AdminDomainsPage({
               </thead>
               <tbody>
                 {domains.map((d) => (
-                  <tr key={d.id} className="border-b border-ink/5 last:border-0">
+                  <tr key={d.id} className="border-b border-navy-900/[0.05] last:border-0">
                     <td className="px-4 py-2">{d.domain}</td>
-                    <td className="px-4 py-2 text-muted">{d.organizationName}</td>
+                    <td className="px-4 py-2 text-slate-500">{d.organizationName}</td>
                     <td className="px-4 py-2">{d.isPrimary ? "Oui" : "—"}</td>
                     <td className="px-4 py-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs ${
-                          d.verified ? "bg-leaf/10 text-leaf" : "bg-clay/10 text-clay"
+                          d.verified ? "bg-success-50 text-success-700" : "bg-danger-50 text-danger-700"
                         }`}
                       >
                         {d.verified ? "Vérifié" : "Non vérifié"}
@@ -115,42 +115,42 @@ export default async function AdminDomainsPage({
       </section>
 
       <section>
-        <h2 className="font-display text-lg font-semibold">Tarification</h2>
-        <p className="mt-1 text-sm text-muted">Prix vendu = prix fournisseur + marge (calculé, jamais stocké).</p>
+        <h2 className="font-jakarta text-lg font-semibold">Tarification</h2>
+        <p className="mt-1 text-sm text-slate-500">Prix vendu = prix fournisseur + marge (calculé, jamais stocké).</p>
 
         <form
           action={upsertTldPricingAction}
-          className="mt-3 grid grid-cols-1 gap-3 rounded-brand border border-ink/10 bg-white p-4 sm:grid-cols-4 sm:items-end"
+          className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-navy-900/10 bg-white p-4 sm:grid-cols-4 sm:items-end"
         >
           <label className="flex flex-col text-sm">
             Extension (ex: .cm)
-            <input name="tld" required placeholder=".cm" className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input name="tld" required placeholder=".cm" className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">
             Prix fournisseur (FCFA)
-            <input type="number" name="supplierPriceFcfa" min={0} required className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input type="number" name="supplierPriceFcfa" min={0} required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">
             Marge (FCFA)
-            <input type="number" name="marginFcfa" min={0} required className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input type="number" name="marginFcfa" min={0} required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="active" defaultChecked className="h-4 w-4" />
             Actif (en vente)
           </label>
           <div className="sm:col-span-4">
-            <button type="submit" className="rounded-brand bg-ink px-4 py-2 text-xs font-medium text-white hover:opacity-90">
+            <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-medium text-white hover:opacity-90">
               Enregistrer la tarification
             </button>
           </div>
         </form>
 
-        <div className="mt-3 overflow-x-auto rounded-brand border border-ink/10 bg-white">
+        <div className="mt-3 overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
           {tldPricing.length === 0 ? (
-            <p className="p-6 text-sm text-muted">Aucune extension tarifée pour l&apos;instant.</p>
+            <p className="p-6 text-sm text-slate-500">Aucune extension tarifée pour l&apos;instant.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+              <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-4 py-2">Extension</th>
                   <th className="px-4 py-2">Fournisseur</th>
@@ -161,12 +161,12 @@ export default async function AdminDomainsPage({
               </thead>
               <tbody>
                 {tldPricing.map((t) => (
-                  <tr key={t.tld} className="border-b border-ink/5 last:border-0">
+                  <tr key={t.tld} className="border-b border-navy-900/[0.05] last:border-0">
                     <td className="px-4 py-2 font-mono">{t.tld}</td>
-                    <td className="px-4 py-2 text-muted">{t.supplierPriceFcfa.toLocaleString("fr-FR")} FCFA</td>
-                    <td className="px-4 py-2 text-muted">{t.marginFcfa.toLocaleString("fr-FR")} FCFA</td>
+                    <td className="px-4 py-2 text-slate-500">{t.supplierPriceFcfa.toLocaleString("fr-FR")} FCFA</td>
+                    <td className="px-4 py-2 text-slate-500">{t.marginFcfa.toLocaleString("fr-FR")} FCFA</td>
                     <td className="px-4 py-2 font-medium">{t.soldPriceFcfa.toLocaleString("fr-FR")} FCFA</td>
-                    <td className={`px-4 py-2 font-medium ${t.active ? "text-leaf" : "text-muted"}`}>
+                    <td className={`px-4 py-2 font-medium ${t.active ? "text-success-700" : "text-slate-500"}`}>
                       {t.active ? "Actif" : "Désactivé"}
                     </td>
                   </tr>
@@ -178,47 +178,47 @@ export default async function AdminDomainsPage({
       </section>
 
       <section>
-        <h2 className="font-display text-lg font-semibold">Demandes ({domainRequests.filter((r) => r.status === "requested").length} en attente)</h2>
+        <h2 className="font-jakarta text-lg font-semibold">Demandes ({domainRequests.filter((r) => r.status === "requested").length} en attente)</h2>
         <div className="mt-3 flex flex-col gap-3">
           {domainRequests.length === 0 ? (
-            <p className="rounded-brand border border-ink/10 bg-white p-6 text-sm text-muted">
+            <p className="rounded-xl border border-navy-900/10 bg-white p-6 text-sm text-slate-500">
               Aucune demande de domaine pour l&apos;instant.
             </p>
           ) : (
             domainRequests.map((r) => {
-              const statusInfo = REQUEST_STATUS_LABEL[r.status] ?? { label: r.status, className: "bg-ink/5 text-muted" };
+              const statusInfo = REQUEST_STATUS_LABEL[r.status] ?? { label: r.status, className: "bg-navy-900/[0.04] text-slate-500" };
               const isFinal = r.status === "registered" || r.status === "failed" || r.status === "cancelled";
               return (
-                <div key={r.id} className="rounded-brand border border-ink/10 bg-white p-4">
+                <div key={r.id} className="rounded-xl border border-navy-900/10 bg-white p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-ink">{r.domainName}</p>
-                      <p className="text-xs text-muted">
+                      <p className="font-medium text-navy-900">{r.domainName}</p>
+                      <p className="text-xs text-slate-500">
                         {r.organizationName} — demandé le {new Date(r.requestedAt).toLocaleDateString("fr-FR")} — prix vendu{" "}
                         {r.soldPriceFcfa.toLocaleString("fr-FR")} FCFA
                       </p>
                     </div>
                     <span className={`rounded-full px-2 py-0.5 text-xs ${statusInfo.className}`}>{statusInfo.label}</span>
                   </div>
-                  {r.resolutionNote && <p className="mt-2 text-xs text-muted">Note : {r.resolutionNote}</p>}
+                  {r.resolutionNote && <p className="mt-2 text-xs text-slate-500">Note : {r.resolutionNote}</p>}
 
                   {!isFinal && (
                     <form action={resolveDomainRequestAction} className="mt-3 flex flex-wrap items-end gap-2">
                       <input type="hidden" name="requestId" value={r.id} />
-                      <label className="flex flex-col text-xs text-muted">
+                      <label className="flex flex-col text-xs text-slate-500">
                         Nouveau statut
-                        <select name="newStatus" defaultValue={r.status === "requested" ? "processing" : "registered"} className="mt-1 rounded-brand border border-ink/20 px-2 py-1.5 text-sm">
+                        <select name="newStatus" defaultValue={r.status === "requested" ? "processing" : "registered"} className="mt-1 rounded-xl border border-navy-900/[0.12] px-2 py-1.5 text-sm">
                           <option value="processing">En cours de traitement</option>
                           <option value="registered">Enregistré</option>
                           <option value="failed">Échoué</option>
                           <option value="cancelled">Annulé</option>
                         </select>
                       </label>
-                      <label className="flex flex-1 flex-col text-xs text-muted">
+                      <label className="flex flex-1 flex-col text-xs text-slate-500">
                         Note (optionnel)
-                        <input name="resolutionNote" className="mt-1 rounded-brand border border-ink/20 px-2 py-1.5 text-sm" />
+                        <input name="resolutionNote" className="mt-1 rounded-xl border border-navy-900/[0.12] px-2 py-1.5 text-sm" />
                       </label>
-                      <button type="submit" className="rounded-brand bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90">
+                      <button type="submit" className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:opacity-90">
                         Mettre à jour
                       </button>
                     </form>

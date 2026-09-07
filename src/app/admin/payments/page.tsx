@@ -2,11 +2,11 @@ import { requirePlatformAdmin } from "@/application/services/platform-admin-serv
 import { listAllPaymentsForAdmin } from "@/application/services/subscription-payment-service";
 
 const STATUS_LABEL: Record<string, { label: string; className: string }> = {
-  pending: { label: "En attente", className: "bg-clay/10 text-clay" },
-  completed: { label: "Payé", className: "bg-leaf/10 text-leaf" },
-  failed: { label: "Échoué", className: "bg-clay/10 text-clay" },
-  refunded: { label: "Remboursé", className: "bg-ink/10 text-muted" },
-  cancelled: { label: "Annulé", className: "bg-ink/10 text-muted" },
+  pending: { label: "En attente", className: "bg-warning-50 text-warning-700" },
+  completed: { label: "Payé", className: "bg-success-50 text-success-700" },
+  failed: { label: "Échoué", className: "bg-danger-50 text-danger-700" },
+  refunded: { label: "Remboursé", className: "bg-navy-900/[0.06] text-slate-500" },
+  cancelled: { label: "Annulé", className: "bg-navy-900/[0.06] text-slate-500" },
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -41,33 +41,33 @@ export default async function AdminPaymentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Paiements</h1>
-        <p className="mt-1 text-sm text-muted">
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Paiements</h1>
+        <p className="mt-1 text-sm text-slate-500">
           Les {payments.length} paiements les plus récents, tous plans et add-ons confondus.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-brand border border-ink/10 bg-white p-4">
-          <p className="text-xs text-muted">Confirmé (total affiché)</p>
-          <p className="mt-1 font-display text-lg font-semibold">{formatFcfa(totalConfirmedFcfa)}</p>
+        <div className="rounded-xl border border-navy-900/10 bg-white p-4">
+          <p className="text-xs text-slate-500">Confirmé (total affiché)</p>
+          <p className="mt-1 font-jakarta text-lg font-semibold">{formatFcfa(totalConfirmedFcfa)}</p>
         </div>
-        <div className="rounded-brand border border-ink/10 bg-white p-4">
-          <p className="text-xs text-muted">En attente</p>
-          <p className="mt-1 font-display text-lg font-semibold">{pendingCount}</p>
+        <div className="rounded-xl border border-navy-900/10 bg-white p-4">
+          <p className="text-xs text-slate-500">En attente</p>
+          <p className="mt-1 font-jakarta text-lg font-semibold">{pendingCount}</p>
         </div>
-        <div className="rounded-brand border border-ink/10 bg-white p-4">
-          <p className="text-xs text-muted">Échoués</p>
-          <p className="mt-1 font-display text-lg font-semibold">{failedCount}</p>
+        <div className="rounded-xl border border-navy-900/10 bg-white p-4">
+          <p className="text-xs text-slate-500">Échoués</p>
+          <p className="mt-1 font-jakarta text-lg font-semibold">{failedCount}</p>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
         {payments.length === 0 ? (
-          <p className="p-6 text-sm text-muted">Aucun paiement enregistré pour l&apos;instant.</p>
+          <p className="p-6 text-sm text-slate-500">Aucun paiement enregistré pour l&apos;instant.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Entreprise</th>
                 <th className="px-4 py-2">Type</th>
@@ -79,20 +79,20 @@ export default async function AdminPaymentsPage() {
             </thead>
             <tbody>
               {payments.map((p) => (
-                <tr key={p.id} className="border-b border-ink/5 last:border-0">
+                <tr key={p.id} className="border-b border-navy-900/[0.05] last:border-0">
                   <td className="px-4 py-2">{p.organizationName}</td>
-                  <td className="px-4 py-2 text-muted">{TYPE_LABEL[p.paymentType] ?? p.paymentType}</td>
-                  <td className="px-4 py-2 text-muted">
+                  <td className="px-4 py-2 text-slate-500">{TYPE_LABEL[p.paymentType] ?? p.paymentType}</td>
+                  <td className="px-4 py-2 text-slate-500">
                     {p.paymentType === "plan_subscription" ? (p.planKey ?? "—") : (p.addonKey ?? "—")}
                     {p.addonQuantity ? ` × ${p.addonQuantity}` : ""}
                   </td>
                   <td className="px-4 py-2">{formatFcfa(p.amountFcfa)}</td>
                   <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[p.status]?.className ?? "bg-ink/10 text-muted"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[p.status]?.className ?? "bg-navy-900/[0.06] text-slate-500"}`}>
                       {STATUS_LABEL[p.status]?.label ?? p.status}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-muted">
+                  <td className="px-4 py-2 text-slate-500">
                     {new Date(p.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                   </td>
                 </tr>

@@ -1,27 +1,17 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { requirePlatformAdmin } from "@/application/services/platform-admin-service";
 import { AuthenticationError } from "@/lib/errors";
-
-const NAV_ITEMS = [
-  { href: "/admin", label: "Vue globale" },
-  { href: "/admin/organizations", label: "Entreprises" },
-  { href: "/admin/plans", label: "Plans" },
-  { href: "/admin/domains", label: "Domaines" },
-  { href: "/admin/numbers", label: "Numéros" },
-  { href: "/admin/channels", label: "Canaux" },
-  { href: "/admin/payments", label: "Paiements" },
-  // Lot H, Partie 3.
-  { href: "/admin/logs", label: "Logs" },
-  { href: "/admin/addons", label: "Add-ons" },
-];
+import { AdminSidebar } from "./_components/sidebar";
+import { AdminTopbar } from "./_components/topbar";
 
 /**
  * Garde d'auth pour TOUTE la console `/admin/*` (03_LOT_C_super_admin.md).
  * `requirePlatformAdmin()` est rappelée individuellement dans chaque
  * page ET dans chaque Server Action mutante en aval — même pattern que
  * `/dashboard/layout.tsx` + `requireCurrentOrganization()` rappelé dans
- * chaque page dashboard (ex: `dashboard/finance/page.tsx`).
+ * chaque page dashboard (ex: `dashboard/finance/page.tsx`). L'appel ici
+ * sert uniquement à afficher la coquille (sidebar + topbar) et l'identité
+ * dans la topbar — ce n'est PAS ce qui protège les pages individuellement.
  *
  * Choix volontaire : pas de page "Accès refusé" qui confirmerait
  * l'existence de la console à un utilisateur non-admin (un membre normal
@@ -29,10 +19,15 @@ const NAV_ITEMS = [
  * comme si `/admin` n'existait pas. Seule l'absence de session redirige
  * vers `/login` (comportement normal, pas une fuite d'info). À ajuster
  * si une page "Accès refusé" explicite est préférée.
+ *
+ * Repasse design (réplique pixel par pixel d'une référence fournie,
+ * sept. 2026) : coquille sidebar navy + topbar, cf. `_components/`.
+ * Contenu des 9 pages inchangé — seul le chrome autour change ici.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  let admin;
   try {
-    await requirePlatformAdmin();
+    admin = await requirePlatformAdmin();
   } catch (error) {
     if (error instanceof AuthenticationError) {
       redirect("/login");
@@ -41,23 +36,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="border-b border-ink/10 bg-ink px-5 py-4 text-paper">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-display text-sm font-semibold">Console plateforme SME-OS</p>
-            <p className="text-xs text-paper/60">Super admin</p>
-          </div>
-          <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-            {NAV_ITEMS.map((item) => (
-              <Link key={item.href} href={item.href} className="text-paper/70 hover:text-paper">
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
-      <div className="mx-auto max-w-5xl px-5 py-8">{children}</div>
+    <div className="adm-shell flex">
+      <AdminSidebar />
+      <div className="flex min-h-screen flex-1 flex-col">
+        <AdminTopbar role={admin.role} email={admin.email} />
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:py-8">{children}</main>
+      </div>
     </div>
   );
 }

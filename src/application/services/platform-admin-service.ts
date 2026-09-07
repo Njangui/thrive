@@ -5,6 +5,14 @@ import { AuthenticationError, AuthorizationError } from "@/lib/errors";
 export interface PlatformAdmin {
   userId: string;
   role: string;
+  /**
+   * Repasse design console admin : ajouté pour alimenter le badge
+   * d'identité de la topbar (`AdminTopbar`) sans requête supplémentaire —
+   * `user.email` est déjà disponible sur l'objet retourné par
+   * `auth.getUser()` juste en dessous, jamais interrogé nulle part
+   * ailleurs dans cette fonction avant ce lot.
+   */
+  email: string | null;
 }
 
 /**
@@ -58,5 +66,5 @@ export async function requirePlatformAdmin(): Promise<PlatformAdmin> {
     throw new AuthorizationError();
   }
 
-  return { userId: user.id, role: data.role as string };
+  return { userId: user.id, role: data.role as string, email: user.email ?? null };
 }

@@ -71,17 +71,17 @@ export default async function AdminAddonsPage({
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Add-ons</h1>
-        <p className="mt-1 text-sm text-muted">Catalogue plateforme et réglages globaux (Lot G).</p>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Add-ons</h1>
+        <p className="mt-1 text-sm text-slate-500">Catalogue plateforme et réglages globaux (Lot G).</p>
       </div>
 
-      {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
+      {error && <p className="rounded-xl border border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-success-700">{success}</p>
       )}
 
       <section>
-        <h2 className="font-display text-lg font-semibold">Réglages plateforme</h2>
+        <h2 className="font-jakarta text-lg font-semibold">Réglages plateforme</h2>
         <form action={updateTrialDaysAction} className="mt-3 flex items-end gap-2">
           <label className="flex flex-col text-sm">
             Durée d&apos;essai par défaut (jours)
@@ -90,44 +90,44 @@ export default async function AdminAddonsPage({
               name="trialDays"
               min={1}
               defaultValue={trialDays}
-              className="mt-1 w-32 rounded-brand border border-ink/20 px-3 py-2 text-sm text-ink"
+              className="mt-1 w-32 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm text-navy-900"
             />
           </label>
-          <button type="submit" className="rounded-brand bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90">
+          <button type="submit" className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:opacity-90">
             Enregistrer
           </button>
         </form>
       </section>
 
       <section>
-        <h2 className="font-display text-lg font-semibold">Créer un add-on</h2>
-        <form action={createAddonAction} className="mt-3 grid grid-cols-1 gap-3 rounded-brand border border-ink/10 bg-white p-4 sm:grid-cols-2">
+        <h2 className="font-jakarta text-lg font-semibold">Créer un add-on</h2>
+        <form action={createAddonAction} className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-navy-900/10 bg-white p-4 sm:grid-cols-2">
           <label className="flex flex-col text-sm">
             Clé (unique, ex: extra_ai_credits_100)
-            <input name="key" required className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input name="key" required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">
             Nom affiché
-            <input name="name" required className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input name="name" required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm sm:col-span-2">
             Description
-            <input name="description" className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input name="description" className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">
             Prix (FCFA)
-            <input type="number" name="priceFcfa" min={0} required className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input type="number" name="priceFcfa" min={0} required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">
             Clé d&apos;entitlement ciblée (ex: ai_credits, whatsapp_groups)
-            <input name="entitlementKey" required className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input name="entitlementKey" required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">
             Incrément accordé
-            <input type="number" name="incrementValue" min={1} required className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm" />
+            <input type="number" name="incrementValue" min={1} required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <div className="sm:col-span-2">
-            <button type="submit" className="rounded-brand bg-ink px-4 py-2 text-xs font-medium text-white hover:opacity-90">
+            <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-medium text-white hover:opacity-90">
               Créer l&apos;add-on
             </button>
           </div>
@@ -135,13 +135,13 @@ export default async function AdminAddonsPage({
       </section>
 
       <section>
-        <h2 className="font-display text-lg font-semibold">Catalogue ({addons.length})</h2>
-        <div className="mt-3 overflow-x-auto rounded-brand border border-ink/10 bg-white">
+        <h2 className="font-jakarta text-lg font-semibold">Catalogue ({addons.length})</h2>
+        <div className="mt-3 overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
           {addons.length === 0 ? (
-            <p className="p-6 text-sm text-muted">Aucun add-on créé pour l&apos;instant.</p>
+            <p className="p-6 text-sm text-slate-500">Aucun add-on créé pour l&apos;instant.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+              <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-4 py-2">Clé</th>
                   <th className="px-4 py-2">Nom</th>
@@ -154,20 +154,20 @@ export default async function AdminAddonsPage({
               </thead>
               <tbody>
                 {addons.map((addon) => (
-                  <tr key={addon.key} className="border-b border-ink/5 last:border-0">
-                    <td className="px-4 py-2 font-mono text-xs text-muted">{addon.key}</td>
+                  <tr key={addon.key} className="border-b border-navy-900/[0.05] last:border-0">
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{addon.key}</td>
                     <td className="px-4 py-2">{addon.name}</td>
                     <td className="px-4 py-2">{addon.priceFcfa.toLocaleString("fr-FR")} FCFA</td>
                     <td className="px-4 py-2 font-mono text-xs">{addon.entitlementKey}</td>
                     <td className="px-4 py-2">+{addon.incrementValue}</td>
-                    <td className={`px-4 py-2 font-medium ${addon.active ? "text-leaf" : "text-muted"}`}>
+                    <td className={`px-4 py-2 font-medium ${addon.active ? "text-success-700" : "text-slate-500"}`}>
                       {addon.active ? "Actif" : "Désactivé"}
                     </td>
                     <td className="px-4 py-2 text-right">
                       <form action={toggleAddonAction}>
                         <input type="hidden" name="key" value={addon.key} />
                         <input type="hidden" name="active" value={String(addon.active)} />
-                        <button type="submit" className="text-xs text-ink underline hover:no-underline">
+                        <button type="submit" className="text-xs text-navy-900 underline hover:no-underline">
                           {addon.active ? "Désactiver" : "Réactiver"}
                         </button>
                       </form>

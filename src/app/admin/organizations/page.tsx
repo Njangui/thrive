@@ -152,11 +152,11 @@ export default async function AdminOrganizationsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Entreprises</h1>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Entreprises</h1>
 
-      <form className="flex flex-wrap items-end gap-2 rounded-brand border border-ink/10 bg-white p-4">
+      <form className="flex flex-wrap items-end gap-2 rounded-xl border border-navy-900/10 bg-white p-4">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted" htmlFor="q">
+          <label className="text-xs text-slate-500" htmlFor="q">
             Recherche
           </label>
           <input
@@ -164,96 +164,96 @@ export default async function AdminOrganizationsPage({
             name="q"
             defaultValue={q ?? ""}
             placeholder="Nom ou identifiant…"
-            className="rounded-brand border border-ink/15 px-3 py-2 text-sm"
+            className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted" htmlFor="status">
+          <label className="text-xs text-slate-500" htmlFor="status">
             Statut
           </label>
           <select
             id="status"
             name="status"
             defaultValue={statusFilter ?? "all"}
-            className="rounded-brand border border-ink/15 px-3 py-2 text-sm"
+            className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm"
           >
             <option value="all">Toutes</option>
             <option value="active">Active</option>
             <option value="suspended">Suspendue</option>
           </select>
         </div>
-        <button type="submit" className="rounded-brand bg-ink px-4 py-2 text-sm font-medium text-white">
+        <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white">
           Filtrer
         </button>
         {(query || statusFilter) && (
-          <a href="/admin/organizations" className="px-2 py-2 text-xs text-muted underline">
+          <a href="/admin/organizations" className="px-2 py-2 text-xs text-slate-500 underline">
             Réinitialiser
           </a>
         )}
       </form>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="rounded-xl border border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>
       )}
 
       <div className="flex flex-col gap-4">
         {filteredOrganizations.length === 0 ? (
-          <p className="rounded-brand border border-ink/10 bg-white p-6 text-sm text-muted">
+          <p className="rounded-xl border border-navy-900/10 bg-white p-6 text-sm text-slate-500">
             Aucune entreprise ne correspond à ces critères.
           </p>
         ) : (
           filteredOrganizations.map((org) => (
-          <div key={org.id} className="rounded-brand border border-ink/10 bg-white p-4">
+          <div key={org.id} className="rounded-xl border border-navy-900/10 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="font-display text-sm font-semibold">{org.name}</p>
-                <p className="text-xs text-muted">{org.slug}</p>
+                <p className="font-jakarta text-sm font-semibold">{org.name}</p>
+                <p className="text-xs text-slate-500">{org.slug}</p>
               </div>
               <div className="flex gap-2">
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs ${
-                    org.status === "active" ? "bg-leaf/10 text-leaf" : "bg-clay/10 text-clay"
+                    org.status === "active" ? "bg-success-50 text-success-700" : "bg-danger-50 text-danger-700"
                   }`}
                 >
                   {STATUS_LABELS[org.status] ?? org.status}
                 </span>
-                <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs text-muted">
+                <span className="rounded-full bg-navy-900/[0.06] px-2 py-0.5 text-xs text-slate-500">
                   {SUBSCRIPTION_STATUS_LABELS[org.subscriptionStatus] ?? org.subscriptionStatus}
                 </span>
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted sm:grid-cols-4">
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500 sm:grid-cols-4">
               <p>
-                Plan : <span className="text-ink">{org.planKey}</span>
+                Plan : <span className="text-navy-900">{org.planKey}</span>
               </p>
               <p>
                 Essai jusqu&apos;au :{" "}
-                <span className="text-ink">
+                <span className="text-navy-900">
                   {org.trialEnd ? new Date(org.trialEnd).toLocaleDateString("fr-FR") : "—"}
                 </span>
               </p>
               <p>
-                Créée le : <span className="text-ink">{new Date(org.createdAt).toLocaleDateString("fr-FR")}</span>
+                Créée le : <span className="text-navy-900">{new Date(org.createdAt).toLocaleDateString("fr-FR")}</span>
               </p>
               <p>
                 Dernière activité :{" "}
-                <span className="text-ink">
+                <span className="text-navy-900">
                   {org.lastActivityAt ? new Date(org.lastActivityAt).toLocaleDateString("fr-FR") : "—"}
                 </span>
               </p>
             </div>
 
-            <p className="mt-2 text-xs text-muted">
+            <p className="mt-2 text-xs text-slate-500">
               Canaux connectés :{" "}
               {org.connectedChannels.length > 0 ? org.connectedChannels.join(", ") : "aucun"}
               {" · "}Crédits IA : {formatCredits(org.creditStatus)}
             </p>
 
-            <p className="mt-1 text-xs text-muted">
+            <p className="mt-1 text-xs text-slate-500">
               Comptes dédiés (Lot N) :{" "}
               {org.dedicatedCredentials.length > 0 ? (
-                <span className="text-ink">
+                <span className="text-navy-900">
                   {org.dedicatedCredentials
                     .map((c) => CREDENTIAL_TARGET_OPTIONS.find((o) => o.value === c)?.label ?? c)
                     .join(", ")}
@@ -267,7 +267,7 @@ export default async function AdminOrganizationsPage({
               const orgUsage = usageByOrg.get(org.id);
               if (!orgUsage) return null;
               return (
-                <p className="mt-1 text-xs text-muted">
+                <p className="mt-1 text-xs text-slate-500">
                   {orgUsage.productsCount} produit{orgUsage.productsCount !== 1 ? "s" : ""}
                   {" · "}
                   {orgUsage.conversationsCount} conversation{orgUsage.conversationsCount !== 1 ? "s" : ""}
@@ -277,7 +277,7 @@ export default async function AdminOrganizationsPage({
               );
             })()}
 
-            <div className="mt-4 flex flex-wrap gap-3 border-t border-ink/10 pt-3">
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-navy-900/10 pt-3">
               <form action={toggleStatusAction}>
                 <input type="hidden" name="organizationId" value={org.id} />
                 <input
@@ -287,8 +287,8 @@ export default async function AdminOrganizationsPage({
                 />
                 <button
                   type="submit"
-                  className={`rounded-brand px-3 py-1.5 text-xs font-medium text-white ${
-                    org.status === "suspended" ? "bg-leaf" : "bg-clay"
+                  className={`rounded-xl px-3 py-1.5 text-xs font-medium text-white ${
+                    org.status === "suspended" ? "bg-success-600" : "bg-danger-600"
                   }`}
                 >
                   {org.status === "suspended" ? "Activer" : "Suspendre"}
@@ -300,7 +300,7 @@ export default async function AdminOrganizationsPage({
                 <select
                   name="newPlan"
                   defaultValue={org.planKey}
-                  className="rounded-brand border border-ink/15 px-2 py-1 text-xs"
+                  className="rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs"
                 >
                   {plans.map((p) => (
                     <option key={p.key} value={p.key}>
@@ -308,7 +308,7 @@ export default async function AdminOrganizationsPage({
                     </option>
                   ))}
                 </select>
-                <button type="submit" className="rounded-brand bg-ink px-3 py-1.5 text-xs font-medium text-white">
+                <button type="submit" className="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white">
                   Changer le plan
                 </button>
               </form>
@@ -321,18 +321,18 @@ export default async function AdminOrganizationsPage({
                   min="1"
                   step="1"
                   placeholder="Crédits IA"
-                  className="w-28 rounded-brand border border-ink/15 px-2 py-1 text-xs"
+                  className="w-28 rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs"
                 />
-                <button type="submit" className="rounded-brand bg-ink px-3 py-1.5 text-xs font-medium text-white">
+                <button type="submit" className="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white">
                   Ajouter crédits
                 </button>
               </form>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-ink/10 pt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-navy-900/10 pt-3">
               <form action={configureCredentialAction} className="flex flex-wrap items-center gap-1">
                 <input type="hidden" name="organizationId" value={org.id} />
-                <select name="target" className="rounded-brand border border-ink/15 px-2 py-1 text-xs">
+                <select name="target" className="rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs">
                   {CREDENTIAL_TARGET_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -344,9 +344,9 @@ export default async function AdminOrganizationsPage({
                   type="password"
                   placeholder="Clé API du compte dédié"
                   required
-                  className="w-40 rounded-brand border border-ink/15 px-2 py-1 text-xs"
+                  className="w-40 rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs"
                 />
-                <button type="submit" className="rounded-brand bg-ink px-3 py-1.5 text-xs font-medium text-white">
+                <button type="submit" className="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white">
                   Configurer un compte dédié
                 </button>
               </form>
@@ -354,14 +354,14 @@ export default async function AdminOrganizationsPage({
               {org.dedicatedCredentials.length > 0 && (
                 <form action={removeCredentialAction} className="flex items-center gap-1">
                   <input type="hidden" name="organizationId" value={org.id} />
-                  <select name="target" className="rounded-brand border border-ink/15 px-2 py-1 text-xs">
+                  <select name="target" className="rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs">
                     {org.dedicatedCredentials.map((c) => (
                       <option key={c} value={c}>
                         {CREDENTIAL_TARGET_OPTIONS.find((o) => o.value === c)?.label ?? c}
                       </option>
                     ))}
                   </select>
-                  <button type="submit" className="rounded-brand bg-clay px-3 py-1.5 text-xs font-medium text-white">
+                  <button type="submit" className="rounded-xl bg-danger-600 px-3 py-1.5 text-xs font-medium text-white">
                     Retirer
                   </button>
                 </form>

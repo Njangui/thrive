@@ -70,39 +70,39 @@ export default async function AdminPlansPage({
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Plans</h1>
-        <p className="mt-1 text-sm text-muted">
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Plans</h1>
+        <p className="mt-1 text-sm text-slate-500">
           Prix, description et grille de limites des 3 plans commerciaux. Ces valeurs alimentent directement le
           dashboard entreprise et le moteur d&apos;entitlements — aucune limite n&apos;est codée en dur ailleurs.
         </p>
       </div>
 
-      {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
+      {error && <p className="rounded-xl border border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-success-700">{success}</p>
       )}
 
       <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg font-semibold">Tarification</h2>
+        <h2 className="font-jakarta text-lg font-semibold">Tarification</h2>
         <div className="grid gap-4 sm:grid-cols-3">
           {overview.plans.map((plan) => (
             <form
               key={plan.key}
               action={updatePlanDetailsAction}
-              className="flex flex-col gap-2 rounded-brand border border-ink/10 bg-white p-4"
+              className="flex flex-col gap-2 rounded-xl border border-navy-900/10 bg-white p-4"
             >
               <input type="hidden" name="planKey" value={plan.key} />
-              <span className="text-xs uppercase tracking-wide text-muted">{PLAN_LABELS[plan.key]}</span>
-              <label className="flex flex-col gap-1 text-xs text-muted">
+              <span className="text-xs uppercase tracking-wide text-slate-500">{PLAN_LABELS[plan.key]}</span>
+              <label className="flex flex-col gap-1 text-xs text-slate-500">
                 Nom affiché
                 <input
                   name="name"
                   defaultValue={plan.name}
                   required
-                  className="rounded-brand border border-ink/15 px-3 py-2 text-sm text-ink"
+                  className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted">
+              <label className="flex flex-col gap-1 text-xs text-slate-500">
                 Prix mensuel (FCFA)
                 <input
                   name="priceFcfa"
@@ -111,19 +111,19 @@ export default async function AdminPlansPage({
                   step={1}
                   defaultValue={plan.priceFcfa}
                   required
-                  className="rounded-brand border border-ink/15 px-3 py-2 text-sm text-ink"
+                  className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted">
+              <label className="flex flex-col gap-1 text-xs text-slate-500">
                 Description
                 <textarea
                   name="description"
                   defaultValue={plan.description ?? ""}
                   rows={2}
-                  className="rounded-brand border border-ink/15 px-3 py-2 text-sm text-ink"
+                  className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900"
                 />
               </label>
-              <button type="submit" className="mt-1 rounded-brand bg-ink px-3 py-2 text-sm font-medium text-white">
+              <button type="submit" className="mt-1 rounded-xl bg-violet-600 px-3 py-2 text-sm font-medium text-white">
                 Enregistrer
               </button>
             </form>
@@ -133,14 +133,14 @@ export default async function AdminPlansPage({
 
       <section className="flex flex-col gap-4">
         <div>
-          <h2 className="font-display text-lg font-semibold">Grille des limites</h2>
-          <p className="text-sm text-muted">
+          <h2 className="font-jakarta text-lg font-semibold">Grille des limites</h2>
+          <p className="text-sm text-slate-500">
             Jauges d&apos;usage (nombre, -1 = illimité) et fonctionnalités (0 = désactivée, 1 = activée).
           </p>
         </div>
-        <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Clé</th>
                 {PLAN_KEYS.map((planKey) => (
@@ -153,7 +153,7 @@ export default async function AdminPlansPage({
             </thead>
             <tbody>
               {overview.entitlements.map((entry) => (
-                <tr key={entry.key} className="border-b border-ink/5 last:border-0">
+                <tr key={entry.key} className="border-b border-navy-900/[0.05] last:border-0">
                   <td colSpan={PLAN_KEYS.length + 2} className="p-0">
                     <form
                       action={updateEntitlementRowAction}
@@ -170,10 +170,10 @@ export default async function AdminPlansPage({
                           min={-1}
                           step={1}
                           defaultValue={entry.limitsByPlan[planKey]}
-                          className="w-full rounded-brand border border-ink/15 px-2 py-1 text-sm"
+                          className="w-full rounded-xl border border-navy-900/[0.09] px-2 py-1 text-sm"
                         />
                       ))}
-                      <button type="submit" className="rounded-brand border border-ink/15 px-2 py-1 text-xs">
+                      <button type="submit" className="rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs">
                         Enregistrer
                       </button>
                     </form>
@@ -187,15 +187,15 @@ export default async function AdminPlansPage({
 
       <section className="flex flex-col gap-4">
         <div>
-          <h2 className="font-display text-lg font-semibold">Bonus numéro dédié</h2>
-          <p className="text-sm text-muted">
+          <h2 className="font-jakarta text-lg font-semibold">Bonus numéro dédié</h2>
+          <p className="text-sm text-slate-500">
             Groupes WhatsApp additionnels débloqués quand un numéro est assigné à l&apos;entreprise depuis{" "}
             <span className="font-medium">/admin/numbers</span>. 0 = pas de bonus pour ce plan.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Clé</th>
                 {PLAN_KEYS.map((planKey) => (
@@ -208,7 +208,7 @@ export default async function AdminPlansPage({
             </thead>
             <tbody>
               {overview.dedicatedBonuses.map((entry) => (
-                <tr key={entry.key} className="border-b border-ink/5 last:border-0">
+                <tr key={entry.key} className="border-b border-navy-900/[0.05] last:border-0">
                   <td colSpan={PLAN_KEYS.length + 2} className="p-0">
                     <form
                       action={updateEntitlementRowAction}
@@ -225,10 +225,10 @@ export default async function AdminPlansPage({
                           min={0}
                           step={1}
                           defaultValue={entry.limitsByPlan[planKey]}
-                          className="w-full rounded-brand border border-ink/15 px-2 py-1 text-sm"
+                          className="w-full rounded-xl border border-navy-900/[0.09] px-2 py-1 text-sm"
                         />
                       ))}
-                      <button type="submit" className="rounded-brand border border-ink/15 px-2 py-1 text-xs">
+                      <button type="submit" className="rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs">
                         Enregistrer
                       </button>
                     </form>

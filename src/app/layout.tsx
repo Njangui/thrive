@@ -1,17 +1,36 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "./_components/service-worker-register";
 
-const displayFont = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["500", "700"],
-});
+const displayFont = { variable: "--font-display" };
+const bodyFont = { variable: "--font-body" };
 
-const bodyFont = Inter({
+/**
+ * Paire de polices pour la landing marketing SME-OS et la console Super
+ * Admin (`/admin/*`) UNIQUEMENT — n'a rien à voir avec `displayFont`/
+ * `bodyFont` ci-dessus, qui restent le mécanisme de police PAR TENANT de
+ * la vitrine publique (`resolveTenantFontClassName`, non touché ici).
+ * Chargées ici (root layout, une seule fois) plutôt que dans chaque
+ * composant pour respecter la règle Next.js sur `next/font` (doit être
+ * appelé au niveau module d'un composant, pas conditionnellement) et
+ * pour ne payer le poids de ces deux fontes qu'une fois pour tout
+ * l'app router. `display: "swap"` pour ne jamais bloquer le rendu si le
+ * réseau est lent (cohérent avec le choix déjà fait ailleurs dans le
+ * projet de ne jamais dépendre d'une ressource externe pour le rendu
+ * initial).
+ */
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-jakarta",
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
+});
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

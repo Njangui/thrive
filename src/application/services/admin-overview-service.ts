@@ -7,6 +7,25 @@ export interface PlatformOverview {
   organizationsSuspended: number;
   revenueLast30Days: number;
   aiMessagesLast30Days: number;
+  /**
+   * Repasse design (vue globale) : revenus `revenues.amount` groupés par
+   * jour sur les 7 derniers jours, pour le graphique d'évolution. Calculé
+   * à partir du MÊME jeu de lignes que `revenueLast30Days` (une seule
+   * requête, filtrée en JS) plutôt qu'un second aller-retour DB. Toujours
+   * exactement 7 points, même à 0 FCFA — jamais de jour manquant qui
+   * romprait l'axe du graphique.
+   */
+  revenueTrend7d: { date: string; label: string; amountFcfa: number }[];
+  /**
+   * Répartition des entreprises en buckets MUTUELLEMENT EXCLUSIFS (somme
+   * = nombre total d'organisations), pour le donut de la vue globale.
+   * Différent des 4 compteurs ci-dessus, qui sont volontairement des
+   * entonnoirs qui se chevauchent (une organisation "abonnée" est aussi
+   * "active", par ex.) — un donut a besoin de parts qui s'additionnent à
+   * 100%, donc priorité : suspendue > active > en essai > autre
+   * (past_due/cancelled/statut inattendu).
+   */
+  organizationsStatusBreakdown: { active: number; trialing: number; suspended: number; other: number };
 }
 
 /**
@@ -41,7 +60,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     await Promise.all([
       supabase.from("organizations").select("id, status"),
       supabase.from("organization_subscriptions").select("organization_id, plan_key, status"),
-      supabase.from("revenues").select("amount").gte("created_at", since30d),
+      supabase.from("revenues").select("amount, created_at").gte("created_at", since30d),
       supabase
         .from("messages")
         .select("id", { count: "exact", head: true })
@@ -58,6 +77,8 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   let subscribed = 0;
   let suspended = 0;
 
+  const breakdown = { active: 0, trialing: 0, suspended: 0, other: 0 };
+
   for (const o of orgs ?? []) {
     const sub = subsByOrg.get(o.id);
     const status = sub?.status ?? "trialing";
@@ -66,7 +87,28 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     if (status === "trialing") trialing += 1;
     if (planKey !== "starter") subscribed += 1;
     if (o.status === "suspended") suspended += 1;
+
+    if (o.status === "suspended") breakdown.suspended += 1;
+    else if (status === "active") breakdown.active += 1;
+    else if (status === "trialing") breakdown.trialing += 1;
+    else breakdown.other += 1;
   }
+
+  const dayFormatter = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short" });
+  const revenueTrend7d = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date();
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() - (6 - i));
+    const nextDay = new Date(day);
+    nextDay.setDate(day.getDate() + 1);
+    const amountFcfa = (revenues ?? [])
+      .filter((r) => {
+        const createdAt = new Date(r.created_at as string);
+        return createdAt >= day && createdAt < nextDay;
+      })
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+    return { date: day.toISOString().slice(0, 10), label: dayFormatter.format(day), amountFcfa };
+  });
 
   return {
     organizationsActive: active,
@@ -75,5 +117,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     organizationsSuspended: suspended,
     revenueLast30Days: (revenues ?? []).reduce((sum, r) => sum + Number(r.amount), 0),
     aiMessagesLast30Days: aiMessages ?? 0,
+    revenueTrend7d,
+    organizationsStatusBreakdown: breakdown,
   };
 }

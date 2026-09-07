@@ -81,25 +81,25 @@ export default async function AdminNumbersPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Numéros</h1>
-        <p className="mt-1 text-sm text-muted">
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Numéros</h1>
+        <p className="mt-1 text-sm text-slate-500">
           Un numéro assigné débloque le bonus &laquo;&nbsp;groupes WhatsApp&nbsp;&raquo; de son plan (section 55).
         </p>
       </div>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="rounded-xl border border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>
       )}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-success-700">{success}</p>
       )}
 
       <form
         action={addPhoneNumberAction}
-        className="flex flex-wrap items-end gap-2 rounded-brand border border-ink/10 bg-white p-4"
+        className="flex flex-wrap items-end gap-2 rounded-xl border border-navy-900/10 bg-white p-4"
       >
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted" htmlFor="phoneE164">
+          <label className="text-xs text-slate-500" htmlFor="phoneE164">
             Numéro (format E.164)
           </label>
           <input
@@ -107,31 +107,31 @@ export default async function AdminNumbersPage({
             name="phoneE164"
             required
             placeholder="+237690000000"
-            className="rounded-brand border border-ink/15 px-3 py-2 text-sm"
+            className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted" htmlFor="country">
+          <label className="text-xs text-slate-500" htmlFor="country">
             Pays (optionnel)
           </label>
           <input
             id="country"
             name="country"
             placeholder="CM"
-            className="rounded-brand border border-ink/15 px-3 py-2 text-sm"
+            className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm"
           />
         </div>
-        <button type="submit" className="rounded-brand bg-ink px-4 py-2 text-sm font-medium text-white">
+        <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white">
           + Ajouter un numéro
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-navy-900/10 bg-white">
         {numbers.length === 0 ? (
-          <p className="p-6 text-sm text-muted">Aucun numéro enregistré.</p>
+          <p className="p-6 text-sm text-slate-500">Aucun numéro enregistré.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Numéro</th>
                 <th className="px-4 py-2">Pays</th>
@@ -142,36 +142,36 @@ export default async function AdminNumbersPage({
             </thead>
             <tbody>
               {numbers.map((n) => (
-                <tr key={n.id} className="border-b border-ink/5 last:border-0">
+                <tr key={n.id} className="border-b border-navy-900/[0.05] last:border-0">
                   <td className="px-4 py-2">{n.phoneE164}</td>
-                  <td className="px-4 py-2 text-muted">{n.country ?? "—"}</td>
+                  <td className="px-4 py-2 text-slate-500">{n.country ?? "—"}</td>
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${
-                        n.status === "assigned" ? "bg-leaf/10 text-leaf" : "bg-ink/10 text-muted"
+                        n.status === "assigned" ? "bg-success-50 text-success-700" : "bg-navy-900/[0.06] text-slate-500"
                       }`}
                     >
                       {STATUS_LABELS[n.status] ?? n.status}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-muted">{n.organizationName ?? "—"}</td>
+                  <td className="px-4 py-2 text-slate-500">{n.organizationName ?? "—"}</td>
                   <td className="px-4 py-2 text-right">
                     {n.organizationId ? (
                       <form action={unassignPhoneNumberAction}>
                         <input type="hidden" name="numberId" value={n.id} />
-                        <button type="submit" className="text-xs text-clay hover:underline">
+                        <button type="submit" className="text-xs text-danger-700 hover:underline">
                           Retirer
                         </button>
                       </form>
                     ) : n.status === "suspended" ? (
-                      <span className="text-xs text-muted">Suspendu</span>
+                      <span className="text-xs text-slate-500">Suspendu</span>
                     ) : (
                       <form action={assignPhoneNumberAction} className="flex items-center justify-end gap-1">
                         <input type="hidden" name="numberId" value={n.id} />
                         <select
                           name="organizationId"
                           defaultValue=""
-                          className="rounded-brand border border-ink/15 px-2 py-1 text-xs"
+                          className="rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs"
                         >
                           <option value="" disabled>
                             Choisir une entreprise…
@@ -182,7 +182,7 @@ export default async function AdminNumbersPage({
                             </option>
                           ))}
                         </select>
-                        <button type="submit" className="rounded-brand bg-ink px-2 py-1 text-xs font-medium text-white">
+                        <button type="submit" className="rounded-xl bg-violet-600 px-2 py-1 text-xs font-medium text-white">
                           Assigner
                         </button>
                       </form>
