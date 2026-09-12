@@ -12,8 +12,11 @@ import {
   completeOnboarding,
 } from "./onboarding-actions";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
+import type { PublicCountry } from "@/application/services/country-service";
 
 const TOTAL_STEPS = 6;
+/** Repli si aucun pays n'est fourni par le serveur (ne devrait pas arriver, CM est toujours seedé actif — voir 0040_country_engine.sql), pour ne jamais afficher un sélecteur vide. */
+const DEFAULT_COUNTRY_FALLBACK = "CM";
 
 const INDUSTRY_OPTIONS = [
   { value: "", label: "Autre" },
@@ -65,9 +68,11 @@ function StepHeader({ step, title }: { step: number; title: string }) {
  * quittée, jamais à l'étape 1.
  */
 export function OnboardingWizard({
+  countries = [],
   initialStep = 1,
   initialOrganizationId = null,
 }: {
+  countries?: PublicCountry[];
   initialStep?: number;
   initialOrganizationId?: string | null;
 }) {
@@ -80,6 +85,17 @@ export function OnboardingWizard({
   // bannière de reprise, ne doit pas réapparaître si l'utilisateur avance
   // ensuite normalement dans le wizard pendant la même session.
   const [isResuming] = useState(initialStep > 1);
+
+  // Country Engine (section 13/14) : pays sélectionné à l'étape 1,
+  // conservé en state pour dériver l'indicatif téléphonique par défaut de
+  // l'étape 3 (section 14 : ne plus jamais coder +237 en dur). Défaut au
+  // Cameroun s'il fait partie des pays actifs reçus, sinon le premier de
+  // la liste (le serveur ne fournit que des pays `active`, voir
+  // onboarding/page.tsx::listSignupEligibleCountries).
+  const [selectedCountryCode, setSelectedCountryCode] = useState(
+    () => countries.find((c) => c.isoCode === DEFAULT_COUNTRY_FALLBACK)?.isoCode ?? countries[0]?.isoCode ?? "",
+  );
+  const selectedCountry = countries.find((c) => c.isoCode === selectedCountryCode);
 
   // L'étape 6 est un état terminal, pas une simple étape "soumise" — on
   // marque l'onboarding comme terminé dès qu'elle est atteinte (montage
@@ -103,7 +119,8 @@ export function OnboardingWizard({
     startTransition(async () => {
       const name = String(formData.get("name") ?? "");
       const industry = String(formData.get("industry") ?? "");
-      const result = await submitBusinessStep(name, industry);
+      const countryCode = String(formData.get("countryCode") ?? selectedCountryCode);
+      const result = await submitBusinessStep(name, industry, countryCode);
       if (!result.ok || !result.organizationId) {
         setError(result.error ?? "Erreur inconnue.");
         return;
@@ -184,6 +201,28 @@ export function OnboardingWizard({
               <input name="name" required className="rounded-brand border border-ink/15 px-4 py-3" />
             </label>
             <label className="flex flex-col gap-1 text-sm">
+              Pays
+              {countries.length > 0 ? (
+                <select
+                  name="countryCode"
+                  value={selectedCountryCode}
+                  onChange={(e) => setSelectedCountryCode(e.target.value)}
+                  required
+                  className="rounded-brand border border-ink/15 px-4 py-3"
+                >
+                  {countries.map((c) => (
+                    <option key={c.isoCode} value={c.isoCode}>
+                      {c.name} ({c.currencyCode})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
+                  Aucun pays disponible pour l&apos;inscription actuellement.
+                </p>
+              )}
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
               Activité
               <select name="industry" defaultValue="" className="rounded-brand border border-ink/15 px-4 py-3">
                 {INDUSTRY_OPTIONS.map((opt) => (
@@ -195,7 +234,7 @@ export function OnboardingWizard({
             </label>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || countries.length === 0}
               className="rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {isPending ? "En cours..." : "Continuer"}
@@ -238,11 +277,19 @@ export function OnboardingWizard({
           <form onSubmit={onSubmitWithFormData(handleContactSubmit)} className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-sm">
               Téléphone
-              <input name="phone" placeholder="+237..." className="rounded-brand border border-ink/15 px-4 py-3" />
+              <input
+                name="phone"
+                placeholder={`${selectedCountry?.phoneCode ?? "+237"}...`}
+                className="rounded-brand border border-ink/15 px-4 py-3"
+              />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               WhatsApp
-              <input name="whatsapp" placeholder="+237..." className="rounded-brand border border-ink/15 px-4 py-3" />
+              <input
+                name="whatsapp"
+                placeholder={`${selectedCountry?.phoneCode ?? "+237"}...`}
+                className="rounded-brand border border-ink/15 px-4 py-3"
+              />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               Adresse

@@ -12,11 +12,11 @@ vi.mock("@/infrastructure/providers/registry", () => ({
   getAIProvider: (...args: unknown[]) => mockGetAIProvider(...args),
 }));
 
-const mockHasCreditsAvailable = vi.fn();
 const mockConsumeCredit = vi.fn();
+const mockReleaseCredit = vi.fn();
 vi.mock("./ai-credits-service", () => ({
-  hasCreditsAvailable: (...args: unknown[]) => mockHasCreditsAvailable(...args),
   consumeCredit: (...args: unknown[]) => mockConsumeCredit(...args),
+  releaseCredit: (...args: unknown[]) => mockReleaseCredit(...args),
 }));
 
 import {
@@ -29,6 +29,7 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockReleaseCredit.mockResolvedValue(undefined);
 });
 
 describe("syncCommentsForPost", () => {
@@ -227,39 +228,41 @@ describe("hideComment / unhideComment", () => {
   });
 });
 
-describe("draftCommentReplySuggestion", () => {
-  it("retourne null sans lever si les crédits IA sont épuisés", async () => {
-    mockHasCreditsAvailable.mockResolvedValue(false);
+describe("draftCommentReplySuggestion — Lot 3 (réservation atomique, jamais un check-then-act)", () => {
+  it("retourne null sans lever si la réservation du crédit échoue (solde épuisé)", async () => {
+    mockConsumeCredit.mockResolvedValue({ success: false });
 
     const result = await draftCommentReplySuggestion("org-1", "Quels sont vos horaires ?");
     expect(result).toBeNull();
     expect(mockGetAIProvider).not.toHaveBeenCalled();
   });
 
-  it("retourne le texte généré et consomme un crédit en cas de succès", async () => {
-    mockHasCreditsAvailable.mockResolvedValue(true);
+  it("réserve le crédit AVANT d'appeler le provider IA (jamais après)", async () => {
+    mockConsumeCredit.mockResolvedValue({ success: true });
     mockFrom.mockReturnValue({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { name: "Boutique Awa" }, error: null }) }) }),
     });
     mockGetAIProvider.mockResolvedValue({
       primary: { generateText: vi.fn().mockResolvedValue({ text: "Merci pour votre message !", provider: "mistral", model: "m" }) },
     });
-    mockConsumeCredit.mockResolvedValue(undefined);
 
     const result = await draftCommentReplySuggestion("org-1", "Super produit");
 
     expect(result).toBe("Merci pour votre message !");
     expect(mockConsumeCredit).toHaveBeenCalledWith("org-1", 1, "social_comment_draft");
+    expect(mockReleaseCredit).not.toHaveBeenCalled();
   });
 
-  it("ne lève jamais et retourne null si le fournisseur IA échoue — jamais bloquant pour la réponse manuelle", async () => {
-    mockHasCreditsAvailable.mockResolvedValue(true);
+  it("rembourse le crédit réservé si le fournisseur IA échoue — jamais bloquant pour la réponse manuelle, mais jamais un crédit consommé pour rien (section 30)", async () => {
+    mockConsumeCredit.mockResolvedValue({ success: true });
     mockFrom.mockReturnValue({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { name: "Boutique Awa" }, error: null }) }) }),
     });
     mockGetAIProvider.mockRejectedValue(new Error("IA non configurée"));
 
     const result = await draftCommentReplySuggestion("org-1", "Super produit");
+
     expect(result).toBeNull();
+    expect(mockReleaseCredit).toHaveBeenCalledWith("org-1", 1, "ai_generation_failed");
   });
 });

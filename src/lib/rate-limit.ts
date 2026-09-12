@@ -56,7 +56,12 @@ const authLimiter = redis
   ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(5, "60 s"), prefix: "ratelimit:auth" })
   : null;
 
-export type RateLimitKind = "webhook" | "auth";
+/** 5 soumissions / 60s par IP — formulaire public de liste d'attente pays (section 54), pas d'authentification donc pas de compte à bloquer, seule l'IP protège contre un flood. */
+const waitlistLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(5, "60 s"), prefix: "ratelimit:waitlist" })
+  : null;
+
+export type RateLimitKind = "webhook" | "auth" | "waitlist";
 
 /**
  * Retourne `null` quand la requête est autorisée à continuer (soit
@@ -65,7 +70,7 @@ export type RateLimitKind = "webhook" | "auth";
  * secondes avant réessai quand la requête doit être refusée.
  */
 export async function checkRateLimit(kind: RateLimitKind, identifier: string): Promise<number | null> {
-  const limiter = kind === "webhook" ? webhookLimiter : authLimiter;
+  const limiter = kind === "webhook" ? webhookLimiter : kind === "waitlist" ? waitlistLimiter : authLimiter;
   if (!limiter) {
     warnNotConfigured();
     return null;

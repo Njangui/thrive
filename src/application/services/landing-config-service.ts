@@ -1,7 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { ValidationError } from "@/lib/errors";
 import type { MemberRole } from "./auth-service";
-import { listActiveProductsForStorefront, type StorefrontProductSummary } from "./catalog-service";
+import { listActiveProductsForStorefront, resolvePrimaryImageUrl, type CatalogProductSummary } from "./catalog-service";
 import {
   LANDING_SECTION_TYPES,
   LandingSectionsSchema,
@@ -263,7 +263,7 @@ export async function listCategoriesWithProductCounts(organizationId: string): P
     .filter((c) => c.productCount > 0);
 }
 
-export interface PromotedProduct extends StorefrontProductSummary {
+export interface PromotedProduct extends CatalogProductSummary {
   compareAtPrice: number;
 }
 
@@ -292,20 +292,18 @@ export async function listPromotedProductsForStorefront(organizationId: string, 
   if (error) throw new Error(`Erreur lecture promotions : ${error.message}`);
 
   return (data ?? [])
-    .map((p) => {
-      const images = (p as unknown as { product_images?: { url: string; position: number }[] }).product_images ?? [];
-      const primaryImage = images.slice().sort((a, b) => a.position - b.position)[0] ?? null;
-      return {
-        id: p.id,
-        name: p.name,
-        slug: p.slug,
-        unitPrice: Number(p.unit_price),
-        compareAtPrice: Number(p.compare_at_price),
-        description: p.description,
-        categoryName: (p as unknown as { categories?: { name?: string } }).categories?.name ?? null,
-        imageUrl: primaryImage?.url ?? null,
-      };
-    })
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      unitPrice: Number(p.unit_price),
+      compareAtPrice: Number(p.compare_at_price),
+      description: p.description,
+      categoryName: (p as unknown as { categories?: { name?: string } }).categories?.name ?? null,
+      imageUrl: resolvePrimaryImageUrl(
+        (p as unknown as { product_images?: { url: string; position: number }[] }).product_images,
+      ),
+    }))
     .filter((p) => p.compareAtPrice > p.unitPrice)
     .slice(0, limit);
 }
@@ -446,7 +444,7 @@ export async function listActiveFaqsForLanding(organizationId: string): Promise<
  * redondante.
  */
 export type LandingSectionData =
-  | { type: "products"; products: StorefrontProductSummary[] }
+  | { type: "products"; products: CatalogProductSummary[] }
   | { type: "services"; services: ServiceSummary[] }
   | { type: "categories"; categories: CategorySummary[] }
   | { type: "promotions"; products: PromotedProduct[] }

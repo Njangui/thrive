@@ -147,3 +147,72 @@ describe("mapZernioPostEventToDomainEvent — Lot M, Partie 2", () => {
     expect(event).toBeNull();
   });
 });
+
+describe("mapZernioEventToDomainEvent — Lot 3 (audit master prompt §44 : events confirmés jusqu'ici jamais mappés)", () => {
+  it("message.failed -> MESSAGE_FAILED, lit metadata.error défensivement", () => {
+    const raw: ZernioInboxWebhookEvent = {
+      id: "evt_fail_1",
+      event: "message.failed",
+      message: { id: "msg_1" },
+      conversation: { id: "conv_1" },
+      account: { id: "acc_1" },
+      metadata: { error: "recipient number invalid" },
+      timestamp: "2026-09-04T10:00:00.000Z",
+    };
+
+    const event = mapZernioEventToDomainEvent(raw, ORG_ID);
+
+    expect(event).toEqual({
+      type: "MESSAGE_FAILED",
+      organizationId: ORG_ID,
+      occurredAt: "2026-09-04T10:00:00.000Z",
+      externalEventId: "evt_fail_1",
+      sourceProvider: "zernio",
+      payload: { externalMessageId: "msg_1", externalThreadId: "conv_1", errorMessage: "recipient number invalid" },
+    });
+  });
+
+  it("message.failed sans metadata.error exploitable : errorMessage undefined, jamais inventé", () => {
+    const raw: ZernioInboxWebhookEvent = {
+      id: "evt_fail_2",
+      event: "message.failed",
+      account: { id: "acc_1" },
+      timestamp: "2026-09-04T10:00:00.000Z",
+    };
+
+    const event = mapZernioEventToDomainEvent(raw, ORG_ID);
+    expect(event?.type).toBe("MESSAGE_FAILED");
+    expect((event as { payload: { errorMessage?: string } }).payload.errorMessage).toBeUndefined();
+  });
+
+  it("account.disconnected -> PROVIDER_ACCOUNT_STATUS_UPDATED, status='error'", () => {
+    const raw: ZernioInboxWebhookEvent = {
+      id: "evt_acc_1",
+      event: "account.disconnected",
+      account: { id: "acc_42" },
+      timestamp: "2026-09-04T10:00:00.000Z",
+    };
+
+    const event = mapZernioEventToDomainEvent(raw, ORG_ID);
+    expect(event).toEqual({
+      type: "PROVIDER_ACCOUNT_STATUS_UPDATED",
+      organizationId: ORG_ID,
+      occurredAt: "2026-09-04T10:00:00.000Z",
+      externalEventId: "evt_acc_1",
+      sourceProvider: "zernio",
+      payload: { accountId: "acc_42", status: "error" },
+    });
+  });
+
+  it("account.connected -> PROVIDER_ACCOUNT_STATUS_UPDATED, status='connected'", () => {
+    const raw: ZernioInboxWebhookEvent = {
+      id: "evt_acc_2",
+      event: "account.connected",
+      account: { id: "acc_42" },
+      timestamp: "2026-09-04T10:00:00.000Z",
+    };
+
+    const event = mapZernioEventToDomainEvent(raw, ORG_ID);
+    expect((event as { payload: { status: string } }).payload.status).toBe("connected");
+  });
+});

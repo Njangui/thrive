@@ -15,8 +15,15 @@ vi.mock("@/infrastructure/supabase/server-session-client", () => ({
 vi.mock("./finance-service", () => ({ seedDefaultExpenseCategories: vi.fn() }));
 vi.mock("./plans-repository", () => ({ createTrialSubscription: vi.fn() }));
 vi.mock("./ai-credits-service", () => ({ initializeCreditBalance: vi.fn() }));
+vi.mock("./country-service", () => ({ validateCountryForSignup: vi.fn() }));
 
-import { updateOnboardingStep, markOnboardingComplete, getOnboardingStatus } from "./onboarding-service";
+import { updateOnboardingStep, markOnboardingComplete, getOnboardingStatus, createOrganization } from "./onboarding-service";
+import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
+import { validateCountryForSignup } from "./country-service";
+import { ValidationError, AuthenticationError } from "@/lib/errors";
+
+const mockGetSupabaseServerSessionClient = vi.mocked(getSupabaseServerSessionClient);
+const mockValidateCountryForSignup = vi.mocked(validateCountryForSignup);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -98,5 +105,84 @@ describe("getOnboardingStatus", () => {
 
     const status = await getOnboardingStatus("org-1");
     expect(status.step).toBe(0);
+  });
+});
+
+describe("createOrganization — Country Engine (section 12/13)", () => {
+  function configureFrom() {
+    const insertedOrgs: Record<string, unknown>[] = [];
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "organizations") {
+        return {
+          // generateUniqueSlug : le slug demandé n'est jamais déjà pris.
+          select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
+          insert: (payload: Record<string, unknown>) => {
+            insertedOrgs.push(payload);
+            return { select: () => ({ single: () => Promise.resolve({ data: { id: "org-1" }, error: null }) }) };
+          },
+        };
+      }
+      if (table === "memberships" || table === "tenant_modules" || table === "ai_config") {
+        return { insert: () => Promise.resolve({ error: null }) };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
+    });
+
+    return { insertedOrgs };
+  }
+
+  function mockAuthenticatedSession(userId = "user-1") {
+    mockGetSupabaseServerSessionClient.mockResolvedValue({
+      auth: { getUser: () => Promise.resolve({ data: { user: { id: userId } } }) },
+    } as never);
+  }
+
+  it("rejette un pays invalide AVANT toute vérification de session ou écriture DB", async () => {
+    mockValidateCountryForSignup.mockRejectedValue(new ValidationError("Ghana arrive bientôt sur SME-OS."));
+
+    await expect(createOrganization({ name: "Ma Boutique", countryCode: "GH" })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(mockGetSupabaseServerSessionClient).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("rejette un nom vide avant même de valider le pays", async () => {
+    await expect(createOrganization({ name: "   ", countryCode: "CM" })).rejects.toBeInstanceOf(ValidationError);
+    expect(mockValidateCountryForSignup).not.toHaveBeenCalled();
+  });
+
+  it("exige une session authentifiée", async () => {
+    mockValidateCountryForSignup.mockResolvedValue({ countryCode: "CM", currencyCode: "XAF" });
+    mockGetSupabaseServerSessionClient.mockResolvedValue({
+      auth: { getUser: () => Promise.resolve({ data: { user: null } }) },
+    } as never);
+
+    await expect(createOrganization({ name: "Ma Boutique", countryCode: "CM" })).rejects.toBeInstanceOf(
+      AuthenticationError,
+    );
+  });
+
+  it("dérive currency/country_code EXCLUSIVEMENT du pays validé, jamais d'un champ libre", async () => {
+    mockValidateCountryForSignup.mockResolvedValue({ countryCode: "GH", currencyCode: "GHS" });
+    mockAuthenticatedSession();
+    const { insertedOrgs } = configureFrom();
+
+    const result = await createOrganization({ name: "Accra Shop", countryCode: "gh" });
+
+    expect(result.organizationId).toBe("org-1");
+    expect(mockValidateCountryForSignup).toHaveBeenCalledWith("gh");
+    expect(insertedOrgs[0]).toMatchObject({ country_code: "GH", currency: "GHS", name: "Accra Shop" });
+  });
+
+  it("régression Cameroun : un pays CM valide produit currency=XAF, country_code=CM, exactement comme avant le Country Engine", async () => {
+    mockValidateCountryForSignup.mockResolvedValue({ countryCode: "CM", currencyCode: "XAF" });
+    mockAuthenticatedSession();
+    const { insertedOrgs } = configureFrom();
+
+    await createOrganization({ name: "Boutique Yaoundé", countryCode: "CM" });
+
+    expect(insertedOrgs[0]).toMatchObject({ country_code: "CM", currency: "XAF" });
   });
 });

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { listPlans, listPlanEntitlements, type PlanKey } from "@/application/services/plans-repository";
+import { listPublicCountries, isoCodeToFlagEmoji } from "@/application/services/country-service";
+import { joinWaitlistAction } from "./country-waitlist-actions";
 import { MarketingMobileMenu } from "./marketing-mobile-menu";
 import {
   IconArrowRight,
@@ -222,9 +224,18 @@ function HeroPreview() {
   );
 }
 
-export async function MarketingLanding() {
+export async function MarketingLanding({
+  waitlistFeedback,
+}: {
+  waitlistFeedback?: { success?: string; error?: string };
+} = {}) {
   const plans = await getPricingPlans();
   const popularPlanKey = plans.find((p) => p.key === "business")?.key ?? plans[Math.floor(plans.length / 2)]?.key;
+  // Country Engine (section 22) : jamais une liste écrite en dur — pilotée
+  // par le Super Admin (/admin/countries), synchronisée depuis NotchPay.
+  const countries = await listPublicCountries();
+  const activeCountries = countries.filter((c) => c.launchStatus === "active");
+  const upcomingCountries = countries.filter((c) => c.launchStatus === "coming_soon" || c.launchStatus === "waitlist");
 
   return (
     <div className="mkt-shell">
@@ -404,6 +415,76 @@ export async function MarketingLanding() {
           )}
         </div>
       </section>
+
+      {/* DISPONIBILITÉ PAYS */}
+      {(activeCountries.length > 0 || upcomingCountries.length > 0) && (
+        <section id="disponibilite" className="mkt-container max-w-5xl py-16 text-center">
+          <h2 className="mkt-section-title">Disponible en Afrique</h2>
+          <p className="mx-auto mt-3 max-w-xl text-navy-900/60">
+            SME-OS s&apos;étend progressivement à de nouveaux pays.
+          </p>
+
+          {waitlistFeedback?.error && (
+            <p className="mx-auto mt-6 max-w-md rounded-xl border border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-danger-700">
+              {waitlistFeedback.error}
+            </p>
+          )}
+          {waitlistFeedback?.success && (
+            <p className="mx-auto mt-6 max-w-md rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-success-700">
+              {waitlistFeedback.success}
+            </p>
+          )}
+
+          {activeCountries.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Disponible actuellement</h3>
+              <ul className="mt-3 flex flex-wrap justify-center gap-3">
+                {activeCountries.map((c) => (
+                  <li
+                    key={c.isoCode}
+                    className="rounded-full border border-success-600/20 bg-success-50 px-4 py-2 text-sm font-medium text-navy-900"
+                  >
+                    {isoCodeToFlagEmoji(c.isoCode)} {c.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {upcomingCountries.length > 0 && (
+            <div className="mt-10">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bientôt disponible</h3>
+              <div className="mt-4 grid grid-cols-1 gap-4 text-left sm:grid-cols-2 md:grid-cols-3">
+                {upcomingCountries.map((c) => (
+                  <div key={c.isoCode} className="mkt-card">
+                    <p className="font-jakarta font-semibold text-navy-900">
+                      {isoCodeToFlagEmoji(c.isoCode)} {c.name}
+                    </p>
+                    <form action={joinWaitlistAction} className="mt-3 flex flex-col gap-2">
+                      <input type="hidden" name="countryCode" value={c.isoCode} />
+                      <input
+                        name="email"
+                        type="email"
+                        required
+                        placeholder="Votre email"
+                        className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                      />
+                      <input
+                        name="companyName"
+                        placeholder="Nom de l'entreprise (optionnel)"
+                        className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                      />
+                      <button type="submit" className="mkt-btn-primary !py-2 !text-xs">
+                        Être prévenu
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* TÉMOIGNAGES */}
       <section className="mkt-container py-16">

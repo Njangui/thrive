@@ -52,8 +52,8 @@ create or replace function public.adjust_product_stock(
 )
 returns table (
   new_stock numeric,
-  new_status product_status,
-  previous_status product_status,
+  new_status public.product_status,
+  previous_status public.product_status,
   product_name text
 )
 language plpgsql
@@ -63,7 +63,7 @@ as $$
 declare
   v_product record;
   v_new_stock numeric;
-  v_new_status product_status;
+  v_new_status public.product_status;
 begin
   select id, name, current_stock, status
   into v_product
@@ -174,6 +174,19 @@ $$;
 -- requireMembership) de garantir que p_organization_id correspond bien
 -- à l'appelant AVANT d'appeler cette fonction, exactement comme pour
 -- toute autre mutation de ce projet passant par service_role.
+--
+-- CORRECTIF (fusion Lot 3 + Country Engine, 07/09/2026) : `product_status`
+-- était référencé sans qualification dans `returns table (...)`
+-- ci-dessus ET dans la déclaration de variable locale `v_new_status`
+-- plus bas, alors que `search_path` est figé à '' sur cette fonction
+-- `security definer` — Postgres ne peut alors PAS résoudre un type non
+-- qualifié. Bug réel, détecté en exécutant cette migration contre un
+-- vrai Postgres (jamais en le relisant) : `create or replace function`
+-- échouait avec `type "product_status" does not exist`. Qualifié en
+-- `public.product_status` aux trois occurrences (deux dans `returns
+-- table`, une dans `declare`) — un premier passage n'avait corrigé que
+-- les deux premières en relisant le fichier, la troisième n'a été
+-- trouvée qu'en ré-exécutant réellement la migration.
 revoke all on function public.adjust_product_stock(uuid, uuid, numeric) from public, anon, authenticated;
 revoke all on function public.complete_order_transaction(uuid, uuid, uuid) from public, anon, authenticated;
 

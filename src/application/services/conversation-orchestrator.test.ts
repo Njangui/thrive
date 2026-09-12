@@ -26,12 +26,20 @@ vi.mock("./conversation-memory-service", () => ({
   rememberMentionedProducts: vi.fn(),
   getRecentlyMentionedProducts: vi.fn(),
 }));
+vi.mock("./service-catalog-service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./service-catalog-service")>();
+  return {
+    ...actual, // garde formatServiceDiscoveryMessage (pur) réel
+    searchServicesByName: vi.fn(),
+  };
+});
 
 import { matchFaq } from "./faq-resolver";
 import { generateAIReply } from "./ai-response-service";
 import { getActiveProducts, searchProductsByName } from "./catalog-service";
 import { resolveBusinessInfo } from "./business-info-resolver";
 import { rememberMentionedProducts, getRecentlyMentionedProducts } from "./conversation-memory-service";
+import { searchServicesByName } from "./service-catalog-service";
 
 const ORG_ID = "org_1";
 const CONVERSATION_ID = "conv_1";
@@ -41,6 +49,7 @@ beforeEach(() => {
   vi.mocked(generateAIReply).mockReset();
   vi.mocked(getActiveProducts).mockReset().mockResolvedValue([]);
   vi.mocked(searchProductsByName).mockReset().mockResolvedValue([]);
+  vi.mocked(searchServicesByName).mockReset().mockResolvedValue([]);
   vi.mocked(resolveBusinessInfo).mockReset().mockResolvedValue(null);
   vi.mocked(rememberMentionedProducts).mockReset().mockResolvedValue(undefined);
   vi.mocked(getRecentlyMentionedProducts).mockReset().mockResolvedValue([]);
@@ -69,7 +78,7 @@ describe("routeMessage — ordre de résolution (section 45 : règles avant IA)"
 
   it("déclenche PRODUCT_DISCOVERY sur une demande générique de catalogue, sans IA (section 15)", async () => {
     vi.mocked(getActiveProducts).mockResolvedValue([
-      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null },
+      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null, imageUrl: null },
     ]);
 
     const result = await routeMessage(ORG_ID, CONVERSATION_ID, "Bonjour, montrez-moi vos produits");
@@ -80,10 +89,32 @@ describe("routeMessage — ordre de résolution (section 45 : règles avant IA)"
     expect(generateAIReply).not.toHaveBeenCalled();
   });
 
+  it("Lot 3 (audit master prompt §28) : joint l'image du premier produit trouvé en PRODUCT_DISCOVERY", async () => {
+    vi.mocked(getActiveProducts).mockResolvedValue([
+      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null, imageUrl: "https://cdn.example.com/sneakers.jpg" },
+      { id: "p2", name: "T-shirt", slug: "t-shirt", unitPrice: 12000, description: null, categoryName: null, imageUrl: "https://cdn.example.com/tshirt.jpg" },
+    ]);
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "Bonjour, montrez-moi vos produits");
+
+    // Le PREMIER produit uniquement, jamais un tableau ni le second.
+    expect(result.replyImageUrl).toBe("https://cdn.example.com/sneakers.jpg");
+  });
+
+  it("PRODUCT_DISCOVERY sans image produit : replyImageUrl reste null, jamais 'undefined' ni une chaîne vide", async () => {
+    vi.mocked(getActiveProducts).mockResolvedValue([
+      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null, imageUrl: null },
+    ]);
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "Bonjour, montrez-moi vos produits");
+
+    expect(result.replyImageUrl).toBeNull();
+  });
+
   it("déclenche PRODUCT_QUERY quand un mot du message correspond à un produit (section 17)", async () => {
     vi.mocked(searchProductsByName).mockImplementation(async (_org, word) =>
       word === "jean"
-        ? [{ id: "p2", name: "Jean Slim", slug: "jean-slim", unitPrice: 18000, description: null, categoryName: null }]
+        ? [{ id: "p2", name: "Jean Slim", slug: "jean-slim", unitPrice: 18000, description: null, categoryName: null, imageUrl: "https://cdn.example.com/jean.jpg" }]
         : [],
     );
 
@@ -91,6 +122,21 @@ describe("routeMessage — ordre de résolution (section 45 : règles avant IA)"
 
     expect(result.intent).toBe("product_query");
     expect(result.replyText).toContain("Jean Slim");
+    expect(result.replyImageUrl).toBe("https://cdn.example.com/jean.jpg");
+    expect(generateAIReply).not.toHaveBeenCalled();
+  });
+
+  it("Lot 3 (audit master prompt §17/§26) : déclenche SERVICE_QUERY quand aucun produit ne correspond mais qu'une prestation si, sans jamais appeler l'IA", async () => {
+    vi.mocked(searchServicesByName).mockImplementation(async (_org, word) =>
+      word === "coupe"
+        ? [{ id: "s1", name: "Coupe homme", slug: "coupe-homme", priceFcfa: 3000, description: null, categoryName: null, durationMinutes: 30, status: "active" }]
+        : [],
+    );
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "La coupe coûte combien ?");
+
+    expect(result.intent).toBe("service_query");
+    expect(result.replyText).toContain("Coupe homme");
     expect(generateAIReply).not.toHaveBeenCalled();
   });
 
@@ -129,8 +175,8 @@ describe("routeMessage — ordre de résolution (section 45 : règles avant IA)"
 describe("routeMessage — mémoire conversationnelle courte (Lot D, section 21/24)", () => {
   it("mémorise les produits montrés lors d'un PRODUCT_DISCOVERY (3 max)", async () => {
     vi.mocked(getActiveProducts).mockResolvedValue([
-      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null },
-      { id: "p2", name: "T-shirt Premium", slug: "t-shirt-premium", unitPrice: 12000, description: null, categoryName: null },
+      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null, imageUrl: null },
+      { id: "p2", name: "T-shirt Premium", slug: "t-shirt-premium", unitPrice: 12000, description: null, categoryName: null, imageUrl: null },
     ]);
 
     await routeMessage(ORG_ID, CONVERSATION_ID, "Montrez-moi vos produits");
@@ -141,7 +187,7 @@ describe("routeMessage — mémoire conversationnelle courte (Lot D, section 21/
   it("mémorise les produits trouvés lors d'un PRODUCT_QUERY", async () => {
     vi.mocked(searchProductsByName).mockImplementation(async (_org, word) =>
       word === "jean"
-        ? [{ id: "p2", name: "Jean Slim", slug: "jean-slim", unitPrice: 18000, description: null, categoryName: null }]
+        ? [{ id: "p2", name: "Jean Slim", slug: "jean-slim", unitPrice: 18000, description: null, categoryName: null, imageUrl: null }]
         : [],
     );
 
@@ -160,7 +206,7 @@ describe("routeMessage — mémoire conversationnelle courte (Lot D, section 21/
         slug: "robe-imprimee",
         unitPrice: 25000,
         description: null,
-        categoryName: null,
+        categoryName: null, imageUrl: null,
       };
       vi.mocked(getRecentlyMentionedProducts).mockResolvedValue([rememberedProduct]);
       vi.mocked(generateAIReply).mockResolvedValue({

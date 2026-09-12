@@ -6,14 +6,16 @@ vi.mock("./plans-repository", () => ({
 }));
 
 const mockFrom = vi.fn();
+const mockRpc = vi.fn();
 vi.mock("@/infrastructure/supabase/server-client", () => ({
-  getSupabaseServiceClient: () => ({ from: mockFrom }),
+  getSupabaseServiceClient: () => ({ from: mockFrom, rpc: mockRpc }),
 }));
 
 import {
   getCreditStatus,
   hasCreditsAvailable,
   consumeCredit,
+  releaseCredit,
   initializeCreditBalance,
   grantCredits,
 } from "./ai-credits-service";
@@ -124,31 +126,88 @@ describe("hasCreditsAvailable", () => {
   });
 });
 
-describe("consumeCredit", () => {
+describe("consumeCredit — Lot 3 (corrige la race condition, voir 0038_ai_credits_atomic.sql)", () => {
   it("rejette un montant négatif ou nul avant tout appel réseau", async () => {
     await expect(consumeCredit("org-1", 0)).rejects.toThrow();
     expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
-  it("incrémente used_credits et journalise l'évènement sans lever", async () => {
-    configureSupabase({
-      ai_credit_balances: { data: { used_credits: 10 }, error: null },
-      ai_usage_events: { data: null, error: null },
-    });
+  it("succès : un seul appel RPC atomique (jamais un select puis un update séparés), journalise l'évènement", async () => {
+    mockRpc.mockResolvedValue({ data: [{ used_credits: 15, included_credits: 500 }], error: null });
+    configureSupabase({ ai_usage_events: { data: null, error: null } });
 
-    await expect(consumeCredit("org-1", 5, "ai_reply")).resolves.toBeUndefined();
+    const result = await consumeCredit("org-1", 5, "ai_reply");
+
+    expect(result).toEqual({ success: true });
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith("consume_ai_credit", { p_organization_id: "org-1", p_amount: 5 });
   });
 
-  it("initialise à la volée un solde manquant (tenant créé avant ce lot) plutôt que de planter", async () => {
+  it("solde insuffisant (RPC renvoie zéro ligne, statut réel confirme l'insuffisance) : success=false, ne retente jamais", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    configureSupabase({ ai_credit_balances: { data: { included_credits: 10, used_credits: 10 }, error: null } });
+
+    const result = await consumeCredit("org-1", 1);
+
+    expect(result).toEqual({ success: false });
+    expect(mockRpc).toHaveBeenCalledTimes(1); // pas de second essai — le solde est réellement épuisé
+  });
+
+  it("ligne jamais initialisée (tenant créé avant ce mécanisme) : initialise puis retente une seule fois", async () => {
+    mockRpc
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [{ used_credits: 1, included_credits: 150 }], error: null });
     configureSupabase({
-      ai_credit_balances: { data: null, error: null },
+      ai_credit_balances: { data: null, error: null }, // getCreditStatus() ET initializeCreditBalance() lisent/écrivent ici
       ai_usage_events: { data: null, error: null },
     });
     mockGetOrganizationPlanKey.mockResolvedValue("starter");
     mockGetEntitlementLimit.mockResolvedValue(150);
 
-    await expect(consumeCredit("org-legacy", 1)).resolves.toBeUndefined();
-    expect(mockGetEntitlementLimit).toHaveBeenCalledWith("starter", "ai_credits");
+    const result = await consumeCredit("org-legacy", 1);
+
+    expect(result).toEqual({ success: true });
+    expect(mockRpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("critère d'acceptation (section 71) : modélise la garantie d'atomicité SQL — sur un budget partagé de 1 crédit, deux appels ne peuvent jamais réussir tous les deux", async () => {
+    // Le mock ci-dessous représente ce que Postgres garantit RÉELLEMENT via
+    // un UPDATE ... WHERE atomique (verrou de ligne implicite) : impossible
+    // de tester une vraie concurrence sans base réelle, mais on peut
+    // vérifier que le code applicatif ne fait plus JAMAIS de
+    // lecture-puis-écriture séparée (un seul appel RPC par tentative,
+    // aucun état lu en JS entre la vérification et l'écriture).
+    let remaining = 1;
+    mockRpc.mockImplementation(async (_fn: string, args: { p_amount: number }) => {
+      if (remaining >= args.p_amount) {
+        remaining -= args.p_amount;
+        return { data: [{ used_credits: 1 - remaining, included_credits: 1 }], error: null };
+      }
+      return { data: [], error: null };
+    });
+    configureSupabase({ ai_usage_events: { data: null, error: null } });
+
+    const [first, second] = await Promise.all([consumeCredit("org-1", 1), consumeCredit("org-1", 1)]);
+
+    const successes = [first, second].filter((r) => r.success).length;
+    expect(successes).toBe(1);
+  });
+});
+
+describe("releaseCredit — Lot 3", () => {
+  it("appelle release_ai_credit et journalise l'évènement", async () => {
+    mockRpc.mockResolvedValue({ error: null });
+    configureSupabase({ ai_usage_events: { data: null, error: null } });
+
+    await releaseCredit("org-1", 1, "ai_generation_failed");
+
+    expect(mockRpc).toHaveBeenCalledWith("release_ai_credit", { p_organization_id: "org-1", p_amount: 1 });
+  });
+
+  it("best-effort : n'échoue jamais même si le remboursement RPC échoue", async () => {
+    mockRpc.mockResolvedValue({ error: { message: "erreur réseau" } });
+    await expect(releaseCredit("org-1")).resolves.toBeUndefined();
   });
 });
 

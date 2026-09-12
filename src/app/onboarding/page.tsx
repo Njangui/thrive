@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserOrganizations } from "@/application/services/auth-service";
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
+import { listSignupEligibleCountries } from "@/application/services/country-service";
 import { OnboardingWizard } from "./onboarding-wizard";
 
 /**
@@ -15,15 +16,21 @@ import { OnboardingWizard } from "./onboarding-wizard";
  *    la dernière étape persistée (jamais à l'étape 1 : l'organisation
  *    existe déjà, la réafficher créerait un doublon si le formulaire de
  *    l'étape 1 était resoumis).
+ *
+ * Country Engine (section 13) : le sélecteur pays de l'étape 1 est
+ * alimenté ICI, côté serveur, par `listSignupEligibleCountries()` —
+ * UNIQUEMENT les pays `active` (jamais coming_soon/waitlist/disabled),
+ * jamais une liste écrite en dur dans le composant client.
  */
 export default async function OnboardingPage() {
   const orgs = await getCurrentUserOrganizations();
   const org = orgs[0];
+  const countries = await listSignupEligibleCountries();
 
   if (!org) {
     return (
       <main className="min-h-screen bg-paper px-5">
-        <OnboardingWizard />
+        <OnboardingWizard countries={countries} />
       </main>
     );
   }
@@ -38,7 +45,7 @@ export default async function OnboardingPage() {
 
   return (
     <main className="min-h-screen bg-paper px-5">
-      <OnboardingWizard initialStep={resumeStep} initialOrganizationId={org.organizationId} />
+      <OnboardingWizard countries={countries} initialStep={resumeStep} initialOrganizationId={org.organizationId} />
     </main>
   );
 }

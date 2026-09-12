@@ -11,6 +11,20 @@ export interface CatalogProductSummary {
   unitPrice: number;
   description: string | null;
   categoryName: string | null;
+  /**
+   * Lot 3 (audit master prompt §28/§35) — URL de l'image principale
+   * (position la plus basse dans product_images), ou `null` si le
+   * produit n'a aucune image. Alimente `attachmentUrl` côté messagerie
+   * (conversation-orchestrator.ts) et diffusion de groupe
+   * (whatsapp-group-service.ts).
+   */
+  imageUrl: string | null;
+}
+
+/** Image de position la plus basse (principale) — ou null si aucune. Partagé entre toutes les requêtes catalogue pour ne pas dupliquer ce tri (section 100). */
+export function resolvePrimaryImageUrl(images: { url: string; position: number }[] | null | undefined): string | null {
+  if (!images || images.length === 0) return null;
+  return [...images].sort((a, b) => a.position - b.position)[0]!.url;
 }
 
 /** Forme de retour de `adjust_product_stock()` — voir 0038_atomic_order_stock_transaction.sql. */
@@ -64,7 +78,7 @@ export async function getActiveProducts(
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, slug, unit_price, description, categories(name)")
+    .select("id, name, slug, unit_price, description, categories(name), product_images(url, position)")
     .eq("organization_id", organizationId)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -81,6 +95,7 @@ export async function getActiveProducts(
     unitPrice: Number(p.unit_price),
     description: p.description,
     categoryName: (p as unknown as { categories?: { name?: string } }).categories?.name ?? null,
+    imageUrl: resolvePrimaryImageUrl((p as unknown as { product_images?: { url: string; position: number }[] }).product_images),
   }));
 }
 
@@ -160,9 +175,14 @@ export async function getCategoryBySlug(
  * les laisser inchangés ici évite tout effet de bord sur ce périmètre
  * pendant qu'il est travaillé ailleurs.
  */
-export interface StorefrontProductSummary extends CatalogProductSummary {
-  imageUrl: string | null;
-}
+/**
+ * Redondant avec `CatalogProductSummary` depuis que `imageUrl` a été
+ * remonté sur l'interface de base (Lot 3, pour l'attacher aux résultats
+ * de messagerie/diffusion aussi) — gardé comme alias plutôt que
+ * supprimé pour ne pas casser les imports existants
+ * (`landing-sections/products.tsx`, `product-card.tsx`).
+ */
+export type StorefrontProductSummary = CatalogProductSummary;
 
 export async function listActiveProductsForStorefront(
   organizationId: string,
@@ -195,7 +215,6 @@ export async function listActiveProductsForStorefront(
 
   return (data ?? []).map((p) => {
     const images = (p as unknown as { product_images?: { url: string; position: number }[] }).product_images ?? [];
-    const primaryImage = images.slice().sort((a, b) => a.position - b.position)[0] ?? null;
     return {
       id: p.id,
       name: p.name,
@@ -203,7 +222,7 @@ export async function listActiveProductsForStorefront(
       unitPrice: Number(p.unit_price),
       description: p.description,
       categoryName: (p as unknown as { categories?: { name?: string } }).categories?.name ?? null,
-      imageUrl: primaryImage?.url ?? null,
+      imageUrl: resolvePrimaryImageUrl(images),
     };
   });
 }
@@ -248,6 +267,7 @@ export async function getProductBySlug(
     seoTitle: data.seo_title,
     seoDescription: data.seo_description,
     categoryName: (data as unknown as { categories?: { name?: string } }).categories?.name ?? null,
+    imageUrl: images[0] ?? null,
     images,
   };
 }
@@ -265,7 +285,7 @@ export async function searchProductsByName(
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, slug, unit_price, description, categories(name)")
+    .select("id, name, slug, unit_price, description, categories(name), product_images(url, position)")
     .eq("organization_id", organizationId)
     .eq("status", "active")
     .ilike("name", `%${query}%`)
@@ -280,6 +300,7 @@ export async function searchProductsByName(
     unitPrice: Number(p.unit_price),
     description: p.description,
     categoryName: (p as unknown as { categories?: { name?: string } }).categories?.name ?? null,
+    imageUrl: resolvePrimaryImageUrl((p as unknown as { product_images?: { url: string; position: number }[] }).product_images),
   }));
 }
 
@@ -298,7 +319,7 @@ export async function getProductsByIds(
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, slug, unit_price, description, categories(name)")
+    .select("id, name, slug, unit_price, description, categories(name), product_images(url, position)")
     .eq("organization_id", organizationId)
     .in("id", productIds);
 
@@ -311,6 +332,7 @@ export async function getProductsByIds(
     unitPrice: Number(p.unit_price),
     description: p.description,
     categoryName: (p as unknown as { categories?: { name?: string } }).categories?.name ?? null,
+    imageUrl: resolvePrimaryImageUrl((p as unknown as { product_images?: { url: string; position: number }[] }).product_images),
   }));
 }
 

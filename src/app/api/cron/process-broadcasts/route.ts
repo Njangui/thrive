@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkCronAuth } from "@/lib/cron-auth";
+import { verifyCronAuth } from "@/lib/cron-auth";
 import { processScheduledBroadcasts } from "@/application/services/whatsapp-group-service";
 
 /**
@@ -16,15 +16,15 @@ import { processScheduledBroadcasts } from "@/application/services/whatsapp-grou
  * jamais eu de cron applicatif à imiter ici. Cette route et sa protection
  * par secret sont donc introduites par ce lot — voir RAPPORT_LOT_F.md.
  *
- * Lot 1 (audit sécurité) — la vérification du secret est désormais
- * partagée avec `process-subscription-renewals` via `checkCronAuth`
- * (une seule source de vérité, section 100/101), et refuse désormais
- * l'appel (fail-safe) plutôt que de continuer sans protection quand
- * `CRON_SECRET` est absent EN PRODUCTION — voir src/lib/cron-auth.ts.
+ * CORRECTIF Lot 3 (audit master prompt §65) : la vérification vit
+ * maintenant dans lib/cron-auth.ts, avec un vrai fail-safe en production
+ * (refus explicite si CRON_SECRET est absent, pas seulement un warning).
  */
 async function handle(request: Request) {
-  const authError = checkCronAuth(request, "/api/cron/process-broadcasts");
-  if (authError) return authError;
+  const auth = verifyCronAuth(request);
+  if (!auth.authorized) {
+    return NextResponse.json(auth.body, { status: auth.status });
+  }
 
   try {
     const result = await processScheduledBroadcasts();

@@ -74,6 +74,17 @@ export interface SocialComment {
   canHide: boolean;
 }
 
+/**
+ * Lot 3 (audit master prompt §39) — un compte social réellement connecté,
+ * distinct d'une simple cible de publication. Voir
+ * SocialPublishingProvider::listAccounts.
+ */
+export interface SocialAccountSummary {
+  accountId: string;
+  platform: string;
+  username: string | null;
+}
+
 export interface SocialPublishingProvider {
   readonly providerName: string;
 
@@ -96,6 +107,15 @@ export interface SocialPublishingProvider {
   cancelPost(providerPostId: string): Promise<void>;
 
   getAnalytics(query: SocialAnalyticsQuery): Promise<SocialAnalyticsEntry[]>;
+
+  /**
+   * Lot 3 (audit master prompt §39) — liste les comptes RÉELLEMENT
+   * connectés (pas les cibles d'une campagne). Consommée par
+   * marketing-service.ts pour appliquer la limite du plan au nombre réel
+   * de comptes, jamais au nombre de publications. CONFIRMÉ
+   * (docs.zernio.com/multi-tenant) : `GET /v1/accounts?profileId=...`.
+   */
+  listAccounts(): Promise<SocialAccountSummary[]>;
 
   /**
    * Commentaires d'un post publié, pour UN compte cible (un post

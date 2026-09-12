@@ -241,7 +241,7 @@ export async function getSocialPublishingProvider(organizationId: string): Promi
 
   const { data: connection, error } = await supabase
     .from("provider_connections")
-    .select("provider_name, status")
+    .select("provider_name, status, metadata")
     .eq("organization_id", organizationId)
     .eq("provider_type", "social")
     .eq("status", "connected")
@@ -258,7 +258,14 @@ export async function getSocialPublishingProvider(organizationId: string): Promi
   switch (connection.provider_name) {
     case "zernio": {
       const apiKey = await resolveCredential(organizationId, "social", "zernio");
-      return new ZernioSocialAdapter(new ZernioSocialClient(apiKey));
+      // Lot 3 (audit master prompt §39) : `profileId` scope
+      // listAccounts() au tenant plutôt qu'à toute l'équipe Zernio (voir
+      // client.ts). Optionnel ici (contrairement à la messagerie) — un
+      // tenant sans metadata.profileId reste fonctionnel pour publier,
+      // seul le COMPTAGE d'entitlement peut alors sur-compter si la clé
+      // API est partagée avec d'autres tenants (voir RAPPORT_LOT_3.md).
+      const metadata = (connection.metadata ?? {}) as { profileId?: string };
+      return new ZernioSocialAdapter(new ZernioSocialClient(apiKey), metadata.profileId);
     }
     default:
       throw new Error(`SocialPublishingProvider "${connection.provider_name}" non implémenté.`);

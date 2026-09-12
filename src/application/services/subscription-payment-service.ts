@@ -3,7 +3,9 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { getPaymentProvider } from "@/infrastructure/providers/registry";
 import type { NotchPayWebhookEvent } from "@/infrastructure/providers/payment/notchpay/types";
-import { listPlans, type PlanKey } from "./plans-repository";
+import { listPlans, resolvePlanPriceForCountry, type PlanKey } from "./plans-repository";
+import { DEFAULT_COUNTRY_CODE } from "./country-service";
+import { validateMoney } from "./currency-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { confirmAddonPurchase } from "./addons-service";
 
@@ -23,6 +25,7 @@ export interface SubscriptionPaymentSummary {
   addonKey: string | null;
   addonQuantity: number | null;
   amountFcfa: number;
+  currencyCode: string;
   status: "pending" | "completed" | "failed" | "refunded" | "cancelled";
   createdAt: string;
 }
@@ -35,6 +38,7 @@ interface SubscriptionPaymentRow {
   addon_key: string | null;
   addon_quantity: number | null;
   amount_fcfa: number;
+  currency_code: string;
   provider_reference: string;
   status: "pending" | "completed" | "failed" | "refunded" | "cancelled";
 }
@@ -44,7 +48,7 @@ export async function listPaymentsForOrganization(organizationId: string, limit 
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("subscription_payments")
-    .select("id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, status, created_at")
+    .select("id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, currency_code, status, created_at")
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -58,6 +62,7 @@ export async function listPaymentsForOrganization(organizationId: string, limit 
     addonKey: r.addon_key,
     addonQuantity: r.addon_quantity,
     amountFcfa: r.amount_fcfa,
+    currencyCode: r.currency_code ?? "XAF",
     status: r.status,
     createdAt: r.created_at,
   }));
@@ -83,7 +88,7 @@ export async function listAllPaymentsForAdmin(limit = 200): Promise<AdminPayment
   const { data, error } = await supabase
     .from("subscription_payments")
     .select(
-      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, status, created_at, organizations(name)",
+      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, currency_code, status, created_at, organizations(name)",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -99,9 +104,36 @@ export async function listAllPaymentsForAdmin(limit = 200): Promise<AdminPayment
     addonKey: r.addon_key,
     addonQuantity: r.addon_quantity,
     amountFcfa: r.amount_fcfa,
+    currencyCode: r.currency_code ?? "XAF",
     status: r.status,
     createdAt: r.created_at,
   }));
+}
+
+/**
+ * Lit le pays de l'organisation pour résoudre son prix/sa devise
+ * (Country Engine, section 12/17). Ne lève JAMAIS — une organisation
+ * pré-Country-Engine ou une erreur de lecture retombe sur
+ * DEFAULT_COUNTRY_CODE ('CM'), le seul marché existant avant ce
+ * lot — comportement identique à avant l'introduction du Country
+ * Engine (section 57).
+ */
+async function getOrganizationCountryCode(organizationId: string): Promise<string> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("country_code")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      `getOrganizationCountryCode(${organizationId}) erreur de lecture, repli sur ${DEFAULT_COUNTRY_CODE}:`,
+      error.message,
+    );
+    return DEFAULT_COUNTRY_CODE;
+  }
+  return data?.country_code ?? DEFAULT_COUNTRY_CODE;
 }
 
 /**
@@ -110,6 +142,14 @@ export async function listAllPaymentsForAdmin(limit = 200): Promise<AdminPayment
  * disponible via Supabase Auth, contrairement à un numéro de téléphone —
  * voir NotchPayAdapter.createPayment) : c'est le Server Action appelant
  * qui le fournit, ce service reste agnostique de la session.
+ *
+ * Country Engine (section 25/26) : le montant et la devise sont
+ * TOUJOURS résolus côté serveur à partir du pays de l'organisation —
+ * jamais transmis ni fait confiance depuis le client. Un pays non
+ * encore configuré par le Super Admin (aucune ligne `plan_prices`)
+ * retombe sur `plan.priceFcfa` + la devise du pays (ou XAF si le pays
+ * lui-même est inconnu), ce qui préserve EXACTEMENT le comportement
+ * antérieur au Country Engine pour le Cameroun.
  */
 export async function initiatePayment(
   organizationId: string,
@@ -123,6 +163,15 @@ export async function initiatePayment(
     throw new ValidationError(`Forfait "${planKey}" introuvable.`);
   }
 
+  const countryCode = await getOrganizationCountryCode(organizationId);
+  const { amount, currencyCode } = await resolvePlanPriceForCountry(plan, countryCode);
+  // Le prix résolu (country-specific ou repli) doit rester un entier
+  // valide dans la plus petite unité de sa devise avant toute écriture
+  // financière (section 16/62) — une configuration Super Admin
+  // corrompue (ex: prix négatif saisi par erreur) ne doit jamais
+  // atteindre NotchPay.
+  validateMoney(amount, currencyCode);
+
   const supabase = getSupabaseServiceClient();
   // Générée AVANT l'appel NotchPay (convention node:crypto randomUUID du
   // projet) pour pouvoir insérer la ligne "pending" avant même la
@@ -135,7 +184,8 @@ export async function initiatePayment(
     organization_id: organizationId,
     payment_type: "plan_subscription",
     plan_key: planKey,
-    amount_fcfa: plan.priceFcfa,
+    amount_fcfa: amount,
+    currency_code: currencyCode,
     provider: "notchpay",
     provider_reference: paymentId,
     status: "pending",
@@ -149,8 +199,8 @@ export async function initiatePayment(
   const result = await provider.createPayment({
     organizationId,
     orderId: paymentId,
-    amount: plan.priceFcfa,
-    currency: "XAF",
+    amount,
+    currency: currencyCode,
     customerEmail: payerEmail,
     description: `Abonnement SME-OS — forfait ${plan.name}`,
   });
@@ -161,7 +211,9 @@ export async function initiatePayment(
     );
   }
 
-  console.info(`[audit] actor=${actorUserId} org=${organizationId} action=SUBSCRIPTION_PAYMENT_INITIATED plan=${planKey}`);
+  console.info(
+    `[audit] actor=${actorUserId} org=${organizationId} action=SUBSCRIPTION_PAYMENT_INITIATED plan=${planKey} country=${countryCode} currency=${currencyCode}`,
+  );
 
   return { paymentId, paymentUrl: result.paymentUrl ?? "" };
 }
@@ -218,7 +270,9 @@ export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise
 
   const { data: payment, error } = await supabase
     .from("subscription_payments")
-    .select("id, organization_id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, provider_reference, status")
+    .select(
+      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, currency_code, provider_reference, status",
+    )
     .eq("provider_reference", reference)
     .maybeSingle();
 
@@ -534,7 +588,7 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
       action: "SUBSCRIPTION_PAYMENT_COMPLETED",
       entity_type: "subscription_payment",
       entity_id: payment.id,
-      after_state: { planKey: payment.plan_key, amountFcfa: payment.amount_fcfa },
+      after_state: { planKey: payment.plan_key, amountFcfa: payment.amount_fcfa, currencyCode: payment.currency_code },
     });
     if (auditError) {
       console.error("markPaymentCompleted: échec journalisation audit_logs:", auditError.message);

@@ -4,7 +4,26 @@ import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { getUnreadNotificationCount } from "@/application/services/notification-service";
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
-import { DashboardSidebar, MobileNavDrawer } from "./_components/dashboard-nav";
+
+const NAV_ITEMS = [
+  { href: "/dashboard", label: "Vue d'ensemble" },
+  { href: "/dashboard/products", label: "Catalogue" },
+  { href: "/dashboard/services", label: "Prestations" },
+  { href: "/dashboard/leads", label: "Clients" },
+  { href: "/dashboard/orders", label: "Commandes" },
+  { href: "/dashboard/appointments", label: "Rendez-vous" },
+  { href: "/dashboard/conversations", label: "Conversations" },
+  { href: "/dashboard/comments", label: "Commentaires" },
+  { href: "/dashboard/marketing", label: "Publications" },
+  { href: "/dashboard/groups", label: "Groupes WhatsApp" },
+  { href: "/dashboard/finance", label: "Finance" },
+  { href: "/dashboard/site", label: "Mon site" },
+  { href: "/dashboard/ai", label: "Assistant IA" },
+  { href: "/dashboard/faq", label: "FAQ" },
+  { href: "/dashboard/team", label: "Équipe" },
+  { href: "/dashboard/subscription", label: "Mon abonnement" },
+  { href: "/dashboard/addons", label: "Add-ons" },
+];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await getSupabaseServerSessionClient();
@@ -33,52 +52,48 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-paper">
-      {/* Lot 2 (§48-50) : barre fine toujours visible (logo + menu mobile +
-          cloche) au-dessus d'une mise en page à deux colonnes — la sidebar
-          desktop et le tiroir mobile partagent le même contenu de nav
-          (dashboard-nav.tsx), jamais dupliqué. */}
-      <header className="sticky top-0 z-40 border-b border-ink/10 bg-white px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <MobileNavDrawer />
-            <div>
-              <p className="font-display text-sm font-semibold leading-tight">{currentOrg.organizationName}</p>
-              <p className="text-xs capitalize leading-tight text-muted">{currentOrg.role}</p>
-            </div>
+      <header className="border-b border-ink/10 bg-white px-5 py-4">
+        <div className="mx-auto flex max-w-4xl items-center justify-between">
+          <div>
+            <p className="font-display text-sm font-semibold">{currentOrg.organizationName}</p>
+            <p className="text-xs text-muted capitalize">{currentOrg.role}</p>
           </div>
-          <Link
-            href="/dashboard/notifications"
-            className="relative flex h-9 w-9 items-center justify-center rounded-brand text-muted hover:bg-ink/5 hover:text-ink"
-            aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : "Notifications"}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              className="h-5 w-5"
-              aria-hidden="true"
+          <nav className="flex items-center gap-4 text-sm">
+            {NAV_ITEMS.map((item) => (
+              <Link key={item.href} href={item.href} className="text-muted hover:text-ink">
+                {item.label}
+              </Link>
+            ))}
+            <Link
+              href="/dashboard/notifications"
+              className="relative flex items-center text-muted hover:text-ink"
+              aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : "Notifications"}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 17h5l-1.4-2.1a2 2 0 0 1-.35-1.13V10a6.25 6.25 0 1 0-12.5 0v3.77c0 .4-.12.79-.35 1.13L4 17h5m6 0a3 3 0 1 1-6 0m6 0H9"
-              />
-            </svg>
-            {unreadCount > 0 && (
-              <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </Link>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                className="h-5 w-5"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 17h5l-1.4-2.1a2 2 0 0 1-.35-1.13V10a6.25 6.25 0 1 0-12.5 0v3.77c0 .4-.12.79-.35 1.13L4 17h5m6 0a3 3 0 1 1-6 0m6 0H9"
+                />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          </nav>
         </div>
       </header>
-
-      <div className="mx-auto flex max-w-6xl">
-        <DashboardSidebar />
-        <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
-      </div>
+      <div className="mx-auto max-w-4xl px-5 py-8">{children}</div>
     </div>
   );
 }

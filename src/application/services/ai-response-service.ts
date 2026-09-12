@@ -1,7 +1,7 @@
 import { getAIProvider } from "@/infrastructure/providers/registry";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { buildTenantAIContext } from "./tenant-ai-context";
-import { hasCreditsAvailable, consumeCredit } from "./ai-credits-service";
+import { consumeCredit, releaseCredit } from "./ai-credits-service";
 import { QuotaExceededError } from "@/lib/errors";
 import type { AITextResponse } from "@/domain/ports/ai-provider";
 import type { CatalogProductSummary } from "./catalog-service";
@@ -24,13 +24,24 @@ import type { CatalogProductSummary } from "./catalog-service";
  * (`handoffReason: "ai_unavailable"`), et le webhook Zernio appelle déjà
  * `escalateToHuman()` dans ce cas — qui notifie déjà les admins
  * (handoff-service.ts). Ajouter une notification ici doublonnerait.
+ *
+ * CORRECTIF Lot 3 (audit master prompt §30/§71) : le crédit est
+ * maintenant RÉSERVÉ atomiquement AVANT l'appel LLM (plus
+ * hasCreditsAvailable() suivi d'un consumeCredit() best-effort après
+ * coup — cette séquence check-then-act laissait une fenêtre où deux
+ * requêtes concurrentes passaient toutes les deux le check, généraient
+ * TOUTES LES DEUX une réponse payante, avant que la comptabilité ne
+ * s'aperçoive du dépassement). Si la génération échoue malgré tout
+ * (primary ET fallback), le crédit réservé est remboursé — jamais
+ * consommé pour une génération qui n'a pas réellement eu lieu (section 30).
  */
 export async function generateAIReply(
   organizationId: string,
   userMessage: string,
   recentProducts: CatalogProductSummary[] = [],
 ): Promise<AITextResponse> {
-  if (!(await hasCreditsAvailable(organizationId))) {
+  const reservation = await consumeCredit(organizationId);
+  if (!reservation.success) {
     throw new QuotaExceededError("Crédits IA épuisés pour cette organisation.");
   }
 
@@ -39,37 +50,37 @@ export async function generateAIReply(
 
   let result: AITextResponse;
   try {
-    result = await primary.generateText({ systemPrompt, userMessage });
-  } catch (primaryError) {
-    if (!fallback) throw primaryError;
+    try {
+      result = await primary.generateText({ systemPrompt, userMessage });
+    } catch (primaryError) {
+      if (!fallback) throw primaryError;
 
-    console.warn(
-      `[AI fallback] org=${organizationId} provider=${primary.providerName} -> ${fallback.providerName}:`,
-      primaryError,
-    );
+      console.warn(
+        `[AI fallback] org=${organizationId} provider=${primary.providerName} -> ${fallback.providerName}:`,
+        primaryError,
+      );
 
-    await getSupabaseServiceClient()
-      .from("audit_logs")
-      .insert({
-        organization_id: organizationId,
-        action: "AI_PROVIDER_FALLBACK",
-        entity_type: "ai_config",
-        after_state: {
-          from: primary.providerName,
-          to: fallback.providerName,
-          error: primaryError instanceof Error ? primaryError.message : String(primaryError),
-        },
-      });
+      await getSupabaseServiceClient()
+        .from("audit_logs")
+        .insert({
+          organization_id: organizationId,
+          action: "AI_PROVIDER_FALLBACK",
+          entity_type: "ai_config",
+          after_state: {
+            from: primary.providerName,
+            to: fallback.providerName,
+            error: primaryError instanceof Error ? primaryError.message : String(primaryError),
+          },
+        });
 
-    result = await fallback.generateText({ systemPrompt, userMessage });
+      result = await fallback.generateText({ systemPrompt, userMessage });
+    }
+  } catch (generationError) {
+    // Ni primary ni fallback n'ont abouti : aucune génération n'a
+    // réellement eu lieu, le crédit réservé ne doit pas rester consommé.
+    await releaseCredit(organizationId);
+    throw generationError;
   }
-
-  // Best-effort (même logique que le reste du système de crédits, Lot B) :
-  // une consommation non enregistrée ne doit jamais faire échouer une
-  // réponse déjà générée et sur le point d'être envoyée au contact.
-  await consumeCredit(organizationId).catch((err) =>
-    console.warn(`[ai-credits] échec consumeCredit(${organizationId}):`, err),
-  );
 
   return result;
 }

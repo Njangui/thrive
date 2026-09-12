@@ -60,6 +60,15 @@ export function IconGlobe(props: IconProps) {
   );
 }
 
+export function IconFlag(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5 21V4" />
+      <path d="M5 4.5c1.5-1 3.5-1 5 0s3.5 1 5 0v9c-1.5 1-3.5 1-5 0s-3.5-1-5 0Z" />
+    </svg>
+  );
+}
+
 export function IconPhone(props: IconProps) {
   return (
     <svg {...base} {...props}>

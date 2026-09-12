@@ -104,6 +104,7 @@ describe("formatGroupBroadcastMessage", () => {
       unitPrice: 25000,
       description: "Fait main",
       categoryName: "Maroquinerie",
+      imageUrl: null,
     },
   ];
 

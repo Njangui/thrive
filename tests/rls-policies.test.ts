@@ -38,8 +38,22 @@ const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "supa
  *   avant même la création d'un compte (page tarifs publique, section 54).
  * - addons / domain_tld_pricing : catalogues similaires (add-ons,
  *   tarification domaines), `to authenticated using (active = true)`.
+ * - countries / payment_channels / plan_prices (Country Engine,
+ *   0040_country_engine.sql) : catalogues plateforme publics en lecture
+ *   (landing publique section 22, sélecteur pays de l'onboarding
+ *   section 13) — même posture que plans/addons ci-dessus, `using
+ *   (true)`, écriture réservée service-role (admin-countries-service.ts
+ *   / notchpay-resources-service.ts).
  */
-const PUBLIC_REFERENCE_TABLES = new Set(["plans", "plan_entitlements", "addons", "domain_tld_pricing"]);
+const PUBLIC_REFERENCE_TABLES = new Set([
+  "plans",
+  "plan_entitlements",
+  "addons",
+  "domain_tld_pricing",
+  "countries",
+  "payment_channels",
+  "plan_prices",
+]);
 
 /**
  * Tables intentionnellement SANS AUCUNE politique (RLS activée = deny-all
@@ -51,8 +65,21 @@ const PUBLIC_REFERENCE_TABLES = new Set(["plans", "plan_entitlements", "addons",
  *   destiné à une lecture applicative directe.
  * - phone_numbers : inventaire Super Admin (section 62) — tout accès
  *   tenant passe par un service en service_role, pas par RLS directe.
+ * - country_waitlist / notchpay_sync_runs (Country Engine,
+ *   0040_country_engine.sql) : la soumission à la liste d'attente
+ *   passe toujours par une Server Action rate-limitée (jamais un insert
+ *   anon-key direct), et l'historique de synchronisation NotchPay n'a
+ *   aucun besoin de lecture applicative tenant — accès service-role
+ *   uniquement pour les deux.
  */
-const SERVICE_ROLE_ONLY_TABLES = new Set(["platform_admins", "platform_settings", "webhook_events", "phone_numbers"]);
+const SERVICE_ROLE_ONLY_TABLES = new Set([
+  "platform_admins",
+  "platform_settings",
+  "webhook_events",
+  "phone_numbers",
+  "country_waitlist",
+  "notchpay_sync_runs",
+]);
 
 const TENANT_SAFE_MARKERS = ["organization_id", "is_member_of_org", "is_platform_admin", "auth.uid()"];
 

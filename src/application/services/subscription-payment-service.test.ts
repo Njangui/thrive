@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./plans-repository", () => ({
   listPlans: vi.fn(),
+  resolvePlanPriceForCountry: vi.fn(),
 }));
 
 vi.mock("./notification-service", () => ({
@@ -36,12 +37,13 @@ import {
   handlePaymentWebhook,
   processSubscriptionRenewals,
 } from "./subscription-payment-service";
-import { listPlans } from "./plans-repository";
+import { listPlans, resolvePlanPriceForCountry } from "./plans-repository";
 import { notifyOrgAdmins } from "./notification-service";
 import { confirmAddonPurchase } from "./addons-service";
 import type { NotchPayWebhookEvent } from "@/infrastructure/providers/payment/notchpay/types";
 
 const mockListPlans = vi.mocked(listPlans);
+const mockResolvePlanPriceForCountry = vi.mocked(resolvePlanPriceForCountry);
 const mockNotifyOrgAdmins = vi.mocked(notifyOrgAdmins);
 const mockConfirmAddonPurchase = vi.mocked(confirmAddonPurchase);
 
@@ -165,6 +167,17 @@ function makeWebhookEvent(reference: string, status: "complete" | "failed" = "co
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Repli générique : reflète fidèlement le comportement RÉEL de
+  // resolvePlanPriceForCountry en l'absence de ligne plan_prices
+  // configurée (plan.priceFcfa + XAF) — couvre tous les tests
+  // existants sans qu'ils aient besoin de connaître le Country Engine,
+  // exactement le comportement historique pré-Country-Engine qu'on
+  // veut préserver (régression Cameroun, section 40).
+  mockResolvePlanPriceForCountry.mockImplementation(async (plan: { priceFcfa: number }) => ({
+    amount: plan.priceFcfa,
+    currencyCode: "XAF",
+    source: "fallback_default",
+  }));
 });
 
 describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => {
@@ -293,6 +306,28 @@ describe("initiatePayment", () => {
     mockListPlans.mockResolvedValue([]);
     await expect(initiatePayment("org-1", "inexistant" as never, "user-1", "user@example.com")).rejects.toThrow();
     expect(mockCreatePayment).not.toHaveBeenCalled();
+  });
+
+  it("Country Engine : une organisation dans un pays configuré paie le prix/devise résolus pour CE pays, pas le prix par défaut", async () => {
+    configureSubscriptionPaymentsMock(null);
+    mockListPlans.mockResolvedValue([
+      { key: "business", name: "Business", priceFcfa: 15000, description: null },
+    ] as never);
+    // Remplace le repli générique du beforeEach : simule une ligne
+    // plan_prices active pour un pays non-camerounais (ex: Ghana/GHS),
+    // configurée par le Super Admin.
+    mockResolvePlanPriceForCountry.mockResolvedValue({ amount: 25000, currencyCode: "GHS", source: "country_specific" });
+    mockCreatePayment.mockImplementation(async (req: { orderId: string }) => ({
+      providerReference: req.orderId,
+      paymentUrl: "https://pay.notchpay.co/checkout/gh",
+      status: "pending",
+    }));
+
+    await initiatePayment("org-gh", "business" as never, "user-1", "user@example.com");
+
+    expect(mockCreatePayment).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-gh", amount: 25000, currency: "GHS" }),
+    );
   });
 });
 

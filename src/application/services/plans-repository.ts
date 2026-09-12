@@ -1,5 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { getPlatformSettingNumber } from "./platform-settings-service";
+import { resolveCurrencyForCountry } from "./country-service";
 
 /** Filet de sécurité si platform_settings.trial_days est illisible/absent — voir createTrialSubscription. */
 const FALLBACK_TRIAL_DAYS = 14;
@@ -244,4 +245,59 @@ export async function countOrganizationRows(
     return 0;
   }
   return count ?? 0;
+}
+
+/**
+ * Country Engine (section 17) — résout le prix effectif d'un plan pour
+ * un pays donné. Repli en 2 temps si aucune ligne `plan_prices` active
+ * n'existe pour (plan, pays) :
+ *   1. devise du pays (country-service.ts) si le pays est connu ;
+ *   2. sinon XAF (comportement historique, seul marché avant le
+ *      Country Engine) — voir country-service.ts::DEFAULT_CURRENCY_CODE.
+ * et le MONTANT retombe toujours sur `plan.priceFcfa` dans ce cas.
+ * C'est ce double repli qui garantit qu'un pays non encore configuré
+ * par le Super Admin (ou le Cameroun lui-même, avant tout seed) se
+ * comporte EXACTEMENT comme avant l'introduction du Country Engine —
+ * jamais une conversion forex automatique (interdite par le cahier,
+ * section 17), jamais un montant à 0 par erreur de configuration.
+ */
+export interface ResolvedPlanPrice {
+  amount: number;
+  currencyCode: string;
+  source: "country_specific" | "fallback_default";
+}
+
+export async function resolvePlanPriceForCountry(plan: PlanSummary, countryCode: string): Promise<ResolvedPlanPrice> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("plan_prices")
+    .select("amount, currency_code")
+    .eq("plan_key", plan.key)
+    .eq("country_code", countryCode)
+    .eq("billing_interval", "monthly")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      `resolvePlanPriceForCountry(${plan.key}, ${countryCode}) erreur de lecture plan_prices, repli sur le prix par défaut:`,
+      error.message,
+    );
+  }
+
+  if (data) {
+    return { amount: data.amount, currencyCode: data.currency_code, source: "country_specific" };
+  }
+
+  const currencyCode = await resolveCurrencyForCountry(countryCode);
+  return { amount: plan.priceFcfa, currencyCode, source: "fallback_default" };
+}
+
+/** Grille tarifaire complète d'un pays (Super Admin /admin/countries/[code], section 19/29) — tous les plans, avec leur prix résolu pour ce pays. */
+export async function listPlanPricesForCountry(countryCode: string): Promise<Array<PlanSummary & ResolvedPlanPrice>> {
+  const plans = await listPlans();
+  const resolved = await Promise.all(
+    plans.map(async (plan) => ({ ...plan, ...(await resolvePlanPriceForCountry(plan, countryCode)) })),
+  );
+  return resolved;
 }

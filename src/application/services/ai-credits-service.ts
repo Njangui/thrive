@@ -72,53 +72,63 @@ export async function hasCreditsAvailable(organizationId: string, amount = 1): P
 }
 
 /**
- * Enregistre une consommation de crédits. N'empêche PAS elle-même l'appel
- * IA si le solde est déjà épuisé — c'est à l'appelant de vérifier
- * `hasCreditsAvailable()` avant (même logique que `canUseFeature`,
- * vérifier-avant-agir plutôt que bloquer-après-coup).
- *
- * Note concurrence : lecture-puis-écriture, pas un incrément SQL
- * atomique. Deux consommations quasi simultanées pour le même tenant
- * peuvent en théorie se marcher dessus. Acceptable pour ce volume (V1,
- * section 62 doc 2 : ne pas sur-engineer) — à durcir avec une fonction
- * SQL d'incrément si la concurrence devient réelle.
+ * Consomme atomiquement des crédits (Lot 3, corrige la race condition
+ * documentée jusqu'ici — voir 0038_ai_credits_atomic.sql). Renvoie
+ * `{ success: false }` plutôt que de lever si le solde est insuffisant :
+ * c'est un résultat métier normal (l'appelant doit alors escalader vers
+ * un humain, jamais une exception à catcher). N'empêche PAS elle-même
+ * l'appel IA — c'est à l'appelant de réserver le crédit AVANT de
+ * générer (voir ai-response-service.ts) et de le libérer avec
+ * `releaseCredit()` si la génération échoue malgré tout après coup.
  */
 export async function consumeCredit(
   organizationId: string,
   amount = 1,
   reason = "ai_reply",
   metadata: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<{ success: boolean }> {
   if (amount <= 0) {
     throw new ValidationError("Le nombre de crédits consommés doit être positif");
   }
 
   const supabase = getSupabaseServiceClient();
-  const { data: balance, error: readError } = await supabase
-    .from("ai_credit_balances")
-    .select("used_credits")
-    .eq("organization_id", organizationId)
-    .maybeSingle();
 
-  if (readError) {
-    throw new Error(`Impossible de lire le solde de crédits IA: ${readError.message}`);
+  let { data, error } = await supabase.rpc("consume_ai_credit", {
+    p_organization_id: organizationId,
+    p_amount: amount,
+  });
+
+  if (error) {
+    throw new Error(`Impossible de consommer les crédits IA: ${error.message}`);
   }
 
-  if (!balance) {
-    // Filet de sécurité pour un tenant créé avant ce lot : on initialise
-    // à la volée avec la valeur de son plan avant de comptabiliser cette
-    // consommation, plutôt que de planter.
-    await initializeCreditBalance(organizationId);
+  if (!data || data.length === 0) {
+    // Zéro ligne renvoyée = solde insuffisant OU ligne jamais initialisée
+    // (voir commentaire de la fonction SQL) — on distingue les deux en
+    // relisant le statut plutôt que de deviner.
+    const status = await getCreditStatus(organizationId);
+    const wasNeverInitialized = status.includedCredits !== -1 && status.usedCredits === 0 && status.remainingCredits >= amount;
+
+    if (wasNeverInitialized) {
+      // Filet de sécurité pour un tenant créé avant ce mécanisme : on
+      // initialise à la volée puis on retente UNE fois — jamais une
+      // boucle, pour ne jamais masquer un vrai solde épuisé en cas
+      // d'erreur de lecture répétée.
+      await initializeCreditBalance(organizationId);
+      ({ data, error } = await supabase.rpc("consume_ai_credit", {
+        p_organization_id: organizationId,
+        p_amount: amount,
+      }));
+      if (error) {
+        throw new Error(`Impossible de consommer les crédits IA: ${error.message}`);
+      }
+    }
   }
 
-  const currentUsed = balance?.used_credits ?? 0;
-  const { error: updateError } = await supabase
-    .from("ai_credit_balances")
-    .update({ used_credits: currentUsed + amount })
-    .eq("organization_id", organizationId);
+  const success = !!data && data.length > 0;
 
-  if (updateError) {
-    throw new Error(`Impossible d'enregistrer la consommation de crédits IA: ${updateError.message}`);
+  if (!success) {
+    return { success: false };
   }
 
   const { error: eventError } = await supabase
@@ -130,6 +140,37 @@ export async function consumeCredit(
     // du log d'historique ne doit pas remonter comme un échec de
     // consommation.
     console.error(`consumeCredit(${organizationId}): échec de journalisation ai_usage_events:`, eventError.message);
+  }
+
+  return { success: true };
+}
+
+/**
+ * Rembourse un crédit précédemment réservé par `consumeCredit()` — appelé
+ * quand la génération IA échoue malgré la réservation (voir
+ * ai-response-service.ts::generateAIReply). Best-effort : un échec de
+ * remboursement ne doit jamais faire échouer le traitement de l'erreur
+ * IA d'origine, juste laisser le solde légèrement sous-remboursé (loggé).
+ */
+export async function releaseCredit(organizationId: string, amount = 1, reason = "ai_generation_failed"): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+
+  const { error } = await supabase.rpc("release_ai_credit", {
+    p_organization_id: organizationId,
+    p_amount: amount,
+  });
+
+  if (error) {
+    console.error(`releaseCredit(${organizationId}): échec du remboursement:`, error.message);
+    return;
+  }
+
+  const { error: eventError } = await supabase
+    .from("ai_usage_events")
+    .insert({ organization_id: organizationId, type: "release", amount, reason });
+
+  if (eventError) {
+    console.error(`releaseCredit(${organizationId}): échec de journalisation ai_usage_events:`, eventError.message);
   }
 }
 

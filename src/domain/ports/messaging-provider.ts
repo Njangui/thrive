@@ -24,6 +24,16 @@ export interface OutboundMessage {
   /** Pour les templates WhatsApp approuvés (hors fenêtre des 24h) */
   templateName?: string;
   templateParams?: Record<string, string>;
+  /**
+   * Lot 3 (audit master prompt §28/§35) — pièce jointe unique (image,
+   * vidéo, audio ou fichier). CONFIRMÉ pour Zernio : `attachmentUrl`
+   * (publiquement accessible, 25 Mo max) + `attachmentType`. `content`
+   * reste le texte/légende — les deux sont compatibles simultanément
+   * (voir zernio/client.ts). Optionnel : tous les MessagingProvider
+   * n'ont pas forcément cette capacité.
+   */
+  attachmentUrl?: string;
+  attachmentType?: "image" | "video" | "audio" | "file";
 }
 
 export interface SendMessageResult {

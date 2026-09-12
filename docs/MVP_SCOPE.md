@@ -4,94 +4,96 @@ Règle de décision utilisée tout du long : chaque fonctionnalité doit
 contribuer à au moins une catégorie parmi ACQUISITION / CONVERSION /
 OPÉRATIONS / REVENUE / FINANCE. Sinon : V2.
 
-> Mis à jour lors du Lot 2 (master prompt SME-OS, §81/§98), puis à la
-> fusion des Lots 1/2/4 (RAPPORT_FUSION_6.md) — ce fichier était
-> significativement obsolète : plusieurs éléments listés
-> "explicitement hors MVP" ci-dessous étaient en réalité déjà construits
-> par des lots précédents (groupes WhatsApp, rendez-vous, paiement
-> NotchPay...). Le code réel fait foi, ce fichier est réaligné dessus à
-> chaque fusion — y compris quand l'écart vient du lot qui a écrit cette
-> note lui-même (la galerie multi-photos listée "non construite"
-> ci-dessous avait en réalité été livrée par ce même Lot 2, corrigé ici).
+**Mise à jour Lot 3 (audit master prompt SME-OS §81/§98)** : ce document
+était devenu obsolète sur plusieurs points — il affirmait "non construit"
+pour des fonctionnalités livrées depuis dans d'autres lots. Le code réel
+fait foi ; corrigé ci-dessous. Voir `RAPPORT_LOT_3.md` pour le détail de
+l'audit qui a motivé cette mise à jour.
 
 ## Dans le MVP (construit)
 
 1. Dashboard (KPIs : CA, dépenses, résultat, commandes, leads, clients,
    conversations à traiter, ruptures de stock, publications programmées)
 2. Business Data (infos entreprise, alimentent landing/FAQ/IA/WhatsApp)
-3. Catalogue — produits (CRUD, galerie multi-photos avec réordonnancement/
-   photo principale, CSV, stock, SEO, promotions) et services (CRUD
-   complet depuis `/dashboard/services`, Lot 2 — le backend existait déjà,
-   l'écran manquait)
-4. Landing Page dynamique par tenant (`/`, `/produits`, `/produits/:slug`)
-   — sections activables/réordonnables, branding, témoignages, domaine
-   personnalisé (`/dashboard/site`)
-5. Landing marketing SME-OS (`/` sans tenant résolu, Lot 2) — remplace
-   l'ancienne page de statut de développement interne, jamais destinée à
-   être vue par un client
-6. WhatsApp via Zernio (réception, réponse, product discovery, groupes +
-   diffusion programmée)
-7. Conversation Orchestrator (règles/FAQ/catalogue/data avant IA) + mémoire courte
-8. FAQ
+3. Catalogue produits (source de vérité unique) — **prestations
+   (`services`) : table DB et RLS existent, mais aucune couche
+   applicative/UI dashboard/intégration au router IA — voir "Connu
+   incomplet" ci-dessous**
+4. Landing Page dynamique, sections configurables par le tenant, presets
+   sectoriels, SEO tenant-aware (title/description/OG/canonical/sitemap)
+5. WhatsApp via Zernio (réception, réponse, product discovery, mémoire
+   conversationnelle courte)
+6. **Groupes WhatsApp** (connexion/synchronisation, diffusion programmée
+   vers plusieurs groupes/produits, cron de traitement, historique/retry)
+   — construit (Lot F), contrairement à ce que ce document affirmait
+   auparavant
+7. Conversation Orchestrator (règles/FAQ/catalogue/data avant IA),
+   handoff humain (inbox admin, reprise, retour à l'IA, clôture) — garde-
+   fou anti-réponse-automatique pendant une prise en charge humaine
+   ajouté en Lot 3
+8. FAQ (résolveur + routage prioritaire avant l'IA) — **backend
+   fonctionnel, mais aucune interface dashboard pour créer/éditer une
+   entrée : voir "Connu incomplet"**
 9. IA contrôlée (dernier recours, jamais d'invention de prix/stock),
-   configuration depuis `/dashboard/ai`
-10. Human Handoff (inbox admin, reprise, retour à l'IA, clôture)
-11. CRM / Leads (`/dashboard/leads`, pagination, changement de statut)
-12. Commandes (`/dashboard/orders`, pagination, détail, finalisation/
-    annulation) — sans paiement intégré côté commande client
-13. Gestion financière (revenus/dépenses manuels + auto depuis commandes)
-14. Publications sociales via Zernio (createPost/schedulePost/publishPost/
-    cancelPost/getAnalytics), sélection multiple de produits + campagnes
-    programmées, commentaires (lecture/réponse/masquage)
+   crédits IA à consommation atomique (Lot 3 — corrige une race
+   condition), fallback multi-provider
+10. CRM / Leads
+11. Commandes (sans paiement intégré côté client final)
+12. Gestion financière (revenus/dépenses manuels + auto depuis commandes)
+13. Publications sociales via Zernio (createPost/schedulePost/
+    publishPost/cancelPost/getAnalytics), commentaires Facebook/Instagram
+    (lecture/réponse/masquage, suggestion IA)
+14. Sélection multiple de produits + campagnes programmées ; suspension
+    automatique des publications programmées d'un produit en rupture de
+    stock — jamais marquée "en pause" sans confirmation réelle côté
+    provider (corrigé Lot 3, voir RAPPORT_LOT_3.md)
 15. Gestion du stock (transition automatique vers OUT_OF_STOCK, jamais de
-    suppression, réapprovisionnement manuel via `/dashboard/products/:id/edit`),
-    transaction atomique commande/stock (verrouillage de ligne, voir Lot 1)
-16. Import CSV en masse
-17. Groupes WhatsApp — connexion, synchronisation, diffusion programmée
-    (voir `docs/ZERNIO_INTEGRATION.md` pour la limite réelle et honnête :
-    un groupe jamais contacté ne peut pas encore recevoir de diffusion à
-    froid, contrainte de l'API, pas un bug)
-18. Rendez-vous (`/dashboard/appointments`)
-19. Abonnements, plans, entitlements, crédits IA, add-ons — paiement
-    plateforme via NotchPay (`/dashboard/subscription`, `/dashboard/addons`)
-20. Domaines personnalisés — sous-domaine automatique, demande manuelle,
-    tarification pilotée par le Super Admin
-21. Équipe — invitations par email, rôles, `/dashboard/team`
-22. Analytics de base (vues, clics produit, leads, commandes,
-    publications — `product_click`/`conversation_started` réellement
-    émis depuis cette vague, RAPPORT_FUSION_6.md) — `/dashboard` et
-    Super Admin
-23. Console Super Admin (`/admin/*`) — entreprises, plans, domaines,
-    numéros, canaux, add-ons, logs, vue globale
-24. PWA installable
-25. Paramètres / intégrations (`provider_connections`)
+    suppression)
+16. Import CSV en masse (rapport ligne par ligne)
+17. Paramètres / intégrations (`provider_connections`)
+18. **Paiement d'abonnement plateforme via NotchPay** — construit (Lot
+    G), contrairement à ce que ce document affirmait auparavant ; webhook
+    vérifié + re-vérification API avant tout crédit
+19. Add-ons, facturation récurrente (relance J-3, passage `past_due`),
+    Super Admin (organisations/plans/add-ons/domaines/numéros/canaux/logs)
+20. Domaines : tarification + demande manuelle (Lot G), recherche/
+    disponibilité réelle via OpenProvider quand configuré, repli manuel
+    sinon (Lot N)
+21. Credentials par tenant (compte Zernio/IA dédié par organisation,
+    Supabase Vault) — Lot N
+22. Notifications in-app + push web ; onboarding reprenable ; PWA
+    installable
+
+## Connu incomplet (construit partiellement — pas un mensonge, une limite documentée)
+
+- **FAQ sans interface de gestion** : le mécanisme fonctionne
+  (résolution + priorité avant l'IA), mais rien ne permet à un
+  commerçant d'en créer une depuis le dashboard. Backend seul,
+  fonctionnellement inatteignable par un vrai utilisateur.
+- **Prestations (`services`)** : table DB prête, zéro service
+  applicatif, zéro UI, zéro intégration au router IA (contrairement aux
+  produits, qui ont tout ça).
+- **Messages texte uniquement** : ni la découverte produit en
+  conversation ni les diffusions de groupe n'envoient d'image, alors que
+  Zernio le supporte (`attachmentUrl`/`attachmentType` confirmés).
+- **Publication sociale non scopée par profil Zernio** (`profileId`) en
+  dehors de `listAccounts()` (corrigé en Lot 3 spécifiquement pour le
+  comptage d'entitlement) — les autres appels (`createPost`, etc.)
+  restent sûrs selon la doc Zernio (validation d'appartenance côté
+  fournisseur), mais l'architecture multi-tenant complète décrite par
+  Zernio n'est pas retranscrite partout. Voir RAPPORT_LOT_3.md, section
+  "Risques production".
 
 ## Explicitement HORS MVP (ne pas construire sans revalidation du scope)
 
 - AI Recommendations / AI Insights / recommandations personnalisées
-- Analytics avancées (BI, A/B testing, machine learning prédictif)
+- Analytics avancées (au-delà de : publications, vues, likes, clics, Top
+  Publications)
 - ERP, comptabilité complète, TVA, rapprochement bancaire
-- Constructeur de site drag-and-drop (sections activables/réordonnables/
-  configurables, pas un éditeur libre façon Webflow — voir master prompt
-  §11, décision volontaire)
+- Constructeur de site drag-and-drop (la landing est configurable par
+  sections activables/réordonnables, pas un éditeur de mise en page libre)
 - Automatisations complexes (trigger/condition/action génériques)
-- Segmentation avancée, scoring de lead prédictif (le score reste
-  rule-based, jamais un modèle prédictif)
-- Recherche/filtre sur la liste de produits du dashboard (identifié
-  Lot 2, non construit)
-- Achat automatisé de domaine/numéro de téléphone auprès d'un
-  fournisseur réel (le workflow manuel + l'abstraction provider existent,
-  aucun registrar/opérateur n'est branché en direct)
-- Gestion des FAQ et des informations business (horaires/adresse/
-  téléphone) depuis un écran dashboard — les deux existent en base
-  (`faqs`, colonnes dédiées sur `organizations`) et sont lues par le
-  routeur IA/la landing publique, mais s'éditent aujourd'hui uniquement
-  en SQL direct (identifié à la fusion des Lots 1/2/4, RAPPORT_FUSION_6.md
-  — aucun des 4 lots de cette vague n'avait ce périmètre)
-- Écran analytics dédié listant les publications les plus performantes
-  (`SocialPublishingProvider.getAnalytics` existe côté provider, pas
-  encore d'écran dashboard qui l'exploite au-delà des compteurs globaux
-  de la page d'accueil)
+- Segmentation avancée, scoring de lead avancé
 - Telegram, messages vocaux avancés, marketplace, application mobile
   native
 
@@ -102,4 +104,5 @@ générique avec Website Engine/Dashboard Engine configurables façon
 page-builder, moteur d'automatisation, AI Insights). Cette vision a été
 explicitement remplacée par la vision catalogue-first documentée ici — le
 détail complet de cette transition, avec les raisons, est dans
-`docs/GAP_ANALYSIS.md`.
+`docs/GAP_ANALYSIS.md` (lui-même partiellement obsolète depuis — se fier
+au code réel, section "Ce qui existe déjà" de chaque service).

@@ -11,6 +11,7 @@
 export type DomainEventType =
   | "MESSAGE_RECEIVED"
   | "MESSAGE_SENT"
+  | "MESSAGE_FAILED"
   | "CONVERSATION_STARTED"
   | "CONTACT_CREATED"
   | "PAYMENT_RECEIVED"
@@ -20,7 +21,8 @@ export type DomainEventType =
   | "APPOINTMENT_CREATED"
   | "INVENTORY_LOW"
   | "RECEIVABLE_OVERDUE"
-  | "SOCIAL_POST_STATUS_UPDATED";
+  | "SOCIAL_POST_STATUS_UPDATED"
+  | "PROVIDER_ACCOUNT_STATUS_UPDATED";
 
 export interface DomainEventBase {
   type: DomainEventType;
@@ -96,12 +98,46 @@ export interface SocialPostStatusUpdatedEvent extends DomainEventBase {
 }
 
 /**
+ * Lot 3 (audit master prompt §44) — confirmation qu'un message sortant
+ * n'a PAS pu être délivré (webhook `message.failed`). Distinct de
+ * `MESSAGE_RECEIVED` : ne crée jamais de nouveau message, sert
+ * uniquement à notifier — voir zernio/mapper.ts pour ce qui est
+ * confirmé vs lu défensivement dans le payload.
+ */
+export interface MessageFailedEvent extends DomainEventBase {
+  type: "MESSAGE_FAILED";
+  payload: {
+    externalMessageId?: string;
+    externalThreadId?: string;
+    /** Non confirmé au niveau du champ exact — lu défensivement depuis `metadata`, jamais requis. */
+    errorMessage?: string;
+  };
+}
+
+/**
+ * Lot 3 (audit master prompt §32/§44) — connexion Zernio perdue ou
+ * recouvrée pour un compte donné (webhook `account.connected`/
+ * `account.disconnected`). `accountId` est la clé Zernio, pas notre id
+ * interne — voir provider-connection-service.ts qui la résout contre
+ * `provider_connections.metadata->>accountId`.
+ */
+export interface ProviderAccountStatusUpdatedEvent extends DomainEventBase {
+  type: "PROVIDER_ACCOUNT_STATUS_UPDATED";
+  payload: {
+    accountId: string;
+    status: "connected" | "error";
+  };
+}
+
+/**
  * Union à étendre au fur et à mesure (Phase 7+). Volontairement pas
  * exhaustive dès Phase 0 — seuls les événements réellement câblés au
  * workflow central (section 64) ont un payload typé pour l'instant.
  */
 export type DomainEvent =
   | MessageReceivedEvent
+  | MessageFailedEvent
   | PaymentReceivedEvent
   | InventoryLowEvent
-  | SocialPostStatusUpdatedEvent;
+  | SocialPostStatusUpdatedEvent
+  | ProviderAccountStatusUpdatedEvent;

@@ -34,6 +34,27 @@ export async function escalateToHuman(
 }
 
 /**
+ * CORRECTIF Lot 3 (audit master prompt §31) : garde-fou explicite, jusqu'ici
+ * absent. `app/api/webhooks/zernio/route.ts` appelait `routeMessage()`
+ * (donc une éventuelle réponse IA automatique) sur CHAQUE message entrant,
+ * sans jamais vérifier `handoff_status` — un commentaire pré-existant dans
+ * `conversation-admin-service.ts` prétendait à tort que c'était "déjà
+ * garanti par le fait que le webhook ne déclenche l'orchestrateur que sur
+ * un nouveau message entrant", ce qui ne dit rien sur le statut de
+ * handoff : un nouveau message PENDANT une prise en charge humaine EST un
+ * nouveau message entrant, donc déclenchait quand même l'IA.
+ *
+ * Seul le statut 'ai' autorise une réponse automatique. 'pending_human'
+ * (en attente) et 'human' (déjà pris en charge) doivent tous les deux
+ * bloquer l'IA — la reprise se fait uniquement via
+ * `returnConversationToAI()` (action explicite de l'admin). 'resolved'
+ * bloque aussi (une conversation clôturée ne doit pas repartir seule).
+ */
+export function shouldAutoRespond(handoffStatus: string): boolean {
+  return handoffStatus === "ai";
+}
+
+/**
  * Heuristique V1 très simple pour décider si une réponse IA doit être
  * bloquée et escaladée plutôt qu'envoyée. À affiner en Phase 8 avec de
  * vrais signaux (confiance du modèle, mots-clés de plainte, etc.) — ne

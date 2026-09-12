@@ -68,7 +68,17 @@ export interface ZernioInboxWebhookEvent {
     | "reaction.received"
     | "comment.received"
     | "review.new"
-    | "review.updated";
+    | "review.updated"
+    // CONFIRMÉ Lot 3 (zernio-php WebhooksApi.md, docs.rs/crate/zernio,
+    // github.com/zernio-dev/convex-zernio — trois SDK indépendants
+    // recoupés le 4 sept. 2026, la liste complète des events déclarables
+    // à la création d'un webhook y est explicite) : "account.connected"
+    // et "account.disconnected" existent réellement, avec un payload
+    // `{id, event, account: {...}, timestamp}` — même enveloppe que les
+    // events inbox. Champs internes de `account` au-delà de `id` non
+    // confirmés au-delà de ce que ZernioInboxWebhookAccount déclare déjà.
+    | "account.connected"
+    | "account.disconnected";
   message?: ZernioInboxWebhookMessage;
   conversation?: ZernioInboxWebhookConversation;
   account: ZernioInboxWebhookAccount;
@@ -79,7 +89,17 @@ export interface ZernioInboxWebhookEvent {
 /** Body confirmé pour répondre dans une conversation inbox existante. */
 export interface ZernioSendInboxMessagePayload {
   accountId: string;
-  message: string;
+  message?: string;
+  /**
+   * CONFIRMÉ (docs.rs/crate/zernio, docs.zernio.com/resources/migrations/
+   * migrating-from-kapso, docs.zernio.com/resources/integrations/chat-sdk
+   * — trois sources indépendantes recoupées le 5 sept. 2026) : URL
+   * publiquement accessible, 25 Mo max. Zernio ne gère pas l'upload
+   * binaire direct pour ce projet (on utilise déjà des URLs Supabase
+   * Storage publiques pour les images produits — voir media-service.ts).
+   */
+  attachmentUrl?: string;
+  attachmentType?: "image" | "video" | "audio" | "file";
 }
 
 export interface ZernioSendInboxMessageResponse {

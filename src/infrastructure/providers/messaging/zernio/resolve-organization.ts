@@ -33,6 +33,39 @@ export async function resolveOrganizationIdByZernioAccount(accountId: string): P
 }
 
 /**
+ * Lot 3 (audit master prompt §44) — routage pour "account.connected"/
+ * "account.disconnected" spécifiquement. Contrairement au resolver
+ * ci-dessus, ne filtre PAS sur `status = 'connected'` : un event
+ * "account.disconnected" a, par définition, de bonnes chances d'arriver
+ * une fois que status vaut déjà 'error' (webhook rejoué) ou juste avant
+ * qu'on l'y fasse passer — le filtrer sur 'connected' le rendrait
+ * irrésolvable. Idem pour un "account.connected" de RECONNEXION, qui doit
+ * rester routable alors que la ligne est encore en 'error' au moment où
+ * l'event arrive. Cherche sur `provider_type` messaging OU social (un
+ * compte Zernio peut avoir les deux, voir secrets-resolver.ts) — les deux
+ * doivent forcément appartenir à la même organisation (unicité de
+ * accountId côté Zernio), donc une seule suffit pour résoudre le tenant.
+ */
+export async function resolveOrganizationIdByZernioAccountAnyStatus(accountId: string): Promise<string | null> {
+  const supabase = getSupabaseServiceClient();
+
+  const { data, error } = await supabase
+    .from("provider_connections")
+    .select("organization_id")
+    .eq("provider_name", "zernio")
+    .eq("metadata->>accountId", accountId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`resolveOrganizationIdByZernioAccountAnyStatus(${accountId}) error:`, error.message);
+    return null;
+  }
+
+  return data?.organization_id ?? null;
+}
+
+/**
  * Lot M, Partie 2 — routage tenant pour les webhooks `post.*`.
  *
  * Contrairement aux events inbox, un post peut cibler PLUSIEURS comptes

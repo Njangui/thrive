@@ -45,10 +45,16 @@ vi.mock("./analytics-service", () => ({
   trackEvent: vi.fn(),
 }));
 
+const mockGetSocialPublishingProvider = vi.fn();
+vi.mock("@/infrastructure/providers/registry", () => ({
+  getSocialPublishingProvider: (...args: unknown[]) => mockGetSocialPublishingProvider(...args),
+}));
+
 import {
   addHoursToNaiveIso,
   createCampaignFromProducts,
   handlePostStatusWebhook,
+  pauseScheduledPostsForProduct,
 } from "./marketing-service";
 import { canUseFeature } from "./entitlements-service";
 import { notifyOrgAdmins } from "./notification-service";
@@ -95,13 +101,25 @@ describe("addHoursToNaiveIso", () => {
   });
 });
 
-describe("createCampaignFromProducts — enforcement Lot B (entitlements)", () => {
+describe("createCampaignFromProducts — enforcement Lot 3 (comptage réel des comptes connectés, corrige §39)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("refuse la création AVANT tout accès DB si le quota 'social_accounts' est dépassé", async () => {
+  it("refuse la création AVANT tout accès DB si le nombre RÉEL de comptes connectés dépasse le quota — jamais le nombre de comptes ciblés par cette seule campagne", async () => {
     mockCanUseFeature.mockResolvedValue({ allowed: false, limit: 3, used: 0, remaining: 3 });
+    // 5 comptes réellement connectés côté Zernio, alors que CETTE
+    // campagne n'en cible que 2 — c'est le nombre réel qui doit compter,
+    // pas le sous-ensemble ciblé ici (c'est exactement le bug corrigé).
+    mockGetSocialPublishingProvider.mockResolvedValue({
+      listAccounts: vi.fn().mockResolvedValue([
+        { accountId: "acc-1", platform: "facebook", username: null },
+        { accountId: "acc-2", platform: "instagram", username: null },
+        { accountId: "acc-3", platform: "tiktok", username: null },
+        { accountId: "acc-4", platform: "linkedin", username: null },
+        { accountId: "acc-5", platform: "facebook", username: null },
+      ]),
+    });
 
     await expect(
       createCampaignFromProducts({
@@ -111,33 +129,34 @@ describe("createCampaignFromProducts — enforcement Lot B (entitlements)", () =
         targets: [
           { platform: "facebook", accountId: "acc-1" },
           { platform: "instagram", accountId: "acc-2" },
-          { platform: "tiktok", accountId: "acc-3" },
-          { platform: "linkedin", accountId: "acc-4" },
         ],
         firstSlotAt: "2026-09-01T18:00:00",
         intervalHours: 24,
       }),
-    ).rejects.toThrow(/Passez à Business/);
+    ).rejects.toThrow(/comptes sociaux connectés/);
 
-    // Vérifie le point d'application exact demandé par le cahier Lot B :
-    // le nombre de COMPTES DISTINCTS ciblés (pas le nombre de targets brut).
-    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "social_accounts", 4);
+    // Point d'application exact du correctif : le nombre RÉEL de comptes
+    // connectés (5), jamais le nombre de cibles de cette campagne (2).
+    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "social_accounts", 5);
     // Aucun accès DB avant la vérification de droits (enforcement serveur réel).
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("déduplique les comptes ciblés plusieurs fois dans la même campagne avant de vérifier le quota", async () => {
-    mockCanUseFeature.mockResolvedValue({ allowed: false, limit: 1, used: 0, remaining: 1 });
+  it("autorisé : sous la limite de comptes réellement connectés, la campagne peut cibler un sous-ensemble de ces comptes", async () => {
+    mockCanUseFeature.mockResolvedValue({ allowed: true, limit: 10, used: 0, remaining: 10 });
+    mockGetSocialPublishingProvider.mockResolvedValue({
+      listAccounts: vi.fn().mockResolvedValue([{ accountId: "acc-1", platform: "facebook", username: null }]),
+    });
 
+    // Pas de configuration DB au-delà de l'entitlement : la fonction va
+    // échouer plus loin (campagne non créée, mock par défaut) — seul le
+    // point d'application de l'entitlement nous intéresse dans ce test.
     await expect(
       createCampaignFromProducts({
         organizationId: "org-1",
         name: "Promo rentrée",
         productIds: ["p1"],
-        targets: [
-          { platform: "facebook", accountId: "acc-1" },
-          { platform: "facebook", accountId: "acc-1" }, // même compte, ne doit compter qu'une fois
-        ],
+        targets: [{ platform: "facebook", accountId: "acc-1" }],
         firstSlotAt: "2026-09-01T18:00:00",
         intervalHours: 24,
       }),
@@ -249,5 +268,89 @@ describe("handlePostStatusWebhook — Lot M, Partie 2", () => {
     expect(result).toEqual({ handled: false });
     expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
     expect(mockTrackEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("pauseScheduledPostsForProduct — Lot 3 (audit master prompt §43/§95 : ne jamais marquer 'paused' sans confirmation)", () => {
+  beforeEach(() => {
+    tableResults.clear();
+    updateCalls.length = 0;
+    mockGetSocialPublishingProvider.mockReset();
+    mockNotifyOrgAdmins.mockClear();
+  });
+
+  it("sans provider_post_id (jamais transmis à Zernio) : marque paused directement, aucun appel cancelPost", async () => {
+    tableResults.set("social_posts", { data: [{ id: "post-1", provider_post_id: null }], error: null });
+    mockGetSocialPublishingProvider.mockResolvedValue({ cancelPost: vi.fn() });
+
+    await pauseScheduledPostsForProduct("org-1", "prod-1");
+
+    expect(updateCalls).toContainEqual(
+      expect.objectContaining({ table: "social_posts", values: { status: "paused" } }),
+    );
+    expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
+  });
+
+  it("provider_post_id présent + annulation confirmée : marque paused, efface error_message", async () => {
+    tableResults.set("social_posts", { data: [{ id: "post-2", provider_post_id: "zpost-2" }], error: null });
+    const cancelPost = vi.fn().mockResolvedValue(undefined);
+    mockGetSocialPublishingProvider.mockResolvedValue({ cancelPost });
+
+    await pauseScheduledPostsForProduct("org-1", "prod-1");
+
+    expect(cancelPost).toHaveBeenCalledWith("zpost-2");
+    expect(updateCalls).toContainEqual(
+      expect.objectContaining({ table: "social_posts", values: { status: "paused", error_message: null } }),
+    );
+    expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
+  });
+
+  it("critère d'acceptation : provider_post_id présent + annulation ÉCHOUÉE -> ne marque JAMAIS paused, notifie l'admin", async () => {
+    tableResults.set("social_posts", { data: [{ id: "post-3", provider_post_id: "zpost-3" }], error: null });
+    const cancelPost = vi.fn().mockRejectedValue(new Error("Zernio indisponible"));
+    mockGetSocialPublishingProvider.mockResolvedValue({ cancelPost });
+
+    await pauseScheduledPostsForProduct("org-1", "prod-1");
+
+    const pausedUpdate = updateCalls.find(
+      (c) => c.table === "social_posts" && (c.values as { status?: string }).status === "paused",
+    );
+    expect(pausedUpdate).toBeUndefined(); // jamais "paused" sans confirmation réelle
+
+    const errorUpdate = updateCalls.find((c) => c.table === "social_posts" && "error_message" in (c.values as object));
+    expect((errorUpdate?.values as { error_message: string }).error_message).toContain("Zernio indisponible");
+
+    expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
+  });
+
+  it("aucun provider social connecté (compte déconnecté entre-temps) : ne marque pas paused non plus, notifie", async () => {
+    tableResults.set("social_posts", { data: [{ id: "post-4", provider_post_id: "zpost-4" }], error: null });
+    mockGetSocialPublishingProvider.mockRejectedValue(new Error("aucune connexion sociale"));
+
+    await pauseScheduledPostsForProduct("org-1", "prod-1");
+
+    const pausedUpdate = updateCalls.find(
+      (c) => c.table === "social_posts" && (c.values as { status?: string }).status === "paused",
+    );
+    expect(pausedUpdate).toBeUndefined();
+    expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
+  });
+
+  it("plusieurs posts en échec pour le même produit : une seule notification agrégée, pas une par post", async () => {
+    tableResults.set("social_posts", {
+      data: [
+        { id: "post-5", provider_post_id: "zpost-5" },
+        { id: "post-6", provider_post_id: "zpost-6" },
+      ],
+      error: null,
+    });
+    const cancelPost = vi.fn().mockRejectedValue(new Error("timeout"));
+    mockGetSocialPublishingProvider.mockResolvedValue({ cancelPost });
+
+    await pauseScheduledPostsForProduct("org-1", "prod-1");
+
+    expect(cancelPost).toHaveBeenCalledTimes(2);
+    expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
+    expect(mockNotifyOrgAdmins.mock.calls[0]![0]).toMatchObject({ body: expect.stringContaining("2 publication") });
   });
 });

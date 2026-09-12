@@ -5,6 +5,7 @@ import type {
   ZernioGetPostResponse,
   ZernioAnalyticsResponse,
   ZernioInboxCommentsResponse,
+  ZernioListAccountsResponse,
 } from "./types";
 
 /**
@@ -165,5 +166,30 @@ export class ZernioSocialClient {
       const body = await res.text().catch(() => "");
       throw new Error(`Zernio unhideInboxComment failed (${res.status}): ${body}`);
     }
+  }
+
+  /**
+   * CONFIRMÉ (docs.zernio.com/multi-tenant, "Build Social Posting Into
+   * Your App — Multi-Tenant Architecture", consulté 5 sept. 2026) :
+   * `GET /v1/accounts?profileId=...`. `profileId` scope le résultat au
+   * profil du tenant plutôt qu'à toute l'équipe Zernio — sans lui, un
+   * appelant partageant une clé API plateforme verrait les comptes de
+   * TOUS les tenants utilisant cette clé (voir adapter.ts pour la portée
+   * exacte de ce que ça affecte vs pas).
+   */
+  async listAccounts(profileId?: string): Promise<ZernioListAccountsResponse> {
+    this.assertConfigured();
+
+    const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : "";
+    const res = await fetch(`${this.baseUrl}/accounts${query}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio listAccounts failed (${res.status}): ${body}`);
+    }
+
+    return res.json() as Promise<ZernioListAccountsResponse>;
   }
 }

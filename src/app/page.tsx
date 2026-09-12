@@ -71,12 +71,20 @@ export default async function RootPage({
   // le pattern success/error déjà utilisé ailleurs (dashboard/site,
   // dashboard/appointments), préfixés "booking" pour ne jamais entrer en
   // collision avec un futur paramètre de la landing publique.
-  searchParams: Promise<{ bookingSuccess?: string; bookingError?: string }>;
+  // Country Engine : `waitlist_success`/`waitlist_error` alimentent la
+  // section "Disponible en Afrique" (country-waitlist-actions.ts).
+  searchParams: Promise<{
+    bookingSuccess?: string;
+    bookingError?: string;
+    waitlist_success?: string;
+    waitlist_error?: string;
+  }>;
 }) {
   const tenant = await resolveRequestTenant();
 
   if (!tenant) {
-    return <MarketingLanding />;
+    const { waitlist_success, waitlist_error } = await searchParams;
+    return <MarketingLanding waitlistFeedback={{ success: waitlist_success, error: waitlist_error }} />;
   }
 
   const { bookingSuccess, bookingError } = await searchParams;

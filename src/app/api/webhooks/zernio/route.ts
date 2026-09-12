@@ -13,14 +13,17 @@ import {
 import { isZernioPostEvent } from "@/infrastructure/providers/messaging/zernio/types";
 import {
   resolveOrganizationIdByZernioAccount,
+  resolveOrganizationIdByZernioAccountAnyStatus,
   resolveOrganizationIdByProviderPostId,
 } from "@/infrastructure/providers/messaging/zernio/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
 import { routeMessage } from "@/application/services/conversation-orchestrator";
-import { escalateToHuman } from "@/application/services/handoff-service";
+import { escalateToHuman, shouldAutoRespond } from "@/application/services/handoff-service";
 import { getMessagingProvider } from "@/infrastructure/providers/registry";
 import { activateGroupFromInboundConversation } from "@/application/services/whatsapp-group-service";
 import { handlePostStatusWebhook } from "@/application/services/marketing-service";
+import { handleAccountStatusChanged } from "@/application/services/provider-connection-service";
+import { notifyOrgAdmins } from "@/application/services/notification-service";
 
 /**
  * Pipeline (section 37) :
@@ -60,7 +63,12 @@ export async function POST(request: Request) {
       ? await resolveOrganizationIdByProviderPostId(
           rawEvent.post?._id ?? rawEvent.post?.id ?? rawEvent.postId ?? "",
         )
-      : await resolveOrganizationIdByZernioAccount(rawEvent.account.id);
+      : // CORRECTIF Lot 3 : account.connected/disconnected doivent rester
+        // routables quel que soit le statut ACTUEL de la ligne (c'est
+        // justement ce que l'event change) — voir resolve-organization.ts.
+        rawEvent.event === "account.connected" || rawEvent.event === "account.disconnected"
+        ? await resolveOrganizationIdByZernioAccountAnyStatus(rawEvent.account.id)
+        : await resolveOrganizationIdByZernioAccount(rawEvent.account.id);
 
     if (!organizationId) {
       console.warn(`Zernio webhook: aucun tenant résolu pour l'événement ${rawEvent.event} (${externalEventId}), ignoré.`);
@@ -116,39 +124,74 @@ export async function POST(request: Request) {
       if (domainEvent.type === "MESSAGE_RECEIVED") {
         const result = await handleInboundMessage(domainEvent);
 
-        // Le ConversationOrchestrator est le SEUL point d'entrée vers une
-        // réponse (section 17/45 doc 2) : règles/FAQ/catalogue/business
-        // data d'abord, IA en dernier recours. Ne jamais appeler l'IA
-        // directement ici — voir docs/GAP_ANALYSIS.md section L.
-        const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content);
+        // CORRECTIF Lot 3 (audit master prompt §31) : le message est
+        // toujours enregistré (ci-dessus, CRM/historique intacts pour
+        // l'admin) mais l'IA ne doit JAMAIS répondre automatiquement
+        // pendant une prise en charge humaine — voir
+        // handoff-service.ts::shouldAutoRespond pour le raisonnement
+        // complet sur le bug corrigé ici.
+        if (shouldAutoRespond(result.handoffStatus)) {
+          // Le ConversationOrchestrator est le SEUL point d'entrée vers une
+          // réponse (section 17/45 doc 2) : règles/FAQ/catalogue/business
+          // data d'abord, IA en dernier recours. Ne jamais appeler l'IA
+          // directement ici — voir docs/GAP_ANALYSIS.md section L.
+          const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content);
 
-        if (routing.handoffReason) {
-          await escalateToHuman(organizationId, result.conversationId, routing.handoffReason);
+          if (routing.handoffReason) {
+            await escalateToHuman(organizationId, result.conversationId, routing.handoffReason);
+          }
+
+          if (routing.replyText) {
+            const messaging = await getMessagingProvider(organizationId);
+            await messaging.sendMessage(organizationId, {
+              to: domainEvent.payload.phoneE164 ?? domainEvent.payload.externalContactId,
+              channel: "whatsapp",
+              content: routing.replyText,
+              // CONFIRMÉ : répondre via Zernio exige le conversationId, pas
+              // juste un numéro — voir adapter.ts.
+              externalThreadId: domainEvent.payload.externalThreadId,
+              // Lot 3 (audit master prompt §28) : image du produit joint au
+              // message quand le routage en a résolu une (product_discovery/
+              // product_query) — toujours une image produit à ce stade,
+              // jamais un autre type de fichier.
+              attachmentUrl: routing.replyImageUrl ?? undefined,
+              attachmentType: routing.replyImageUrl ? "image" : undefined,
+            });
+
+            await supabase.from("messages").insert({
+              organization_id: organizationId,
+              conversation_id: result.conversationId,
+              direction: "outbound",
+              // `sender: "ai"` couvre toute réponse automatique (FAQ, catalogue,
+              // business data ou vrai LLM) — le détail exact est dans
+              // `metadata.intent` pour l'observabilité (section 48).
+              sender: "ai",
+              content: routing.replyText,
+              metadata: { intent: routing.intent, ai_invoked: routing.aiInvoked },
+            });
+          }
         }
+      }
 
-        if (routing.replyText) {
-          const messaging = await getMessagingProvider(organizationId);
-          await messaging.sendMessage(organizationId, {
-            to: domainEvent.payload.phoneE164 ?? domainEvent.payload.externalContactId,
-            channel: "whatsapp",
-            content: routing.replyText,
-            // CONFIRMÉ : répondre via Zernio exige le conversationId, pas
-            // juste un numéro — voir adapter.ts.
-            externalThreadId: domainEvent.payload.externalThreadId,
-          });
+      // CORRECTIF Lot 3 (audit master prompt §44) : message.failed
+      // confirmé mais jamais traité jusqu'ici.
+      if (domainEvent.type === "MESSAGE_FAILED") {
+        await notifyOrgAdmins({
+          organizationId,
+          title: "Message non délivré.",
+          body: domainEvent.payload.errorMessage
+            ? `Un message n'a pas pu être envoyé : ${domainEvent.payload.errorMessage}`
+            : "Un message n'a pas pu être envoyé. Vérifiez la connexion du canal concerné.",
+          relatedEntityType: "message",
+          relatedEntityId: domainEvent.payload.externalMessageId,
+        });
+      }
 
-          await supabase.from("messages").insert({
-            organization_id: organizationId,
-            conversation_id: result.conversationId,
-            direction: "outbound",
-            // `sender: "ai"` couvre toute réponse automatique (FAQ, catalogue,
-            // business data ou vrai LLM) — le détail exact est dans
-            // `metadata.intent` pour l'observabilité (section 48).
-            sender: "ai",
-            content: routing.replyText,
-            metadata: { intent: routing.intent, ai_invoked: routing.aiInvoked },
-          });
-        }
+      // CORRECTIF Lot 3 (audit master prompt §32/§44) : account.connected/
+      // disconnected confirmés mais jamais traités jusqu'ici — voir
+      // provider-connection-service.ts.
+      if (domainEvent.type === "PROVIDER_ACCOUNT_STATUS_UPDATED") {
+        await handleAccountStatusChanged(organizationId, domainEvent.payload.accountId, domainEvent.payload.status);
       }
 
       await markWebhookEvent(externalEventId, "processed");

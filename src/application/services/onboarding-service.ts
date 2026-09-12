@@ -5,11 +5,21 @@ import { MODULE_KEYS, INDUSTRY_MODULE_PRESETS, type ModuleKey } from "@/applicat
 import { seedDefaultExpenseCategories } from "./finance-service";
 import { createTrialSubscription } from "./plans-repository";
 import { initializeCreditBalance } from "./ai-credits-service";
+import { validateCountryForSignup } from "./country-service";
 
 export interface CreateOrganizationInput {
   name: string;
   industry?: string;
-  currency?: string;
+  /**
+   * Country Engine (section 12/13) — REQUIS, remplace l'ancien champ
+   * `currency` libre non validé (un appelant pouvait auparavant passer
+   * n'importe quelle devise sans rapport avec le pays réel, exactement
+   * l'anti-pattern interdit par le cahier : "Cameroon + Currency=GHS
+   * sans raison métier explicite"). La devise n'est plus JAMAIS choisie
+   * indépendamment : elle est TOUJOURS dérivée de `countryCode` via
+   * `validateCountryForSignup` ci-dessous, seule source de vérité.
+   */
+  countryCode: string;
 }
 
 /**
@@ -25,6 +35,12 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
   if (!input.name.trim()) {
     throw new ValidationError("Le nom de l'entreprise est requis");
   }
+
+  // Country Engine (section 13) : seuls les pays `active` permettent
+  // l'inscription normale — lève un message adapté (coming_soon/waitlist/
+  // disabled/inconnu) AVANT toute écriture, jamais une organisation à
+  // moitié créée avec un pays invalide.
+  const { countryCode, currencyCode } = await validateCountryForSignup(input.countryCode);
 
   const sessionClient = await getSupabaseServerSessionClient();
   const {
@@ -44,7 +60,8 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
       name: input.name.trim(),
       slug,
       industry: input.industry ?? null,
-      currency: input.currency ?? "XAF",
+      currency: currencyCode,
+      country_code: countryCode,
       // Lot I, Partie 2 (onboarding reprenable) : l'étape 1 (celle-ci) vient
       // d'être complétée avec succès, donc onboarding_step=1 dès la
       // création — jamais 0 (0 = "jamais commencé", faux pour une

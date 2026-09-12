@@ -12,6 +12,7 @@ describe("formatRecentProductsForAIContext (Lot D, section 21/24)", () => {
         unitPrice: 25000,
         description: "Coupe fluide, motif wax",
         categoryName: "Vêtements",
+        imageUrl: null,
       },
     ];
 
@@ -31,7 +32,7 @@ describe("formatRecentProductsForAIContext (Lot D, section 21/24)", () => {
 
   it("ne plante pas et n'affiche pas 'undefined' pour un produit sans description", () => {
     const products: CatalogProductSummary[] = [
-      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null },
+      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null, imageUrl: null },
     ];
 
     const context = formatRecentProductsForAIContext(products);

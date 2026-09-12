@@ -76,9 +76,10 @@ export async function completeOnboarding(organizationId: string): Promise<void> 
 export async function submitBusinessStep(
   name: string,
   industry: string,
+  countryCode: string,
 ): Promise<OnboardingStepResult & { organizationId?: string }> {
   try {
-    const { organizationId } = await createOrganization({ name, industry: industry || undefined });
+    const { organizationId } = await createOrganization({ name, industry: industry || undefined, countryCode });
     await persistStep(organizationId, 2);
     return { ok: true, organizationId };
   } catch (error) {

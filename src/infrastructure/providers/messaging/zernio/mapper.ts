@@ -1,4 +1,10 @@
-import type { DomainEvent, MessageReceivedEvent, SocialPostStatusUpdatedEvent } from "@/domain/events/domain-events";
+import type {
+  DomainEvent,
+  MessageReceivedEvent,
+  MessageFailedEvent,
+  ProviderAccountStatusUpdatedEvent,
+  SocialPostStatusUpdatedEvent,
+} from "@/domain/events/domain-events";
 import type { ZernioInboxWebhookEvent, ZernioPostWebhookEvent } from "./types";
 
 /**
@@ -38,10 +44,61 @@ export function mapZernioEventToDomainEvent(
       return event;
     }
 
-    // TODO (bloc suivant) : mapper message.failed -> notification admin
-    // (section 43 doc 2 : erreur Zernio ne doit jamais casser l'appli),
-    // account.disconnected -> provider_connections.status = 'error'.
+    // CONFIRMÉ Lot 3 (audit master prompt §44) : "message.failed" existe
+    // (voir types.ts) — jusqu'ici dans la liste d'events confirmés mais
+    // jamais mappé (TODO laissé par un lot précédent). Le champ exact
+    // portant le motif d'échec n'est PAS confirmé au niveau du payload —
+    // lu défensivement depuis `metadata.error`/`metadata.reason` sans
+    // jamais l'exiger, jamais inventé si absent.
+    case "message.failed": {
+      const event: MessageFailedEvent = {
+        type: "MESSAGE_FAILED",
+        organizationId,
+        occurredAt: raw.timestamp,
+        externalEventId: raw.id,
+        sourceProvider: "zernio",
+        payload: {
+          externalMessageId: raw.message?.id,
+          externalThreadId: raw.conversation?.id,
+          errorMessage:
+            typeof raw.metadata?.error === "string"
+              ? raw.metadata.error
+              : typeof raw.metadata?.reason === "string"
+                ? raw.metadata.reason
+                : undefined,
+        },
+      };
+      return event;
+    }
+
+    // CONFIRMÉ Lot 3 (voir types.ts) : "account.connected"/"account.disconnected".
+    case "account.connected":
+    case "account.disconnected": {
+      const event: ProviderAccountStatusUpdatedEvent = {
+        type: "PROVIDER_ACCOUNT_STATUS_UPDATED",
+        organizationId,
+        occurredAt: raw.timestamp,
+        externalEventId: raw.id,
+        sourceProvider: "zernio",
+        payload: {
+          accountId: raw.account.id,
+          status: raw.event === "account.connected" ? "connected" : "error",
+        },
+      };
+      return event;
+    }
+
+    // Confirmés (types.ts) mais pas encore consommés par une fonctionnalité
+    // SME-OS dans ce lot : conversation.started, message.sent/edited/
+    // deleted/delivered/read, reaction.received, comment.received (couvert
+    // séparément par la synchronisation manuelle existante,
+    // social-comment-service.ts — un webhook temps réel dédié reste à
+    // construire), review.new/updated (aucune fonctionnalité "avis" dans
+    // SME-OS à ce jour — voir RAPPORT_LOT_3.md, section Missing). Logué
+    // proprement plutôt que silencieusement ignoré (section 44 : "Les
+    // événements non supportés doivent être loggés proprement").
     default:
+      console.info(`Zernio webhook: événement "${raw.event}" reçu mais non traité par ce lot (id=${raw.id}).`);
       return null;
   }
 }

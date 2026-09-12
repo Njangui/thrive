@@ -7,6 +7,8 @@ export interface HandleInboundMessageResult {
   conversationId: string;
   leadId: string;
   messageId: string;
+  /** CORRECTIF Lot 3 : nécessaire pour que l'appelant (webhook route) applique le garde-fou handoff-service.ts::shouldAutoRespond avant toute réponse automatique. */
+  handoffStatus: string;
 }
 
 /**
@@ -44,6 +46,11 @@ export async function handleInboundMessage(
   }
 
   // 2. Conversation : upsert par (organization_id, channel, external_thread_id)
+  // `.select("id, handoff_status")` : sur un conflit (conversation déjà
+  // existante), l'upsert ne modifie QUE les colonnes fournies ci-dessus —
+  // handoff_status n'y figure pas, donc sa valeur existante est préservée
+  // intacte et c'est bien elle qui revient ici (RETURNING post-upsert),
+  // jamais écrasée par un nouveau message entrant (voir handoff-service.ts::shouldAutoRespond).
   const { data: conversation, error: conversationError } = await supabase
     .from("conversations")
     .upsert(
@@ -56,7 +63,7 @@ export async function handleInboundMessage(
       },
       { onConflict: "organization_id,channel,external_thread_id" },
     )
-    .select("id")
+    .select("id, handoff_status")
     .single();
 
   if (conversationError || !conversation) {
@@ -93,5 +100,6 @@ export async function handleInboundMessage(
     conversationId: conversation.id,
     leadId: lead.id,
     messageId: message.id,
+    handoffStatus: conversation.handoff_status,
   };
 }

@@ -7,6 +7,7 @@ import {
   IconBuilding,
   IconTag,
   IconPuzzle,
+  IconFlag,
   IconGlobe,
   IconPhone,
   IconPlug,
@@ -21,6 +22,10 @@ import {
  * (03_LOT_C_super_admin.md), pas les items d'une boutique tenant
  * (Produits/Commandes/Clients) qui figuraient dans la référence — la
  * console Super Admin gère la plateforme, pas une boutique individuelle.
+ *
+ * "Pays" (Country Engine) ajouté au groupe Plateforme, juste après
+ * Plans — pilotage des pays actifs et de leurs tarifs, prolongement
+ * naturel des plans plutôt qu'une section à part.
  *
  * Regroupement en 4 blocs (reprend la logique déjà en place dans
  * `NAV_ITEMS` de l'ancien `admin/layout.tsx`, seulement réorganisée
@@ -37,6 +42,7 @@ export const ADMIN_NAV_GROUPS: { label: string | null; items: { href: string; la
     items: [
       { href: "/admin/organizations", label: "Entreprises", icon: IconBuilding },
       { href: "/admin/plans", label: "Plans", icon: IconTag },
+      { href: "/admin/countries", label: "Pays", icon: IconFlag },
       { href: "/admin/addons", label: "Add-ons", icon: IconPuzzle },
     ],
   },

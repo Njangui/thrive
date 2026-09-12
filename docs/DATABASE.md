@@ -41,6 +41,9 @@ et sont protégées par RLS (`is_member_of_org()` — voir migration 0002).
 | `0037_tenant_credentials.sql` | `provider_connections.credential_reference`, fonctions Vault `vault_create_secret`/`vault_read_secret`/`vault_update_secret`/`vault_delete_secret` (Lot N) — résolution de credentials PAR TENANT (Zernio/IA), réservées `service_role` |
 | `0038_atomic_order_stock_transaction.sql` | `adjust_product_stock()`, `complete_order_transaction()` (Lot 1, audit sécurité/DB/stock) — corrige une race condition réelle (double complétion de commande / double décrément de stock sous appels concurrents) via verrouillage de ligne (`FOR UPDATE`) en transaction unique, réservées `service_role` |
 | `0039_plan_whatsapp_groups_correction.sql` | Correction des limites `whatsapp_groups` du plan (2/5/10, alignées sur le master prompt) + nouvelle clé `whatsapp_groups_dedicated_bonus` (1/3/5, bonus numéro dédié) (Lot 4) — **renumérotée à la fusion** : livrée en `0038_*.sql` par le Lot 4, entrait en collision avec le fichier `0038_atomic_order_stock_transaction.sql` du Lot 1 (deux lots indépendants ayant pris le même numéro sans se voir) ; contenu inchangé, seuls le nom de fichier et son commentaire d'en-tête ont été mis à jour |
+| `0040_country_engine.sql` | Country Engine (expansion multi-pays) — `countries`, `payment_channels`, `plan_prices`, `country_waitlist`, `notchpay_sync_runs`. Seed : Cameroun `active`, prix `plan_prices` identiques à `plans.price_fcfa`. Voir `docs/country-engine.md` |
+| `0041_organizations_country_code.sql` | `organizations.country_code` (FK vers `countries`) — backfill `'CM'` pour toutes les organisations existantes |
+| `0042_subscription_payments_currency.sql` | `subscription_payments.currency_code` — corrige l'hypothèse implicite FCFA sur `amount_fcfa` (backfill `'XAF'` pour l'historique) |
 
 > Note (mise à jour Lot 1) : cette table listait encore, avant cet audit,
 > les migrations jusqu'à `0033` seulement alors que `0035`-`0037`
@@ -152,6 +155,7 @@ explicitement par `organization_id` (voir commentaire dans
 - `lead_status` réel (0003_crm.sql) : `visitor` → `lead` → `qualified` →
   `opportunity` → `customer`, ou `lost`. Le cahier Lot L citait par erreur
   `new/contacted/interested/customer/lost` — non repris, voir `RAPPORT_LOT_L.md`.
+- `countries.launch_status` (Country Engine, 0040) : `disabled` → `coming_soon`/`waitlist` → `active`, ou directement `disabled` → `active`. Jamais automatique depuis `notchpay_supported` — voir `docs/country-engine.md`.
 
 ## Idempotence webhooks
 

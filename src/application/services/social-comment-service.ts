@@ -1,6 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { getSocialPublishingProvider, getAIProvider } from "@/infrastructure/providers/registry";
-import { hasCreditsAvailable, consumeCredit } from "./ai-credits-service";
+import { consumeCredit, releaseCredit } from "./ai-credits-service";
 import { NotFoundError } from "@/lib/errors";
 
 /**
@@ -281,11 +281,20 @@ export async function unhideComment(organizationId: string, commentId: string): 
  * indisponibilité (IA désactivée, crédits épuisés, erreur réseau...) ne
  * doit jamais bloquer la réponse manuelle, donc ne lève jamais — retourne
  * simplement `null`.
+ *
+ * CORRECTIF Lot 3 (même race condition que ai-response-service.ts,
+ * section 30/71) : réservation atomique du crédit AVANT l'appel IA,
+ * remboursé si la génération échoue — jamais un hasCreditsAvailable()
+ * suivi d'un consumeCredit() best-effort après coup.
  */
 export async function draftCommentReplySuggestion(organizationId: string, commentContent: string): Promise<string | null> {
-  try {
-    if (!(await hasCreditsAvailable(organizationId))) return null;
+  const reservation = await consumeCredit(organizationId, 1, "social_comment_draft").catch((err) => {
+    console.warn(`[social-comments] échec réservation crédit(${organizationId}):`, err);
+    return { success: false as const };
+  });
+  if (!reservation.success) return null;
 
+  try {
     const supabase = getSupabaseServiceClient();
     const { data: org } = await supabase.from("organizations").select("name").eq("id", organizationId).maybeSingle();
 
@@ -298,13 +307,10 @@ export async function draftCommentReplySuggestion(organizationId: string, commen
 
     const result = await primary.generateText({ systemPrompt, userMessage: commentContent, maxTokens: 150 });
 
-    await consumeCredit(organizationId, 1, "social_comment_draft").catch((err) =>
-      console.warn(`[social-comments] échec consumeCredit(${organizationId}):`, err),
-    );
-
     return result.text;
   } catch (err) {
     console.warn(`[social-comments] draftCommentReplySuggestion indisponible (org ${organizationId}):`, err);
+    await releaseCredit(organizationId, 1, "ai_generation_failed").catch(() => {});
     return null;
   }
 }

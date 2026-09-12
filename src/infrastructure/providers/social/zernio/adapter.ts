@@ -7,13 +7,26 @@ import type {
   SocialPostResult,
   SocialPublishingProvider,
   SocialComment,
+  SocialAccountSummary,
 } from "@/domain/ports/social-publishing-provider";
 import { ZernioSocialClient } from "./client";
 
 export class ZernioSocialAdapter implements SocialPublishingProvider {
   readonly providerName = "zernio";
 
-  constructor(private readonly client: ZernioSocialClient) {}
+  /**
+   * `profileId` optionnel (contrairement à ZernioAdapter côté messaging,
+   * qui l'exige) : voir registry.ts::getSocialPublishingProvider pour le
+   * raisonnement — tous les tenants n'ont pas encore ce champ peuplé côté
+   * social, et le dégrader en simple perte de précision de comptage
+   * (plutôt qu'un blocage dur) est le choix le moins risqué pour ne
+   * jamais casser une publication déjà fonctionnelle (voir
+   * RAPPORT_LOT_3.md, section "Risques production" pour l'impact exact).
+   */
+  constructor(
+    private readonly client: ZernioSocialClient,
+    private readonly profileId?: string,
+  ) {}
 
   async createPost(
     request: Omit<CreateSocialPostRequest, "scheduledFor" | "publishNow">,
@@ -126,6 +139,15 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
 
   async unhideComment(providerPostId: string, accountId: string, commentId: string): Promise<void> {
     await this.client.unhideInboxComment(providerPostId, accountId, commentId);
+  }
+
+  async listAccounts(): Promise<SocialAccountSummary[]> {
+    const response = await this.client.listAccounts(this.profileId);
+    return response.accounts.map((a) => ({
+      accountId: a._id,
+      platform: a.platform,
+      username: a.username ?? null,
+    }));
   }
 }
 

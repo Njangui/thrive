@@ -90,3 +90,58 @@ export interface NotchPayWebhookEvent {
     updated_at: string;
   };
 }
+
+/**
+ * Resources API — Country Engine (section 8 du master prompt
+ * d'expansion multi-pays). CONFIRMÉ via developer.notchpay.co/
+ * api-reference/resources (consulté 06/09/2026 — voir
+ * docs/notchpay-resources.md pour le détail complet des réponses
+ * réelles). Distinct de `GET /countries` (sans préfixe /resources),
+ * qui liste TOUS les pays du monde ({name, code} uniquement, sans
+ * devise/indicatif) pour des formulaires génériques — PAS la même
+ * ressource, et PAS utilisée ici : seule `/resources/countries`
+ * reflète ce que NotchPay supporte réellement comme moyen de paiement,
+ * ce qui est la question posée par le Country Engine.
+ */
+export interface NotchPayResourceCountry {
+  code: string; // ISO 3166-1 alpha-2, ex: 'CM'
+  name: string;
+  currency: string; // ISO 4217, ex: 'XAF'
+  flag?: string; // URL d'image (ex: https://assets.notchpay.co/flags/cm.png) — PAS un emoji
+  phone_code: string; // ex: '+237'
+  channels?: string[]; // catégories larges, ex: ['mobile_money', 'card', 'bank'] — PAS les channel_code individuels (voir NotchPayResourceChannel)
+}
+
+export interface NotchPayListCountriesResponse {
+  code: number;
+  status: string;
+  message: string;
+  countries: NotchPayResourceCountry[];
+}
+
+export interface NotchPayGetCountryResponse {
+  code: number;
+  status: string;
+  message: string;
+  country: NotchPayResourceCountry & {
+    available_channels?: Array<{ id: string; name: string; type: string }>;
+  };
+}
+
+export interface NotchPayResourceChannel {
+  id: string; // ex: 'cm.mtn'
+  name: string;
+  country: string; // ISO 3166-1 alpha-2
+  currency: string;
+  type: string; // 'mobile_money' | 'bank' | 'ussd' | 'qr' | 'wallet' — catalogue NotchPay évolutif, texte libre côté nous aussi (voir 0040_country_engine.sql)
+  logo?: string;
+  minimum?: number;
+  maximum?: number;
+}
+
+export interface NotchPayListChannelsResponse {
+  code: number;
+  status: string;
+  message: string;
+  channels: NotchPayResourceChannel[];
+}

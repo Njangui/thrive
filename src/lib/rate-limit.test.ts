@@ -25,9 +25,10 @@ describe("checkRateLimit — repli quand Upstash n'est pas configuré", () => {
     warnSpy.mockRestore();
   });
 
-  it("les deux types de clé (webhook/auth) passent par le même repli ouvert", async () => {
+  it("les trois types de clé (webhook/auth/waitlist) passent par le même repli ouvert", async () => {
     const { checkRateLimit } = await import("./rate-limit");
     expect(await checkRateLimit("webhook", "id-1")).toBeNull();
     expect(await checkRateLimit("auth", "id-2")).toBeNull();
+    expect(await checkRateLimit("waitlist", "id-3")).toBeNull();
   });
 });

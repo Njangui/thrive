@@ -44,22 +44,28 @@ export function addHoursToNaiveIso(naiveIso: string, hours: number): string {
 export async function createCampaignFromProducts(
   input: CreateCampaignFromProductsInput,
 ): Promise<CreateCampaignFromProductsResult> {
-  // Lot B (section 62) — exemple d'intégration du pattern d'enforcement
-  // dans un flux existant. Vérifié CÔTÉ SERVEUR, jamais seulement masqué
-  // au frontend. On compare le nombre de comptes distincts ciblés par
-  // CETTE campagne à `social_accounts` (limite "par action" plutôt que
-  // cumulative — voir entitlements-service.ts : il n'existe aujourd'hui
-  // aucune table "comptes sociaux connectés" dans ce projet pour compter
-  // un cumul réel, donc on ne devine pas ce modèle de données ; on borne
-  // ce qu'une seule campagne peut cibler à la fois, ce qui reste une
-  // vérification server-side réelle et utile). Absence de ligne
-  // `plan_entitlements` = illimité (canUseFeature), donc un tenant de
-  // démo créé avant ce lot n'est jamais cassé par cette vérification.
-  const distinctAccountCount = new Set(input.targets.map((t) => t.accountId)).size;
-  const entitlement = await canUseFeature(input.organizationId, "social_accounts", distinctAccountCount);
+  // Récupéré ici (avant l'entitlement) plutôt que plus bas dans la
+  // fonction — réutilisé à la fois pour le comptage réel des comptes
+  // connectés (ci-dessous) et pour la publication effective plus loin.
+  const socialProvider = await getSocialPublishingProvider(input.organizationId);
+
+  // CORRECTIF Lot 3 (audit master prompt §39) : la version précédente
+  // comptait les comptes DISTINCTS ciblés par CETTE campagne — un tenant
+  // pouvait rester sous la limite en créant plusieurs campagnes ciblant
+  // chacune 1 seul compte différent, sans jamais être bloqué même en
+  // connectant plus de comptes que son plan n'autorise. Compare
+  // maintenant le nombre RÉEL de comptes connectés (Zernio
+  // `GET /v1/accounts`, voir adapter.ts) à la limite du plan — cohérent
+  // avec "ne pas confondre nombre de publications et nombre de comptes
+  // connectés" (§39). Vérifié CÔTÉ SERVEUR, jamais seulement masqué au
+  // frontend. Absence de ligne `plan_entitlements` = illimité
+  // (canUseFeature), donc un tenant de démo créé avant ce lot n'est
+  // jamais cassé par cette vérification.
+  const connectedAccounts = await socialProvider.listAccounts();
+  const entitlement = await canUseFeature(input.organizationId, "social_accounts", connectedAccounts.length);
   if (!entitlement.allowed) {
     throw new QuotaExceededError(
-      "Vous avez atteint la limite de votre offre. Passez à Business pour publier sur davantage de comptes à la fois.",
+      "Vous avez atteint la limite de comptes sociaux connectés de votre offre. Déconnectez-en un ou passez à un forfait supérieur.",
     );
   }
 
@@ -104,8 +110,6 @@ export async function createCampaignFromProducts(
   if (productsError) {
     throw new Error(`Erreur lecture produits pour campagne: ${productsError.message}`);
   }
-
-  const socialProvider = await getSocialPublishingProvider(input.organizationId);
 
   const scheduled: string[] = [];
   const failed: { productId: string; error: string }[] = [];
@@ -201,11 +205,29 @@ export async function createCampaignFromProducts(
 }
 
 /**
- * Section 52 doc 2 : si un produit devient OUT_OF_STOCK, les publications
- * encore programmées le concernant doivent pouvoir passer à PAUSED plutôt
- * que de partir automatiquement. Appelé depuis catalog-service au moment
- * du flip de statut — jamais l'inverse (le catalogue reste la source de
- * vérité, section 2).
+ * Section 52 doc 2 (durcie par l'audit master prompt §43/§95) : si un
+ * produit devient OUT_OF_STOCK, les publications encore programmées le
+ * concernant doivent pouvoir passer à PAUSED plutôt que de partir
+ * automatiquement. Appelé depuis catalog-service au moment du flip de
+ * statut — jamais l'inverse (le catalogue reste la source de vérité,
+ * section 2).
+ *
+ * CORRECTIF Lot 3 : la version précédente marquait `paused` de façon
+ * INCONDITIONNELLE, même quand `cancelPost` échouait côté Zernio — un
+ * post resté réellement actif chez le fournisseur pouvait donc être
+ * affiché "en pause" par SME-OS et se publier quand même (exactement le
+ * cas que §95 interdit : "Une publication échouée [ici : une annulation
+ * échouée] ne doit pas être affichée comme publiée [ici : comme mise en
+ * pause]"). Désormais :
+ * - Aucun `provider_post_id` -> rien n'a jamais été transmis à Zernio,
+ *   `paused` en local est honnête sans appel provider.
+ * - `provider_post_id` présent + annulation confirmée -> `paused`.
+ * - `provider_post_id` présent + provider absent OU `cancelPost` en échec
+ *   -> le statut N'EST PAS changé (reste `scheduled`, donc toujours
+ *   visible comme actif dans l'UI — jamais un mensonge), `error_message`
+ *   posé pour tracer la tentative, et l'admin est notifié UNE fois pour
+ *   l'ensemble des posts concernés par CE produit (jamais un spam par
+ *   post individuel).
  */
 export async function pauseScheduledPostsForProduct(organizationId: string, productId: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
@@ -223,25 +245,58 @@ export async function pauseScheduledPostsForProduct(organizationId: string, prod
   }
   if (!posts || posts.length === 0) return;
 
-  let socialProvider;
+  let socialProvider: Awaited<ReturnType<typeof getSocialPublishingProvider>> | null = null;
   try {
     socialProvider = await getSocialPublishingProvider(organizationId);
-  } catch (providerError) {
-    // Pas de provider connecté = rien à annuler côté Zernio, mais on
-    // marque quand même côté interne pour rester cohérent avec le stock.
-    console.warn(`pauseScheduledPostsForProduct: aucun SocialPublishingProvider pour org ${organizationId}`);
+  } catch {
+    // Pas de provider connecté — voir la branche `!socialProvider`
+    // ci-dessous : un post avec provider_post_id reste alors `scheduled`,
+    // jamais marqué `paused` sans confirmation.
   }
 
+  let failedCancellations = 0;
+
   for (const post of posts) {
-    if (socialProvider && post.provider_post_id) {
-      try {
-        await socialProvider.cancelPost(post.provider_post_id);
-      } catch (cancelError) {
-        // Section 43 : erreur provider isolée, ne bloque pas le reste.
-        console.warn(`Annulation Zernio échouée pour post ${post.id}:`, cancelError);
-      }
+    if (!post.provider_post_id) {
+      // Jamais transmis à Zernio — rien à confirmer, sûr de marquer paused.
+      await supabase.from("social_posts").update({ status: "paused" }).eq("id", post.id);
+      continue;
     }
-    await supabase.from("social_posts").update({ status: "paused" }).eq("id", post.id);
+
+    if (!socialProvider) {
+      failedCancellations++;
+      await supabase
+        .from("social_posts")
+        .update({ error_message: "Rupture de stock détectée mais aucun canal social connecté pour annuler la publication programmée — vérifiez manuellement." })
+        .eq("id", post.id);
+      continue;
+    }
+
+    try {
+      await socialProvider.cancelPost(post.provider_post_id);
+      await supabase.from("social_posts").update({ status: "paused", error_message: null }).eq("id", post.id);
+    } catch (cancelError) {
+      failedCancellations++;
+      console.warn(`Annulation Zernio échouée pour post ${post.id}:`, cancelError);
+      await supabase
+        .from("social_posts")
+        .update({
+          error_message: `Rupture de stock détectée mais l'annulation automatique a échoué : ${
+            cancelError instanceof Error ? cancelError.message : String(cancelError)
+          }. Vérifiez/annulez manuellement sur le compte connecté.`,
+        })
+        .eq("id", post.id);
+    }
+  }
+
+  if (failedCancellations > 0) {
+    await notifyOrgAdmins({
+      organizationId,
+      title: "Action requise : publication(s) non annulée(s).",
+      body: `Un produit est passé en rupture de stock, mais ${failedCancellations} publication(s) programmée(s) le concernant n'ont pas pu être automatiquement annulées. Vérifiez-les dans Publications.`,
+      relatedEntityType: "product",
+      relatedEntityId: productId,
+    });
   }
 }
 

@@ -129,3 +129,19 @@ export interface ZernioInboxCommentsResponse {
   status?: string;
   comments: ZernioInboxComment[];
 }
+
+/**
+ * CONFIRMÉ (docs.zernio.com/multi-tenant, node SDK README, consultés
+ * 5 sept. 2026) : `{accounts: [{_id, platform, username}]}`. Champs
+ * au-delà de `_id`/`platform`/`username` non nécessaires ici — jamais
+ * lus, jamais devinés.
+ */
+export interface ZernioAccountSummaryRaw {
+  _id: string;
+  platform: string;
+  username?: string;
+}
+
+export interface ZernioListAccountsResponse {
+  accounts: ZernioAccountSummaryRaw[];
+}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkCronAuth } from "@/lib/cron-auth";
+import { verifyCronAuth } from "@/lib/cron-auth";
 import { processSubscriptionRenewals } from "@/application/services/subscription-payment-service";
 
 /**
@@ -10,15 +10,14 @@ import { processSubscriptionRenewals } from "@/application/services/subscription
  * externe (cron-job.org, Vercel Cron...) toutes les 1-4h — voir
  * docs/DEPLOYMENT.md.
  *
- * Lot 1 (audit sécurité) — protection partagée avec `process-broadcasts`
- * via `checkCronAuth` (une seule source de vérité, section 100/101) ;
- * refuse désormais l'appel (fail-safe) plutôt que de continuer sans
- * protection quand `CRON_SECRET` est absent EN PRODUCTION — voir
- * src/lib/cron-auth.ts.
+ * CORRECTIF Lot 3 (audit master prompt §65) : voir lib/cron-auth.ts pour
+ * le fail-safe production désormais partagé par toutes les routes cron.
  */
 async function handle(request: Request) {
-  const authError = checkCronAuth(request, "/api/cron/process-subscription-renewals");
-  if (authError) return authError;
+  const auth = verifyCronAuth(request);
+  if (!auth.authorized) {
+    return NextResponse.json(auth.body, { status: auth.status });
+  }
 
   try {
     const result = await processSubscriptionRenewals();

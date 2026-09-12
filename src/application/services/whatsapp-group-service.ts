@@ -820,6 +820,12 @@ async function processOneBroadcast(
     .map((id) => productsById.get(id))
     .filter((p): p is CatalogProductSummary => Boolean(p));
   const messageContent = formatGroupBroadcastMessage(orderedProducts);
+  // Lot 3 (audit master prompt §35) : une seule pièce jointe possible par
+  // message côté Zernio — jointe uniquement quand la diffusion ne porte
+  // que sur UN SEUL produit (sinon le texte les liste tous, mais joindre
+  // l'image d'un seul risquerait de laisser croire que c'est le seul
+  // concerné).
+  const broadcastImageUrl = orderedProducts.length === 1 ? (orderedProducts[0]?.imageUrl ?? null) : null;
 
   let provider: Awaited<ReturnType<typeof getMessagingProvider>> | null = null;
   let providerError: string | null = null;
@@ -870,6 +876,8 @@ async function processOneBroadcast(
         channel: "whatsapp",
         content: messageContent,
         externalThreadId: group.zernio_conversation_id,
+        attachmentUrl: broadcastImageUrl ?? undefined,
+        attachmentType: broadcastImageUrl ? "image" : undefined,
       });
       await supabase
         .from("group_broadcast_targets")
