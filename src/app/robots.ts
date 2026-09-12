@@ -32,7 +32,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
       allow: "/",
       // Surfaces authentifiées/internes — jamais destinées à l'indexation,
       // quel que soit le tenant.
-      disallow: ["/dashboard", "/admin", "/api", "/onboarding", "/login"],
+      disallow: ["/dashboard", "/admin", "/api", "/onboarding", "/login", "/reset-password"],
     },
     sitemap: `${origin}/sitemap.xml`,
   };
