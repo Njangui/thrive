@@ -40,7 +40,16 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https://*.supabase.co https://picsum.photos",
       "font-src 'self'",
-      "connect-src 'self'",
+      // `connect-src` doit inclure Supabase : le client navigateur
+      // (browser-client.ts) appelle directement `https://<projet>.supabase.co`
+      // (Auth + REST) depuis le front — un domaine différent de l'origine
+      // de l'app. Sans cette entrée, CSP bloque silencieusement CHAQUE appel
+      // fetch vers Supabase émis depuis le navigateur (login, signup, reset
+      // password...), qui échoue côté JS avec `TypeError: Failed to fetch` —
+      // pas une erreur réseau, un blocage CSP. `wss://*.supabase.co` non
+      // ajouté : Supabase Realtime (websocket) n'est utilisé nulle part dans
+      // le projet actuellement — à ajouter si un futur lot l'introduit.
+      "connect-src 'self' https://*.supabase.co",
       "form-action 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
