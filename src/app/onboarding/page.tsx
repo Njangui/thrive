@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserOrganizations } from "@/application/services/auth-service";
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
-import { listSignupEligibleCountries } from "@/application/services/country-service";
+import { listSignupEligibleCountries, type PublicCountry } from "@/application/services/country-service";
 import { OnboardingWizard } from "./onboarding-wizard";
 
 /**
@@ -25,7 +25,21 @@ import { OnboardingWizard } from "./onboarding-wizard";
 export default async function OnboardingPage() {
   const orgs = await getCurrentUserOrganizations();
   const org = orgs[0];
-  const countries = await listSignupEligibleCountries();
+
+  // Lecture "safe" ICI : un souci ponctuel sur `countries` (ex: migration
+  // Country Engine 0040_country_engine.sql pas encore appliquée en
+  // production, ou incident DB transitoire) ne doit jamais empêcher un
+  // nouvel utilisateur d'accéder au wizard d'onboarding — même philosophie
+  // que getCountrySafe() dans country-service.ts (section 9 : continuer à
+  // fonctionner plutôt que planter), appliquée ici au point d'entrée public.
+  // `listSignupEligibleCountries()` elle-même continue de lever pour ses
+  // autres appelants (ex: Super Admin), où l'erreur doit rester visible.
+  let countries: PublicCountry[] = [];
+  try {
+    countries = await listSignupEligibleCountries();
+  } catch (err) {
+    console.error("OnboardingPage: listSignupEligibleCountries a échoué:", err);
+  }
 
   if (!org) {
     return (
