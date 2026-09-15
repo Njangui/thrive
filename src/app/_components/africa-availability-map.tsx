@@ -7,7 +7,7 @@ import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps
 import type { Topology } from "topojson-specification";
 import type { FeatureCollection, GeoJsonProperties, Geometry } from "geojson";
 import type { PublicCountry } from "@/application/services/country-service";
-import { isoCodeToFlagEmoji } from "@/application/services/country-service";
+import { isoCodeToFlagEmoji } from "@/lib/country-flag";
 import africaTopologyRaw from "@/data/africa-map-topology.json";
 
 /**

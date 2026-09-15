@@ -175,15 +175,14 @@ export async function joinCountryWaitlist(params: {
 }
 
 /**
- * Emoji drapeau calculé depuis le code ISO (algorithme standard des
- * "regional indicator symbols" Unicode) — repli d'affichage quand
- * `flagUrl` est absent (pays saisi manuellement, pas encore synchronisé
- * avec une image NotchPay). Jamais stocké en base : calculé à la
- * volée, purement côté présentation.
+ * Emoji drapeau — déplacé dans `@/lib/country-flag` (fonction pure, sans
+ * dépendance serveur) et ré-exporté ici pour ne rien casser côté Server
+ * Components qui l'importaient déjà depuis ce fichier. Un composant
+ * CLIENT (ex: africa-availability-map.tsx) doit impérativement importer
+ * directement depuis `@/lib/country-flag`, jamais depuis ce fichier :
+ * importer quoi que ce soit d'ici entraîne aussi `getSupabaseServiceClient`
+ * et donc `env.ts` (validation stricte des secrets serveur) dans le
+ * bundle navigateur, où ces variables n'existent pas — d'où le crash
+ * "Invalid environment configuration" observé en production.
  */
-export function isoCodeToFlagEmoji(isoCode: string): string {
-  const upper = isoCode.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(upper)) return "🏳️";
-  const codePoints = [...upper].map((c) => 127397 + c.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-}
+export { isoCodeToFlagEmoji } from "@/lib/country-flag";
