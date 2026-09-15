@@ -26,14 +26,13 @@ export default async function OnboardingPage() {
   const orgs = await getCurrentUserOrganizations();
   const org = orgs[0];
 
-  // Lecture "safe" ICI : un souci ponctuel sur `countries` (ex: migration
-  // Country Engine 0040_country_engine.sql pas encore appliquée en
-  // production, ou incident DB transitoire) ne doit jamais empêcher un
+  // Lecture "safe" ICI : un souci ponctuel sur `countries` (migration
+  // Country Engine, incident DB transitoire...) ne doit jamais empêcher un
   // nouvel utilisateur d'accéder au wizard d'onboarding — même philosophie
-  // que getCountrySafe() dans country-service.ts (section 9 : continuer à
-  // fonctionner plutôt que planter), appliquée ici au point d'entrée public.
-  // `listSignupEligibleCountries()` elle-même continue de lever pour ses
-  // autres appelants (ex: Super Admin), où l'erreur doit rester visible.
+  // que getCountrySafe() dans country-service.ts, appliquée ici au point
+  // d'entrée public. `listSignupEligibleCountries()` elle-même continue de
+  // lever pour ses autres appelants (ex: Super Admin), où l'erreur doit
+  // rester visible.
   let countries: PublicCountry[] = [];
   try {
     countries = await listSignupEligibleCountries();
@@ -43,7 +42,7 @@ export default async function OnboardingPage() {
 
   if (!org) {
     return (
-      <main className="min-h-screen bg-paper px-5">
+      <main className="min-h-screen bg-[#F7F6FD] px-5">
         <OnboardingWizard countries={countries} />
       </main>
     );
@@ -58,7 +57,7 @@ export default async function OnboardingPage() {
   const resumeStep = Math.min(Math.max(status.step, 2), 6);
 
   return (
-    <main className="min-h-screen bg-paper px-5">
+    <main className="min-h-screen bg-[#F7F6FD] px-5">
       <OnboardingWizard countries={countries} initialStep={resumeStep} initialOrganizationId={org.organizationId} />
     </main>
   );

@@ -103,13 +103,13 @@ export default async function CommentsPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Commentaires</h1>
-        <p className="text-sm text-muted">Répondez aux commentaires laissés sur vos publications.</p>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Commentaires</h1>
+        <p className="text-sm text-slate-500">Répondez aux commentaires laissés sur vos publications.</p>
       </div>
 
-      {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
+      {error && <p className="adm-alert-danger">{error}</p>}
       {synced !== undefined && !error && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-ink">
+        <p className="rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-navy-900">
           {Number(synced) > 0
             ? `${synced} commentaire${Number(synced) > 1 ? "s" : ""} synchronisé${Number(synced) > 1 ? "s" : ""}.`
             : "Aucun nouveau commentaire pour cette publication."}
@@ -118,19 +118,19 @@ export default async function CommentsPage({
 
       {syncablePosts.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium text-ink">Vérifier une publication</h2>
+          <h2 className="text-sm font-medium text-navy-900">Vérifier une publication</h2>
           <div className="flex flex-col gap-2">
             {syncablePosts.map((post) => (
               <form
                 key={post.id}
                 action={syncAction}
-                className="flex items-center justify-between gap-2 rounded-brand border border-ink/10 bg-white px-4 py-2.5"
+                className="flex items-center justify-between gap-2 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] px-4 py-2.5"
               >
                 <input type="hidden" name="postId" value={post.id} />
-                <p className="truncate text-sm text-muted">{post.content || "(publication sans texte)"}</p>
+                <p className="truncate text-sm text-slate-500">{post.content || "(publication sans texte)"}</p>
                 <SubmitButton
                   pendingLabel="Vérification..."
-                  className="shrink-0 rounded-full border border-ink/15 px-3 py-1.5 text-xs font-medium text-muted hover:bg-ink/5 disabled:opacity-60"
+                  className="shrink-0 rounded-full border border-navy-900/10 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-navy-900/5 disabled:opacity-60"
                 >
                   Vérifier les commentaires
                 </SubmitButton>
@@ -141,7 +141,7 @@ export default async function CommentsPage({
       )}
 
       {sortedComments.length === 0 ? (
-        <p className="text-sm text-muted">
+        <p className="text-sm text-slate-500">
           Aucun commentaire pour l&apos;instant. Publiez sur vos réseaux sociaux puis vérifiez les commentaires
           ci-dessus.
         </p>

@@ -34,23 +34,23 @@ export function CsvImportForm({ organizationId }: { organizationId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 rounded-brand border border-ink/10 bg-white p-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
       <p className="text-sm font-medium">Import en masse (CSV)</p>
-      <p className="text-xs text-muted">Colonnes : name, price, category, description, stock, status</p>
+      <p className="text-xs text-slate-500">Colonnes : name, price, category, description, stock, status</p>
       <input type="file" name="file" accept=".csv" required className="text-sm" />
       <button
         type="submit"
         disabled={status === "uploading"}
-        className="w-fit rounded-brand bg-ink px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-fit rounded-xl bg-navy-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
         {status === "uploading" ? "Import en cours..." : "Importer"}
       </button>
       {result && (
-        <p className="text-sm text-leaf">
+        <p className="text-sm text-violet-600">
           {result.created} produit(s) créé(s){result.failed > 0 ? `, ${result.failed} échec(s)` : ""}.
         </p>
       )}
-      {errorMessage && <p className="text-sm text-clay">{errorMessage}</p>}
+      {errorMessage && <p className="text-sm text-danger-600">{errorMessage}</p>}
     </form>
   );
 }

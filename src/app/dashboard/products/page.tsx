@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { resolvePrimaryImageUrl } from "@/application/services/catalog-service";
 import { CsvImportForm } from "./csv-import-form";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -37,7 +38,9 @@ export default async function ProductsPage({
     count,
   } = await supabase
     .from("products")
-    .select("id, name, unit_price, current_stock, status", { count: "exact" })
+    .select("id, name, sku, unit_price, current_stock, status, categories(name), product_images(url, position)", {
+      count: "exact",
+    })
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .range(from, to);
@@ -48,29 +51,35 @@ export default async function ProductsPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Catalogue</h1>
+        <div>
+          <h1 className="font-jakarta text-2xl font-bold tracking-tight">Catalogue</h1>
+          <Link href="/dashboard/products/categories" className="text-xs font-medium text-violet-600 hover:underline">
+            Gérer les catégories
+          </Link>
+        </div>
         <Link
           href="/dashboard/products/new"
-          className="rounded-brand bg-leaf px-4 py-2 text-sm font-medium text-white"
+          className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white"
         >
           + Ajouter un produit
         </Link>
       </div>
 
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="adm-alert-success">{success}</p>
       )}
 
       <CsvImportForm organizationId={organizationId} />
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
         {(products ?? []).length === 0 ? (
-          <p className="p-6 text-sm text-muted">Aucun produit pour l&apos;instant.</p>
+          <p className="p-6 text-sm text-slate-500">Aucun produit pour l&apos;instant.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-4 py-2">Nom</th>
+                <th className="px-4 py-2" colSpan={2}>Produit</th>
+                <th className="px-4 py-2">Catégorie</th>
                 <th className="px-4 py-2">Prix</th>
                 <th className="px-4 py-2">Stock</th>
                 <th className="px-4 py-2">Statut</th>
@@ -78,34 +87,54 @@ export default async function ProductsPage({
               </tr>
             </thead>
             <tbody>
-              {(products ?? []).map((p) => (
-                <tr key={p.id} className="border-b border-ink/5 last:border-0">
-                  <td className="px-4 py-2">{p.name}</td>
-                  <td className="px-4 py-2">{Number(p.unit_price).toLocaleString("fr-FR")}</td>
-                  <td className="px-4 py-2">{p.current_stock}</td>
-                  <td className="px-4 py-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        p.status === "active" ? "bg-leaf/10 text-leaf" : "bg-ink/10 text-muted"
-                      }`}
-                    >
-                      {STATUS_LABELS[p.status] ?? p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <Link href={`/dashboard/products/${p.id}/edit`} className="text-xs font-medium text-leaf hover:underline">
-                      Modifier
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {(products ?? []).map((p) => {
+                const imageUrl = resolvePrimaryImageUrl(
+                  (p as unknown as { product_images?: { url: string; position: number }[] }).product_images,
+                );
+                const categoryName = (p as unknown as { categories?: { name?: string } }).categories?.name ?? null;
+                return (
+                  <tr key={p.id} className="border-b border-navy-900/5 last:border-0">
+                    <td className="py-2 pl-4">
+                      {imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={imageUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                      ) : (
+                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy-900/5 text-xs text-slate-400">
+                          —
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2">
+                      <p className="font-medium text-navy-900">{p.name}</p>
+                      {p.sku && <p className="text-xs adm-muted">SKU : {p.sku}</p>}
+                    </td>
+                    <td className="px-4 py-2 text-slate-600">{categoryName ?? "—"}</td>
+                    <td className="px-4 py-2">{Number(p.unit_price).toLocaleString("fr-FR")}</td>
+                    <td className="px-4 py-2">{p.current_stock}</td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          p.status === "active" ? "bg-success-50 text-success-700" : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {STATUS_LABELS[p.status] ?? p.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Link href={`/dashboard/products/${p.id}/edit`} className="text-xs font-medium text-violet-600 hover:underline">
+                        Modifier
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted">
+        <div className="flex items-center justify-between text-sm text-slate-500">
           <p>
             Page {page} sur {totalPages} — {totalCount} produit{totalCount > 1 ? "s" : ""} au total
           </p>
@@ -113,7 +142,7 @@ export default async function ProductsPage({
             {page > 1 && (
               <Link
                 href={`/dashboard/products?page=${page - 1}`}
-                className="rounded-brand border border-ink/15 px-3 py-1.5 font-medium hover:border-ink/30"
+                className="rounded-xl border border-navy-900/10 px-3 py-1.5 font-medium hover:border-navy-900/20"
               >
                 Précédent
               </Link>
@@ -121,7 +150,7 @@ export default async function ProductsPage({
             {page < totalPages && (
               <Link
                 href={`/dashboard/products?page=${page + 1}`}
-                className="rounded-brand border border-ink/15 px-3 py-1.5 font-medium hover:border-ink/30"
+                className="rounded-xl border border-navy-900/10 px-3 py-1.5 font-medium hover:border-navy-900/20"
               >
                 Suivant
               </Link>

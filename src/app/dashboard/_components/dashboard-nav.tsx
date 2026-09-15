@@ -2,158 +2,201 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import type { ModuleKey } from "@/application/config/modules";
+import type { CreditStatus } from "@/application/services/ai-credits-service";
+import {
+  IconGrid,
+  IconTag,
+  IconBriefcase,
+  IconBox,
+  IconUsers,
+  IconClock,
+  IconChat,
+  IconComment,
+  IconGroupChat,
+  IconMegaphone,
+  IconPlug,
+  IconGlobe,
+  IconBot,
+  IconBanknote,
+  IconHelp,
+  IconCard,
+  IconPuzzle,
+} from "@/app/_components/app-icons";
 
 /**
- * Lot 2 (master prompt §48-50/93) — remplace l'ancienne nav plate (15
- * liens horizontaux dans le header, aucune adaptation mobile) par une
- * sidebar groupée sur desktop et un tiroir (drawer) sur mobile. Un seul
- * composant client (pas deux qui se partageraient un état d'ouverture)
- * pour garder ça simple — la liste des liens elle-même reste une donnée
- * statique, aucun besoin de la faire remonter du serveur.
+ * Sidebar du dashboard marchand — habillage repris de `AdminSidebar`
+ * (chantier d'unification design, sept. 2026) : mêmes classes
+ * `adm-sidebar-link`/`adm-sidebar-link-active`/`adm-sidebar-group-label`,
+ * même structure navy `#0E1130` + item actif violet `#5027B9`.
+ *
+ * Remplace l'ancienne nav horizontale plate de `layout.tsx` (17 liens
+ * dans un `<header>`, illisible dès qu'on dépasse ~8 sections) par les 4
+ * groupes ci-dessous — regroupement thématique nouveau (l'ancien
+ * `NAV_ITEMS` était une liste plate), mais les 17 routes et leurs libellés
+ * sont préservés à l'identique, rien n'est renommé ni retiré.
+ *
+ * `module` (optionnel par item) branche la nav sur le système de modules
+ * PAR SECTEUR D'ACTIVITÉ qui existe déjà (`tenant_modules`/
+ * `INDUSTRY_MODULE_PRESETS`, voir `application/config/modules.ts`) mais
+ * n'était utilisé nulle part côté UI jusqu'ici : un item sans `module`
+ * (Vue d'ensemble, Équipe, Abonnement, Add-ons) est un réglage de compte,
+ * toujours visible ; un item avec `module` disparaît si ce module est
+ * désactivé pour l'organisation — c'est le mécanisme "les sections
+ * changent selon le domaine choisi à la création". `inventory`/
+ * `analytics` n'ont pas de page dédiée : le stock vit dans Catalogue, pas
+ * de gate séparé.
  */
-
-interface NavGroup {
-  label: string;
-  items: { href: string; label: string }[];
-}
-
-const NAV_GROUPS: NavGroup[] = [
+export const DASHBOARD_NAV_GROUPS: {
+  label: string | null;
+  items: { href: string; label: string; icon: (p: { className?: string }) => JSX.Element; module?: ModuleKey }[];
+}[] = [
+  {
+    label: null,
+    items: [{ href: "/dashboard", label: "Vue d'ensemble", icon: IconGrid }],
+  },
   {
     label: "Ventes",
     items: [
-      { href: "/dashboard/products", label: "Catalogue" },
-      { href: "/dashboard/services", label: "Services" },
-      { href: "/dashboard/orders", label: "Commandes" },
-      { href: "/dashboard/leads", label: "Clients" },
-      { href: "/dashboard/appointments", label: "Rendez-vous" },
+      { href: "/dashboard/products", label: "Catalogue", icon: IconTag, module: "catalog" },
+      { href: "/dashboard/services", label: "Prestations", icon: IconBriefcase, module: "catalog" },
+      { href: "/dashboard/orders", label: "Commandes", icon: IconBox, module: "orders" },
+      { href: "/dashboard/leads", label: "Clients", icon: IconUsers, module: "crm" },
+      { href: "/dashboard/appointments", label: "Rendez-vous", icon: IconClock, module: "appointments" },
     ],
   },
   {
     label: "Communication",
     items: [
-      { href: "/dashboard/conversations", label: "Conversations" },
-      { href: "/dashboard/groups", label: "Groupes WhatsApp" },
-      { href: "/dashboard/comments", label: "Commentaires" },
+      { href: "/dashboard/conversations", label: "Conversations", icon: IconChat, module: "whatsapp" },
+      { href: "/dashboard/channels", label: "Canaux", icon: IconPlug, module: "whatsapp" },
+      { href: "/dashboard/comments", label: "Commentaires", icon: IconComment, module: "marketing" },
+      { href: "/dashboard/groups", label: "Groupes WhatsApp", icon: IconGroupChat, module: "whatsapp" },
+      { href: "/dashboard/marketing", label: "Publications", icon: IconMegaphone, module: "marketing" },
     ],
-  },
-  {
-    label: "Marketing",
-    items: [{ href: "/dashboard/marketing", label: "Publications" }],
   },
   {
     label: "Mon entreprise",
     items: [
-      { href: "/dashboard/site", label: "Mon site" },
-      { href: "/dashboard/ai", label: "Assistant IA" },
-      { href: "/dashboard/finance", label: "Finance" },
+      { href: "/dashboard/site", label: "Mon site", icon: IconGlobe, module: "landing" },
+      { href: "/dashboard/ai", label: "Assistant IA", icon: IconBot, module: "ai" },
+      { href: "/dashboard/finance", label: "Finance", icon: IconBanknote, module: "finance" },
+      { href: "/dashboard/faq", label: "FAQ", icon: IconHelp, module: "faq" },
+      { href: "/dashboard/team", label: "Équipe", icon: IconUsers },
     ],
   },
   {
     label: "Système",
     items: [
-      { href: "/dashboard/team", label: "Équipe" },
-      { href: "/dashboard/subscription", label: "Mon abonnement" },
-      { href: "/dashboard/addons", label: "Add-ons" },
+      { href: "/dashboard/subscription", label: "Mon abonnement", icon: IconCard },
+      { href: "/dashboard/addons", label: "Add-ons", icon: IconPuzzle },
     ],
   },
 ];
 
-function isActive(pathname: string, href: string): boolean {
-  return href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
+export function isActive(pathname: string | null, href: string): boolean {
+  if (href === "/dashboard") return pathname === "/dashboard";
+  return pathname?.startsWith(href) ?? false;
 }
 
-function NavLink({ href, label, onNavigate }: { href: string; label: string; onNavigate?: () => void }) {
-  const pathname = usePathname();
-  const active = isActive(pathname, href);
+/** Groupes filtrés par modules activés, groupes devenus vides retirés
+ * entièrement (jamais un titre "GESTION" affiché au-dessus de rien). */
+export function useVisibleNavGroups(enabledModules: ModuleKey[]) {
+  return DASHBOARD_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.module || enabledModules.includes(item.module)),
+  })).filter((group) => group.items.length > 0);
+}
 
+function CreditsWidget({ credits }: { credits: CreditStatus }) {
+  if (credits.includedCredits === -1) return null;
+  const pct = credits.includedCredits > 0 ? Math.min(100, Math.round((credits.usedCredits / credits.includedCredits) * 100)) : 0;
   return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
-      className={`block rounded-brand px-3 py-2 text-sm transition-colors ${
-        active ? "bg-leaf/10 font-medium text-leaf" : "text-ink/80 hover:bg-ink/5 hover:text-ink"
-      }`}
-    >
-      {label}
+    <div className="mb-2 rounded-xl bg-white/5 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Crédits IA</p>
+      <p className="mt-1 font-jakarta text-sm font-semibold text-white">
+        {credits.usedCredits} / {credits.includedCredits} utilisés
+      </p>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div className={`h-full rounded-full ${pct >= 90 ? "bg-warning-500" : "bg-violet-500"}`} style={{ width: `${pct}%` }} />
+      </div>
+      <Link href="/dashboard/subscription" className="mt-2 inline-block text-xs font-medium text-violet-300 hover:underline">
+        Voir les détails
+      </Link>
+    </div>
+  );
+}
+
+function UserCard({ displayName, roleLabel, initials }: { displayName: string; roleLabel: string; initials: string }) {
+  return (
+    <Link href="/dashboard/team" className="flex items-center gap-2.5 rounded-xl px-2 py-2 transition hover:bg-white/5">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 font-jakarta text-xs font-semibold text-white">
+        {initials}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-white">{displayName}</span>
+        <span className="block truncate text-xs text-white/40">{roleLabel}</span>
+      </span>
     </Link>
   );
 }
 
-function NavContent({ onNavigate }: { onNavigate?: () => void }) {
-  return (
-    <nav className="flex flex-col gap-5">
-      <NavLink href="/dashboard" label="Vue d'ensemble" onNavigate={onNavigate} />
-      {NAV_GROUPS.map((group) => (
-        <div key={group.label}>
-          <p className="px-3 text-xs font-semibold uppercase tracking-wide text-muted">{group.label}</p>
-          <div className="mt-1 flex flex-col gap-0.5">
-            {group.items.map((item) => (
-              <NavLink key={item.href} href={item.href} label={item.label} onNavigate={onNavigate} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </nav>
-  );
-}
-
-export function DashboardSidebar() {
-  return (
-    <aside className="hidden w-60 shrink-0 border-r border-ink/10 bg-white px-3 py-6 md:block">
-      <NavContent />
-    </aside>
-  );
-}
-
-export function MobileNavDrawer() {
-  const [isOpen, setIsOpen] = useState(false);
+export function DashboardSidebar({
+  organizationName,
+  enabledModules,
+  credits,
+  displayName,
+  roleLabel,
+  initials,
+}: {
+  organizationName: string;
+  enabledModules: ModuleKey[];
+  credits: CreditStatus;
+  displayName: string;
+  roleLabel: string;
+  initials: string;
+}) {
   const pathname = usePathname();
-
-  // Ferme automatiquement le tiroir après un changement de page (ex:
-  // navigation par le bouton retour) — évite un tiroir resté ouvert par
-  // erreur au-dessus du nouveau contenu.
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+  const groups = useVisibleNavGroups(enabledModules);
 
   return (
-    <div className="md:hidden">
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        aria-label="Ouvrir le menu"
-        aria-expanded={isOpen}
-        className="flex h-9 w-9 items-center justify-center rounded-brand text-ink hover:bg-ink/5"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+    <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">
+      <Link href="/dashboard" className="mb-4 flex items-center gap-2.5 rounded-xl px-2 py-1.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600 font-jakarta text-sm font-bold text-white">
+          S
+        </span>
+        <span className="flex flex-col leading-tight">
+          <span className="font-jakarta text-sm font-bold text-white">SME-OS</span>
+          <span className="max-w-[160px] truncate text-[11px] font-medium text-white/40">{organizationName}</span>
+        </span>
+      </Link>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
-          <div className="fixed inset-0 bg-ink/40" onClick={() => setIsOpen(false)} aria-hidden="true" />
-          <div className="relative flex h-full w-72 max-w-[80vw] flex-col overflow-y-auto bg-white px-3 py-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between px-3">
-              <span className="font-display text-sm font-semibold">Menu</span>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                aria-label="Fermer le menu"
-                className="flex h-8 w-8 items-center justify-center rounded-brand text-muted hover:bg-ink/5"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </div>
-            <NavContent onNavigate={() => setIsOpen(false)} />
+      <nav className="flex-1 overflow-y-auto pb-2">
+        {groups.map((group) => (
+          <div key={group.label ?? "root"}>
+            {group.label ? <p className="adm-sidebar-group-label">{group.label}</p> : null}
+            <ul className="flex flex-col gap-1">
+              {group.items.map((item) => {
+                const active = isActive(pathname, item.href);
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link href={item.href} className={active ? "adm-sidebar-link-active" : "adm-sidebar-link"}>
+                      <Icon className="h-[18px] w-[18px] shrink-0" />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-        </div>
-      )}
-    </div>
+        ))}
+      </nav>
+
+      <div className="mt-2 border-t border-white/5 pt-3">
+        <CreditsWidget credits={credits} />
+        <UserCard displayName={displayName} roleLabel={roleLabel} initials={initials} />
+      </div>
+    </aside>
   );
 }

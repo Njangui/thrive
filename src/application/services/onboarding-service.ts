@@ -6,6 +6,8 @@ import { seedDefaultExpenseCategories } from "./finance-service";
 import { createTrialSubscription } from "./plans-repository";
 import { initializeCreditBalance } from "./ai-credits-service";
 import { validateCountryForSignup } from "./country-service";
+import { attributeReferral } from "./affiliate-service";
+import { seedDefaultCategories } from "./catalog-service";
 
 export interface CreateOrganizationInput {
   name: string;
@@ -31,7 +33,19 @@ export interface CreateOrganizationInput {
  * "member of org" ne peut s'appliquer) mais vérifie l'authentification
  * via la session cookie AVANT toute écriture (section 35).
  */
-export async function createOrganization(input: CreateOrganizationInput): Promise<{ organizationId: string }> {
+/**
+ * `referralCookieValue` — voir affiliate-service.ts::attributeReferral :
+ * lu par l'APPELANT (Server Action, onboarding-actions.ts) via
+ * `cookies()` puis transmis ici tel quel, jamais lu directement dans ce
+ * fichier. `next/headers` ne fonctionne que dans un vrai contexte de
+ * requête Next.js — l'appeler ici casserait
+ * onboarding-service.test.ts (exécuté en simple script Node par
+ * vitest, hors tout contexte de requête).
+ */
+export async function createOrganization(
+  input: CreateOrganizationInput,
+  referralCookieValue?: string | null,
+): Promise<{ organizationId: string }> {
   if (!input.name.trim()) {
     throw new ValidationError("Le nom de l'entreprise est requis");
   }
@@ -120,6 +134,19 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
   // initializeCreditBalance pour que la résolution du plan soit correcte.
   await createTrialSubscription(org.id, "starter");
   await initializeCreditBalance(org.id);
+
+  // Catégories produit/service par défaut (section design, sept. 2026 —
+  // "les catégories doivent être sélectionnées selon le secteur d'activité,
+  // pas retapées à chaque produit") — même moment que le seed des modules
+  // ci-dessus, distinct de `seedDefaultExpenseCategories` (dépenses de
+  // comptabilité, table différente). Voir catalog-service.ts::seedDefaultCategories.
+  await seedDefaultCategories(org.id, input.industry ?? null);
+
+  // Programme d'affiliation (0044) — best-effort par contrat de fonction
+  // (voir affiliate-service.ts) : jamais lu via next/headers ici (voir
+  // JSDoc de la fonction) — un échec ne doit JAMAIS faire échouer la
+  // création d'organisation elle-même.
+  await attributeReferral(org.id, user.id, referralCookieValue);
 
   return { organizationId: org.id };
 }

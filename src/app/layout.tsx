@@ -19,6 +19,16 @@ const bodyFont = { variable: "--font-body" };
  * réseau est lent (cohérent avec le choix déjà fait ailleurs dans le
  * projet de ne jamais dépendre d'une ressource externe pour le rendu
  * initial).
+ *
+ * `<body>` reste sur le thème neutre `bg-paper font-body text-ink`
+ * (volontairement PAS passé en violet/navy lors du chantier d'unification
+ * design, sept. 2026) : c'est le fallback hérité par la vitrine publique
+ * d'un tenant et par `error.tsx`/`not-found.tsx` (voir leurs notes), qui
+ * s'appliquent à tous les contextes sans distinction. Chaque zone
+ * réellement unifiée (landing marketing, admin, dashboard, login/
+ * onboarding/invite, pages légales) impose son propre fond via
+ * `.mkt-shell`/`.adm-shell` sur son wrapper — ce défaut de `<body>` ne les
+ * concerne donc pas en pratique.
  */
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],

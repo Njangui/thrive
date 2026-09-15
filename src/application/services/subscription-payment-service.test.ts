@@ -36,6 +36,7 @@ import {
   cancelPendingPayment,
   handlePaymentWebhook,
   processSubscriptionRenewals,
+  reconcileStalePayments,
 } from "./subscription-payment-service";
 import { listPlans, resolvePlanPriceForCountry } from "./plans-repository";
 import { notifyOrgAdmins } from "./notification-service";
@@ -543,5 +544,126 @@ describe("cancelPendingPayment", () => {
 
     await expect(cancelPendingPayment("org-1", "pay-6")).rejects.toThrow();
     expect(mockCancelPayment).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Repasse fiabilité P0 (07/09/2026, section 62 de la mission) — filet de
+ * sécurité pour un paiement dont le webhook NotchPay n'est jamais
+ * arrivé du tout (pas un rejeu, une absence totale de livraison).
+ * Mock dédié : la requête multi-lignes de `reconcileStalePayments`
+ * (`select().eq().lt().not()`, pas de `.maybeSingle()`) a une forme
+ * différente du mock stateful single-row utilisé ci-dessus.
+ */
+describe("reconcileStalePayments (section 62)", () => {
+  interface StaleRow {
+    id: string;
+    organization_id: string;
+    payment_type: "plan_subscription" | "addon";
+    plan_key: string | null;
+    addon_key: string | null;
+    addon_quantity: number | null;
+    amount_fcfa: number;
+    provider_reference: string;
+    status: "pending" | "completed" | "failed";
+  }
+
+  function configureStalePaymentsMock(rows: StaleRow[]) {
+    const states = new Map(rows.map((r) => [r.id, { ...r }]));
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "subscription_payments") {
+        let filterByReference: string | undefined;
+        let pendingUpdate: Record<string, unknown> | null = null;
+
+        const builder = {
+          select: () => builder,
+          eq: (column: string, value: string) => {
+            if (column === "provider_reference") filterByReference = value;
+            if (column === "status" && pendingUpdate) {
+              // garde d'idempotence de l'update, comme le mock ci-dessus
+            }
+            return builder;
+          },
+          lt: () => builder,
+          not: () => builder,
+          update: (patch: Record<string, unknown>) => {
+            pendingUpdate = patch;
+            return builder;
+          },
+          maybeSingle: () => {
+            const row = filterByReference ? [...states.values()].find((r) => r.provider_reference === filterByReference) : undefined;
+            if (pendingUpdate && row && row.status === "pending") {
+              Object.assign(row, pendingUpdate);
+              return Promise.resolve({ data: { id: row.id }, error: null });
+            }
+            if (pendingUpdate) return Promise.resolve({ data: null, error: null });
+            return Promise.resolve({ data: row ? { ...row } : null, error: null });
+          },
+          // `await` direct du builder = la requête liste de reconcileStalePayments.
+          then: (onFulfilled: (v: { data: unknown; error: null }) => unknown) =>
+            Promise.resolve({ data: [...states.values()].filter((r) => r.status === "pending"), error: null }).then(
+              onFulfilled,
+            ),
+        };
+        return builder;
+      }
+      if (table === "organization_subscriptions") return { upsert: () => Promise.resolve({ error: null }) };
+      if (table === "audit_logs") return { insert: () => Promise.resolve({ error: null }) };
+      return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
+    });
+
+    return { getStates: () => states };
+  }
+
+  const BASE_ROW = {
+    payment_type: "plan_subscription" as const,
+    plan_key: "starter",
+    addon_key: null,
+    addon_quantity: null,
+    amount_fcfa: 5000,
+    status: "pending" as const,
+  };
+
+  it("réconcilie plusieurs paiements bloqués : succès, échec et toujours en attente indépendamment", async () => {
+    configureStalePaymentsMock([
+      { ...BASE_ROW, id: "p1", organization_id: "org-1", provider_reference: "ref-1" },
+      { ...BASE_ROW, id: "p2", organization_id: "org-2", provider_reference: "ref-2" },
+      { ...BASE_ROW, id: "p3", organization_id: "org-3", provider_reference: "ref-3" },
+    ]);
+    mockVerifyPayment.mockImplementation(async (reference: string) => {
+      if (reference === "ref-1") return { status: "succeeded" };
+      if (reference === "ref-2") return { status: "failed" };
+      return { status: "pending" };
+    });
+
+    const result = await reconcileStalePayments();
+
+    expect(result).toEqual({ checked: 3, completed: 1, failed: 1, stillPending: 1 });
+  });
+
+  it("une erreur de réconciliation sur un paiement n'empêche jamais les suivants (jamais de perte silencieuse, section 21)", async () => {
+    configureStalePaymentsMock([
+      { ...BASE_ROW, id: "p1", organization_id: "org-1", provider_reference: "ref-boom" },
+      { ...BASE_ROW, id: "p2", organization_id: "org-2", provider_reference: "ref-ok" },
+    ]);
+    mockVerifyPayment.mockImplementation(async (reference: string) => {
+      if (reference === "ref-boom") throw new Error("NotchPay indisponible");
+      return { status: "succeeded" };
+    });
+
+    const result = await reconcileStalePayments();
+
+    expect(result.checked).toBe(2);
+    expect(result.completed).toBe(1); // ref-ok traité malgré l'échec de ref-boom
+  });
+
+  it("ne fait rien s'il n'y a aucun paiement bloqué", async () => {
+    configureStalePaymentsMock([]);
+
+    const result = await reconcileStalePayments();
+
+    expect(result).toEqual({ checked: 0, completed: 0, failed: 0, stillPending: 0 });
+    expect(mockVerifyPayment).not.toHaveBeenCalled();
   });
 });

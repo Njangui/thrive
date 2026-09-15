@@ -123,29 +123,29 @@ export default async function TeamPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Équipe</h1>
-        <p className="mt-1 text-sm text-muted">Invitez des collègues et gérez leurs accès.</p>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Équipe</h1>
+        <p className="mt-1 text-sm text-slate-500">Invitez des collègues et gérez leurs accès.</p>
       </div>
 
-      {success && <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>}
+      {success && <p className="adm-alert-success">{success}</p>}
       {error && (
-        <div className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
+        <div className="adm-alert-danger">
           <p>{error}</p>
           {inviteUrl && (
             <input
               readOnly
               value={inviteUrl}
               onFocus={(e) => e.currentTarget.select()}
-              className="mt-2 w-full rounded-brand border border-clay/20 bg-white px-3 py-2 text-xs text-ink"
+              className="mt-2 w-full rounded-xl border border-danger-600/15 bg-white px-3 py-2 text-xs text-navy-900"
             />
           )}
         </div>
       )}
 
-      <section className="flex flex-col gap-3 rounded-brand border border-ink/10 bg-white p-4">
-        <h2 className="font-display text-lg font-semibold">Membres ({members.length})</h2>
+      <section className="flex flex-col gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+        <h2 className="font-jakarta text-lg font-semibold">Membres ({members.length})</h2>
         <table className="w-full text-sm">
-          <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+          <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
             <tr>
               <th className="px-2 py-2">Email</th>
               <th className="px-2 py-2">Rôle</th>
@@ -154,23 +154,23 @@ export default async function TeamPage({
           </thead>
           <tbody>
             {members.map((m) => (
-              <tr key={m.userId} className="border-b border-ink/5 last:border-0">
+              <tr key={m.userId} className="border-b border-navy-900/5 last:border-0">
                 <td className="px-2 py-2">{m.email ?? "—"}</td>
                 <td className="px-2 py-2">
                   {m.role === "owner" ? (
-                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs">{ROLE_LABELS.owner}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{ROLE_LABELS.owner}</span>
                   ) : (
                     <form action={updateMemberRoleAction} className="flex items-center gap-2">
                       <input type="hidden" name="organizationId" value={organizationId} />
                       <input type="hidden" name="targetUserId" value={m.userId} />
-                      <select name="role" defaultValue={m.role} className="rounded-brand border border-ink/15 px-2 py-1 text-xs">
+                      <select name="role" defaultValue={m.role} className="rounded-xl border border-navy-900/10 px-2 py-1 text-xs">
                         {INVITABLE_ROLES.map((r) => (
                           <option key={r} value={r}>
                             {ROLE_LABELS[r]}
                           </option>
                         ))}
                       </select>
-                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-leaf hover:underline disabled:opacity-60">
+                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-violet-600 hover:underline disabled:opacity-60">
                         Enregistrer
                       </SubmitButton>
                     </form>
@@ -181,7 +181,7 @@ export default async function TeamPage({
                     <form action={removeMemberAction}>
                       <input type="hidden" name="organizationId" value={organizationId} />
                       <input type="hidden" name="targetUserId" value={m.userId} />
-                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-clay hover:underline disabled:opacity-60">
+                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-danger-600 hover:underline disabled:opacity-60">
                         Retirer
                       </SubmitButton>
                     </form>
@@ -193,24 +193,24 @@ export default async function TeamPage({
         </table>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-brand border border-ink/10 bg-white p-4">
-        <h2 className="font-display text-lg font-semibold">Inviter quelqu&apos;un</h2>
+      <section className="flex flex-col gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+        <h2 className="font-jakarta text-lg font-semibold">Inviter quelqu&apos;un</h2>
         <form action={inviteMemberAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="organizationId" value={organizationId} />
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium uppercase text-muted" htmlFor="email">Email</label>
+            <label className="text-xs font-medium uppercase text-slate-500" htmlFor="email">Email</label>
             <input
               id="email"
               type="email"
               name="email"
               required
               placeholder="collegue@entreprise.com"
-              className="rounded-brand border border-ink/15 px-3 py-2 text-sm"
+              className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium uppercase text-muted" htmlFor="role">Rôle</label>
-            <select id="role" name="role" defaultValue="employee" className="rounded-brand border border-ink/15 px-3 py-2 text-sm">
+            <label className="text-xs font-medium uppercase text-slate-500" htmlFor="role">Rôle</label>
+            <select id="role" name="role" defaultValue="employee" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm">
               {INVITABLE_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABELS[r]}
@@ -218,17 +218,17 @@ export default async function TeamPage({
               ))}
             </select>
           </div>
-          <SubmitButton pendingLabel="Envoi..." className="rounded-brand bg-leaf px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
+          <SubmitButton pendingLabel="Envoi..." className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
             Envoyer l&apos;invitation
           </SubmitButton>
         </form>
       </section>
 
       {invitations.length > 0 && (
-        <section className="flex flex-col gap-3 rounded-brand border border-ink/10 bg-white p-4">
-          <h2 className="font-display text-lg font-semibold">Invitations en attente</h2>
+        <section className="flex flex-col gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+          <h2 className="font-jakarta text-lg font-semibold">Invitations en attente</h2>
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-2 py-2">Email</th>
                 <th className="px-2 py-2">Rôle</th>
@@ -238,15 +238,15 @@ export default async function TeamPage({
             </thead>
             <tbody>
               {invitations.map((inv) => (
-                <tr key={inv.id} className="border-b border-ink/5 last:border-0">
+                <tr key={inv.id} className="border-b border-navy-900/5 last:border-0">
                   <td className="px-2 py-2">{inv.email}</td>
                   <td className="px-2 py-2">{ROLE_LABELS[inv.role]}</td>
-                  <td className="px-2 py-2 text-muted">{new Date(inv.expiresAt).toLocaleDateString("fr-FR")}</td>
+                  <td className="px-2 py-2 text-slate-500">{new Date(inv.expiresAt).toLocaleDateString("fr-FR")}</td>
                   <td className="px-2 py-2 text-right">
                     <form action={revokeInvitationAction}>
                       <input type="hidden" name="organizationId" value={organizationId} />
                       <input type="hidden" name="invitationId" value={inv.id} />
-                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-clay hover:underline disabled:opacity-60">
+                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-danger-600 hover:underline disabled:opacity-60">
                         Révoquer
                       </SubmitButton>
                     </form>

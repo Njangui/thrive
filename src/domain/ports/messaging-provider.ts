@@ -11,7 +11,11 @@
 
 export interface OutboundMessage {
   to: string; // numéro E.164 ou identifiant de contact côté canal
-  channel: "whatsapp" | "sms";
+  // "telegram" ajouté pour le canal client natif Telegram
+  // (infrastructure/providers/messaging/telegram/*) — INDÉPENDANT de
+  // Zernio : chaque tenant connecte son propre bot (@BotFather), aucun
+  // import croisé avec messaging/zernio/*. Voir docs/TELEGRAM_INTEGRATION.md.
+  channel: "whatsapp" | "sms" | "telegram";
   content: string;
   /**
    * Id de conversation côté provider (ex: Zernio conversationId), quand on

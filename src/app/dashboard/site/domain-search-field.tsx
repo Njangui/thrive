@@ -59,27 +59,27 @@ export function DomainSearchField({ organizationId }: { organizationId: string }
           onChange={(e) => setValue(e.target.value.replace(/\.[a-z]*$/i, ""))}
           placeholder="boutique-fatou"
           required
-          className="mt-1 rounded-brand border border-ink/20 px-3 py-2 text-sm text-ink"
+          className="mt-1 rounded-xl border border-navy-900/15 px-3 py-2 text-sm text-navy-900"
         />
       </label>
 
-      {isPending && <p className="text-xs text-muted">Vérification en cours...</p>}
+      {isPending && <p className="text-xs text-slate-500">Vérification en cours...</p>}
 
-      {!isPending && error && <p className="text-xs text-clay">{error}</p>}
+      {!isPending && error && <p className="text-xs text-danger-600">{error}</p>}
 
       {!isPending && !error && results && results.length > 0 && (
         <ul className="flex flex-col gap-1">
           {results.map((r) => (
             <li key={r.tld} className="flex items-center justify-between text-xs">
-              <span className="font-mono text-ink">{r.domain}</span>
+              <span className="font-mono text-navy-900">{r.domain}</span>
               {r.available === true && (
-                <span className="text-leaf">
+                <span className="text-success-600">
                   ✓ Disponible{r.priceFcfa !== null ? ` — ${r.priceFcfa.toLocaleString("fr-FR")} FCFA/an` : ""}
                 </span>
               )}
-              {r.available === false && <span className="text-clay">✗ Déjà pris</span>}
+              {r.available === false && <span className="text-danger-600">✗ Déjà pris</span>}
               {r.available === null && (
-                <span className="text-muted">
+                <span className="text-slate-500">
                   Disponibilité non vérifiable{r.priceFcfa !== null ? ` — ${r.priceFcfa.toLocaleString("fr-FR")} FCFA/an` : ""}
                 </span>
               )}

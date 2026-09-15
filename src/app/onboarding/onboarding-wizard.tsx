@@ -40,12 +40,12 @@ function StepHeader({ step, title }: { step: number; title: string }) {
         {Array.from({ length: TOTAL_STEPS }, (_, i) => (
           <div
             key={i}
-            className={`h-1 flex-1 rounded-full ${i < step ? "bg-leaf" : "bg-ink/10"}`}
+            className={`h-1 flex-1 rounded-full ${i < step ? "bg-violet-600" : "bg-slate-100"}`}
           />
         ))}
       </div>
-      <p className="text-xs text-muted">Étape {step} sur {TOTAL_STEPS}</p>
-      <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>
+      <p className="text-xs text-slate-500">Étape {step} sur {TOTAL_STEPS}</p>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">{title}</h1>
     </div>
   );
 }
@@ -180,13 +180,13 @@ export function OnboardingWizard({
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6 py-10">
       {isResuming && !error && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-ink">
+        <p className="rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-navy-900">
           Vous aviez commencé votre configuration — reprenons où vous vous étiez arrêté.
         </p>
       )}
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
 
       {step === 1 && (
@@ -198,7 +198,7 @@ export function OnboardingWizard({
           >
             <label className="flex flex-col gap-1 text-sm">
               Nom de l&apos;entreprise
-              <input name="name" required className="rounded-brand border border-ink/15 px-4 py-3" />
+              <input name="name" required className="rounded-xl border border-navy-900/10 px-4 py-3" />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               Pays
@@ -208,7 +208,7 @@ export function OnboardingWizard({
                   value={selectedCountryCode}
                   onChange={(e) => setSelectedCountryCode(e.target.value)}
                   required
-                  className="rounded-brand border border-ink/15 px-4 py-3"
+                  className="rounded-xl border border-navy-900/10 px-4 py-3"
                 >
                   {countries.map((c) => (
                     <option key={c.isoCode} value={c.isoCode}>
@@ -217,14 +217,14 @@ export function OnboardingWizard({
                   ))}
                 </select>
               ) : (
-                <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
+                <p className="adm-alert-danger">
                   Aucun pays disponible pour l&apos;inscription actuellement.
                 </p>
               )}
             </label>
             <label className="flex flex-col gap-1 text-sm">
               Activité
-              <select name="industry" defaultValue="" className="rounded-brand border border-ink/15 px-4 py-3">
+              <select name="industry" defaultValue="" className="rounded-xl border border-navy-900/10 px-4 py-3">
                 {INDUSTRY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -235,7 +235,7 @@ export function OnboardingWizard({
             <button
               type="submit"
               disabled={isPending || countries.length === 0}
-              className="rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="rounded-xl bg-violet-600 px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {isPending ? "En cours..." : "Continuer"}
             </button>
@@ -246,14 +246,14 @@ export function OnboardingWizard({
       {step === 2 && (
         <>
           <StepHeader step={2} title="Votre logo" />
-          <p className="text-sm text-muted">Optionnel — vous pourrez l&apos;ajouter plus tard depuis &quot;Mon site&quot;.</p>
+          <p className="text-sm text-slate-500">Optionnel — vous pourrez l&apos;ajouter plus tard depuis &quot;Mon site&quot;.</p>
           <form onSubmit={onSubmitWithFormData(handleLogoSubmit)} className="flex flex-col gap-3">
             <ImageUploadField name="logo" label="Logo" />
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="flex-1 rounded-xl bg-violet-600 px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {isPending ? "En cours..." : "Continuer"}
               </button>
@@ -261,7 +261,7 @@ export function OnboardingWizard({
                 type="button"
                 onClick={skip}
                 disabled={isPending}
-                className="rounded-brand border border-ink/15 px-4 py-3 text-sm font-medium text-muted hover:bg-ink/5"
+                className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm font-medium text-slate-500 hover:bg-navy-900/5"
               >
                 Passer pour plus tard
               </button>
@@ -273,14 +273,14 @@ export function OnboardingWizard({
       {step === 3 && (
         <>
           <StepHeader step={3} title="Vos coordonnées" />
-          <p className="text-sm text-muted">Optionnel — utile pour que vos clients vous contactent.</p>
+          <p className="text-sm text-slate-500">Optionnel — utile pour que vos clients vous contactent.</p>
           <form onSubmit={onSubmitWithFormData(handleContactSubmit)} className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-sm">
               Téléphone
               <input
                 name="phone"
                 placeholder={`${selectedCountry?.phoneCode ?? "+237"}...`}
-                className="rounded-brand border border-ink/15 px-4 py-3"
+                className="rounded-xl border border-navy-900/10 px-4 py-3"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
@@ -288,18 +288,18 @@ export function OnboardingWizard({
               <input
                 name="whatsapp"
                 placeholder={`${selectedCountry?.phoneCode ?? "+237"}...`}
-                className="rounded-brand border border-ink/15 px-4 py-3"
+                className="rounded-xl border border-navy-900/10 px-4 py-3"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               Adresse
-              <input name="address" className="rounded-brand border border-ink/15 px-4 py-3" />
+              <input name="address" className="rounded-xl border border-navy-900/10 px-4 py-3" />
             </label>
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="flex-1 rounded-xl bg-violet-600 px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {isPending ? "En cours..." : "Continuer"}
               </button>
@@ -307,7 +307,7 @@ export function OnboardingWizard({
                 type="button"
                 onClick={skip}
                 disabled={isPending}
-                className="rounded-brand border border-ink/15 px-4 py-3 text-sm font-medium text-muted hover:bg-ink/5"
+                className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm font-medium text-slate-500 hover:bg-navy-900/5"
               >
                 Passer pour plus tard
               </button>
@@ -319,26 +319,26 @@ export function OnboardingWizard({
       {step === 4 && (
         <>
           <StepHeader step={4} title="Votre premier produit" />
-          <p className="text-sm text-muted">Optionnel — vous pourrez en ajouter autant que nécessaire ensuite.</p>
+          <p className="text-sm text-slate-500">Optionnel — vous pourrez en ajouter autant que nécessaire ensuite.</p>
           <form onSubmit={onSubmitWithFormData(handleProductSubmit)} className="flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-sm">
               Nom du produit
-              <input name="name" className="rounded-brand border border-ink/15 px-4 py-3" />
+              <input name="name" className="rounded-xl border border-navy-900/10 px-4 py-3" />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               Prix (FCFA)
-              <input name="price" type="number" min="0" defaultValue={0} className="rounded-brand border border-ink/15 px-4 py-3" />
+              <input name="price" type="number" min="0" defaultValue={0} className="rounded-xl border border-navy-900/10 px-4 py-3" />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               Stock
-              <input name="stock" type="number" min="0" defaultValue={0} className="rounded-brand border border-ink/15 px-4 py-3" />
+              <input name="stock" type="number" min="0" defaultValue={0} className="rounded-xl border border-navy-900/10 px-4 py-3" />
             </label>
             <ImageUploadField name="image" label="Photo du produit" helpText="Optionnel." />
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="flex-1 rounded-xl bg-violet-600 px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {isPending ? "En cours..." : "Continuer"}
               </button>
@@ -346,7 +346,7 @@ export function OnboardingWizard({
                 type="button"
                 onClick={skip}
                 disabled={isPending}
-                className="rounded-brand border border-ink/15 px-4 py-3 text-sm font-medium text-muted hover:bg-ink/5"
+                className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm font-medium text-slate-500 hover:bg-navy-900/5"
               >
                 Passer pour plus tard
               </button>
@@ -358,7 +358,7 @@ export function OnboardingWizard({
       {step === 5 && (
         <>
           <StepHeader step={5} title="Questions fréquentes" />
-          <p className="text-sm text-muted">
+          <p className="text-sm text-slate-500">
             Optionnel — répondez à celles qui vous concernent, laissez les autres vides.
           </p>
           <form onSubmit={onSubmitWithFormData(handleFaqSubmit)} className="flex flex-col gap-4">
@@ -369,7 +369,7 @@ export function OnboardingWizard({
                 <input
                   name={`answer${i}`}
                   placeholder="Votre réponse (laissez vide pour passer)"
-                  className="rounded-brand border border-ink/15 px-4 py-3 text-sm"
+                  className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm"
                 />
               </div>
             ))}
@@ -377,7 +377,7 @@ export function OnboardingWizard({
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="flex-1 rounded-xl bg-violet-600 px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {isPending ? "En cours..." : "Continuer"}
               </button>
@@ -385,7 +385,7 @@ export function OnboardingWizard({
                 type="button"
                 onClick={skip}
                 disabled={isPending}
-                className="rounded-brand border border-ink/15 px-4 py-3 text-sm font-medium text-muted hover:bg-ink/5"
+                className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm font-medium text-slate-500 hover:bg-navy-900/5"
               >
                 Passer pour plus tard
               </button>
@@ -397,13 +397,13 @@ export function OnboardingWizard({
       {step === 6 && (
         <>
           <StepHeader step={6} title="C'est prêt !" />
-          <p className="text-sm text-muted">
+          <p className="text-sm text-slate-500">
             Votre entreprise est configurée. Vous pouvez compléter les informations manquantes à tout moment depuis le tableau de bord.
           </p>
           <button
             type="button"
             onClick={goToDashboard}
-            className="rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90"
+            className="rounded-xl bg-violet-600 px-4 py-3 font-medium text-white transition-opacity hover:opacity-90"
           >
             Aller à mon tableau de bord
           </button>

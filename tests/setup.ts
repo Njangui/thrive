@@ -11,3 +11,9 @@
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test-placeholder.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
+
+// Programme d'affiliation (0044) : secret de signature des jetons de
+// cookie d'attribution — optionnel en prod (voir lib/env.ts), mais
+// affiliate-link-security.test.ts a besoin d'une valeur déterministe
+// pour signer/vérifier des jetons sans dépendre d'un vrai déploiement.
+process.env.AFFILIATE_LINK_SECRET = "test-affiliate-link-secret";

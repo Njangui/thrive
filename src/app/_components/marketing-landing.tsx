@@ -3,6 +3,7 @@ import { listPlans, listPlanEntitlements, type PlanKey } from "@/application/ser
 import { listPublicCountries, isoCodeToFlagEmoji } from "@/application/services/country-service";
 import { joinWaitlistAction } from "./country-waitlist-actions";
 import { MarketingMobileMenu } from "./marketing-mobile-menu";
+import { AfricaAvailabilityMap } from "./africa-availability-map";
 import {
   IconArrowRight,
   IconBotAssist,
@@ -436,18 +437,38 @@ export async function MarketingLanding({
           )}
 
           {activeCountries.length > 0 && (
-            <div className="mt-8">
+            <div className="mt-10">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Disponible actuellement</h3>
-              <ul className="mt-3 flex flex-wrap justify-center gap-3">
+
+              <div className="mt-6">
+                <AfricaAvailabilityMap countries={countries} />
+              </div>
+
+              <div className="mt-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2 md:grid-cols-3">
                 {activeCountries.map((c) => (
-                  <li
-                    key={c.isoCode}
-                    className="rounded-full border border-success-600/20 bg-success-50 px-4 py-2 text-sm font-medium text-navy-900"
-                  >
-                    {isoCodeToFlagEmoji(c.isoCode)} {c.name}
-                  </li>
+                  <div key={c.isoCode} className="mkt-card flex items-center gap-3">
+                    {c.flagUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- icône de drapeau externe, taille fixe, next/image inutile ici
+                      <img
+                        src={c.flagUrl}
+                        alt=""
+                        className="h-8 w-11 shrink-0 rounded object-cover"
+                      />
+                    ) : (
+                      <span className="text-3xl leading-none" aria-hidden="true">
+                        {isoCodeToFlagEmoji(c.isoCode)}
+                      </span>
+                    )}
+                    <div>
+                      <p className="font-jakarta font-semibold text-navy-900">{c.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {c.currencyCode}
+                        {c.currencySymbol ? ` (${c.currencySymbol})` : ""} · {c.phoneCode}
+                      </p>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
 

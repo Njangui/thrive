@@ -14,7 +14,7 @@ export function SubmitButton({
   children,
   pendingLabel = "En cours...",
   disabled = false,
-  className = "rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60",
+  className = "rounded-xl bg-violet-600 px-4 py-3 font-medium text-white shadow-[0_10px_24px_-8px_rgba(91,33,229,0.45)] transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none",
 }: {
   children: React.ReactNode;
   pendingLabel?: string;

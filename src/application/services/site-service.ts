@@ -26,6 +26,7 @@ import { NotFoundError } from "@/lib/errors";
  * (une table = un service), pas un choix arbitraire.
  */
 export interface SiteMedia {
+  slug: string;
   logoUrl: string | null;
   bannerUrl: string | null;
   faviconUrl: string | null;
@@ -39,7 +40,7 @@ export async function getSiteMedia(organizationId: string): Promise<SiteMedia> {
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("organizations")
-    .select("logo_url, banner_url, favicon_url, seo_title, seo_description, seo_og_image_url, social_links")
+    .select("slug, logo_url, banner_url, favicon_url, seo_title, seo_description, seo_og_image_url, social_links")
     .eq("id", organizationId)
     .maybeSingle();
 
@@ -47,6 +48,7 @@ export async function getSiteMedia(organizationId: string): Promise<SiteMedia> {
   if (!data) throw new NotFoundError("Entreprise introuvable");
 
   return {
+    slug: data.slug,
     logoUrl: data.logo_url,
     bannerUrl: data.banner_url,
     faviconUrl: data.favicon_url,

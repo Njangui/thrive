@@ -166,18 +166,18 @@ describe("inviteMember", () => {
 describe("acceptInvitation", () => {
   it("refuse une invitation déjà acceptée", async () => {
     pushResult("team_invitations", {
-      data: { id: "inv-1", organization_id: "org-1", role: "employee", status: "accepted", expires_at: new Date(Date.now() + 100000).toISOString() },
+      data: { id: "inv-1", organization_id: "org-1", email: "invite@example.com", role: "employee", status: "accepted", expires_at: new Date(Date.now() + 100000).toISOString() },
       error: null,
     });
-    await expect(acceptInvitation("token-1", "user-2")).rejects.toThrow(/déjà été acceptée/);
+    await expect(acceptInvitation("token-1", "user-2", "invite@example.com")).rejects.toThrow(/déjà été acceptée/);
   });
 
   it("refuse une invitation révoquée", async () => {
     pushResult("team_invitations", {
-      data: { id: "inv-1", organization_id: "org-1", role: "employee", status: "revoked", expires_at: new Date(Date.now() + 100000).toISOString() },
+      data: { id: "inv-1", organization_id: "org-1", email: "invite@example.com", role: "employee", status: "revoked", expires_at: new Date(Date.now() + 100000).toISOString() },
       error: null,
     });
-    await expect(acceptInvitation("token-1", "user-2")).rejects.toThrow(/révoquée/);
+    await expect(acceptInvitation("token-1", "user-2", "invite@example.com")).rejects.toThrow(/révoquée/);
   });
 
   it("refuse et marque expirée une invitation dont la date est dépassée", async () => {
@@ -185,6 +185,7 @@ describe("acceptInvitation", () => {
       data: {
         id: "inv-1",
         organization_id: "org-1",
+        email: "invite@example.com",
         role: "employee",
         status: "pending",
         expires_at: new Date(Date.now() - 1000).toISOString(),
@@ -192,7 +193,7 @@ describe("acceptInvitation", () => {
       error: null,
     });
 
-    await expect(acceptInvitation("token-1", "user-2")).rejects.toThrow(/expiré/);
+    await expect(acceptInvitation("token-1", "user-2", "invite@example.com")).rejects.toThrow(/expiré/);
 
     const expireUpdate = updateCalls.find(
       (c) => c.table === "team_invitations" && (c.patch as { status?: string }).status === "expired",
@@ -205,6 +206,7 @@ describe("acceptInvitation", () => {
       data: {
         id: "inv-1",
         organization_id: "org-1",
+        email: "invite@example.com",
         role: "manager",
         status: "pending",
         expires_at: new Date(Date.now() + 100000).toISOString(),
@@ -213,7 +215,7 @@ describe("acceptInvitation", () => {
       error: null,
     });
 
-    const result = await acceptInvitation("token-1", "user-2");
+    const result = await acceptInvitation("token-1", "user-2", "invite@example.com");
 
     expect(result).toEqual({ organizationId: "org-1", organizationName: "Ma Boutique" });
 
@@ -225,6 +227,65 @@ describe("acceptInvitation", () => {
       (c) => c.table === "team_invitations" && (c.patch as { status?: string }).status === "accepted",
     );
     expect(acceptUpdate).toBeDefined();
+  });
+
+  // Repasse sécurité P0 (07/09/2026, section 7) : sans cette vérification,
+  // n'importe quel compte connecté pouvait consommer le token d'une
+  // invitation destinée à quelqu'un d'autre.
+  it("refuse si l'email de la session ne correspond pas à l'email invité", async () => {
+    pushResult("team_invitations", {
+      data: {
+        id: "inv-1",
+        organization_id: "org-1",
+        email: "invite@example.com",
+        role: "manager",
+        status: "pending",
+        expires_at: new Date(Date.now() + 100000).toISOString(),
+        organizations: { name: "Ma Boutique" },
+      },
+      error: null,
+    });
+
+    await expect(acceptInvitation("token-1", "user-mallory", "mallory@evil.example")).rejects.toThrow(
+      /destinée à invite@example\.com/,
+    );
+    expect(insertCalls.find((c) => c.table === "memberships")).toBeUndefined();
+  });
+
+  it("refuse si l'utilisateur connecté n'a pas d'email (fail-closed, jamais une correspondance par défaut)", async () => {
+    pushResult("team_invitations", {
+      data: {
+        id: "inv-1",
+        organization_id: "org-1",
+        email: "invite@example.com",
+        role: "manager",
+        status: "pending",
+        expires_at: new Date(Date.now() + 100000).toISOString(),
+        organizations: { name: "Ma Boutique" },
+      },
+      error: null,
+    });
+
+    await expect(acceptInvitation("token-1", "user-2", null)).rejects.toThrow(/destinée à/);
+    expect(insertCalls.find((c) => c.table === "memberships")).toBeUndefined();
+  });
+
+  it("accepte une correspondance d'email insensible à la casse/espaces", async () => {
+    pushResult("team_invitations", {
+      data: {
+        id: "inv-1",
+        organization_id: "org-1",
+        email: "invite@example.com",
+        role: "manager",
+        status: "pending",
+        expires_at: new Date(Date.now() + 100000).toISOString(),
+        organizations: { name: "Ma Boutique" },
+      },
+      error: null,
+    });
+
+    const result = await acceptInvitation("token-1", "user-2", "  Invite@Example.com  ");
+    expect(result.organizationId).toBe("org-1");
   });
 });
 

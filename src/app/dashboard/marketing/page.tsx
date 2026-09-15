@@ -29,13 +29,13 @@ const POST_STATUS_LABELS: Record<string, string> = {
 };
 
 const POST_STATUS_STYLES: Record<string, string> = {
-  draft: "bg-ink/10 text-muted",
-  scheduled: "bg-ink/10 text-ink",
-  published: "bg-leaf/10 text-leaf",
+  draft: "bg-slate-100 text-slate-600",
+  scheduled: "bg-slate-100 text-navy-900",
+  published: "bg-success-50 text-success-700",
   partial: "bg-amber-500/10 text-amber-600",
-  failed: "bg-clay/10 text-clay",
-  cancelled: "bg-ink/10 text-muted",
-  paused: "bg-ink/10 text-muted",
+  failed: "bg-danger-50 text-danger-700",
+  cancelled: "bg-slate-100 text-slate-600",
+  paused: "bg-slate-100 text-slate-600",
 };
 
 const TARGET_STATUS_LABELS: Record<string, string> = {
@@ -45,9 +45,9 @@ const TARGET_STATUS_LABELS: Record<string, string> = {
 };
 
 const TARGET_STATUS_STYLES: Record<string, string> = {
-  pending: "bg-ink/10 text-muted",
-  published: "bg-leaf/10 text-leaf",
-  failed: "bg-clay/10 text-clay",
+  pending: "bg-slate-100 text-slate-600",
+  published: "bg-success-50 text-success-700",
+  failed: "bg-danger-50 text-danger-700",
 };
 
 export default async function MarketingPage() {
@@ -57,39 +57,39 @@ export default async function MarketingPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Publications</h1>
-        <p className="mt-1 text-sm text-muted">
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Publications</h1>
+        <p className="mt-1 text-sm text-slate-500">
           Statut réel de vos publications sociales, plateforme par plateforme — mis à jour automatiquement dès
           que Zernio confirme une diffusion.
         </p>
       </div>
 
-      <section className="flex flex-col gap-3 rounded-brand border border-ink/10 bg-white p-4">
+      <section className="flex flex-col gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
         {posts.length === 0 ? (
-          <p className="text-sm text-muted">Aucune publication pour l&apos;instant.</p>
+          <p className="text-sm text-slate-500">Aucune publication pour l&apos;instant.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-ink/5">
+          <ul className="flex flex-col divide-y divide-navy-900/5">
             {posts.map((post) => (
               <li key={post.id} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm text-ink line-clamp-2">{post.content}</p>
+                  <p className="text-sm text-navy-900 line-clamp-2">{post.content}</p>
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
-                      POST_STATUS_STYLES[post.status] ?? "bg-ink/10 text-ink"
+                      POST_STATUS_STYLES[post.status] ?? "bg-slate-100 text-navy-900"
                     }`}
                   >
                     {POST_STATUS_LABELS[post.status] ?? post.status}
                   </span>
                 </div>
 
-                <p className="text-xs text-muted">
+                <p className="text-xs text-slate-500">
                   {post.scheduledFor
                     ? `Programmée pour le ${new Date(post.scheduledFor).toLocaleString("fr-FR")}`
                     : `Créée le ${new Date(post.createdAt).toLocaleString("fr-FR")}`}
                 </p>
 
                 {post.errorMessage && (
-                  <p className="rounded-brand border border-clay/30 bg-clay/5 px-3 py-2 text-xs text-clay">
+                  <p className="rounded-xl border border-danger-600/20 bg-danger-50 px-3 py-2 text-xs text-danger-600">
                     {post.errorMessage}
                   </p>
                 )}
@@ -100,7 +100,7 @@ export default async function MarketingPage() {
                       <span
                         key={target.platform}
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                          TARGET_STATUS_STYLES[target.status] ?? "bg-ink/10 text-ink"
+                          TARGET_STATUS_STYLES[target.status] ?? "bg-slate-100 text-navy-900"
                         }`}
                         title={target.errorMessage ?? undefined}
                       >

@@ -4,9 +4,9 @@ import type { ConversationThreadMessage } from "@/application/services/conversat
 import { SubmitButton } from "@/app/_components/submit-button";
 
 const SENDER_STYLES: Record<string, string> = {
-  contact: "self-start bg-white border border-ink/10",
-  ai: "self-end bg-leaf/10 text-ink",
-  human: "self-end bg-ink text-white",
+  contact: "self-start bg-white border border-navy-900/10",
+  ai: "self-end bg-violet-50 text-navy-900",
+  human: "self-end bg-navy-900 text-white",
 };
 
 /**
@@ -32,14 +32,14 @@ export function ConversationThreadView({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 rounded-brand border border-ink/10 bg-paper p-4">
+      <div className="flex flex-col gap-2 rounded-xl border border-navy-900/10 bg-[#F7F6FD] p-4">
         {messages.length === 0 ? (
-          <p className="text-sm text-muted">Aucun message pour l&apos;instant.</p>
+          <p className="text-sm text-slate-500">Aucun message pour l&apos;instant.</p>
         ) : (
           messages.map((m) => (
             <div
               key={m.id}
-              className={`max-w-[80%] rounded-brand px-3 py-2 text-sm ${SENDER_STYLES[m.sender] ?? ""}`}
+              className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${SENDER_STYLES[m.sender] ?? ""}`}
             >
               {m.content}
             </div>
@@ -51,14 +51,14 @@ export function ConversationThreadView({
         <button
           type="button"
           onClick={returnToAiAction}
-          className="rounded-brand border border-ink/15 px-3 py-2 text-xs font-medium text-muted hover:bg-ink/5"
+          className="rounded-xl border border-navy-900/10 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-navy-900/5"
         >
           Rendre à l&apos;IA
         </button>
         <button
           type="button"
           onClick={closeAction}
-          className="rounded-brand border border-ink/15 px-3 py-2 text-xs font-medium text-muted hover:bg-ink/5"
+          className="rounded-xl border border-navy-900/10 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-navy-900/5"
         >
           Clôturer
         </button>
@@ -70,12 +70,12 @@ export function ConversationThreadView({
           required
           placeholder="Répondre..."
           disabled={disabled}
-          className="flex-1 rounded-brand border border-ink/15 px-4 py-3 text-sm disabled:opacity-50"
+          className="flex-1 rounded-xl border border-navy-900/10 px-4 py-3 text-sm disabled:opacity-50"
         />
         <SubmitButton
           pendingLabel="Envoi..."
           disabled={disabled}
-          className="rounded-brand bg-leaf px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
         >
           Envoyer
         </SubmitButton>

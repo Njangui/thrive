@@ -66,6 +66,104 @@ export async function findOrCreateCategory(organizationId: string, name: string)
   return created.id;
 }
 
+export interface CategorySummary {
+  id: string;
+  name: string;
+}
+
+/**
+ * Catégories réellement gérées comme une liste fermée (section : "les
+ * catégories doivent être sélectionnées selon le secteur d'activité, pas
+ * retapées à chaque produit — sinon 'chaussure' et 'Chaussure' coexistent").
+ * `listCategories` alimente les `<select>` de création produit/service ;
+ * plus aucun de ces formulaires ne doit passer par `findOrCreateCategory`
+ * avec du texte libre (le CSV d'import reste le seul appelant légitime de
+ * `findOrCreateCategory` — une colonne de tableur n'a pas de `<select>`).
+ */
+export async function listCategories(organizationId: string): Promise<CategorySummary[]> {
+  const supabase = getSupabaseServiceClient();
+  const { data } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("organization_id", organizationId)
+    .order("name", { ascending: true });
+  return (data ?? []) as CategorySummary[];
+}
+
+/** Création explicite (bouton "+ Nouvelle catégorie"), distincte de
+ * `findOrCreateCategory` : celle-ci renvoie une erreur claire si le nom
+ * existe déjà plutôt que de renvoyer silencieusement l'id existant — un
+ * marchand qui clique "créer" veut savoir si ça a doublonné. */
+export async function createCategory(organizationId: string, name: string): Promise<CategorySummary> {
+  const supabase = getSupabaseServiceClient();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Le nom de la catégorie est requis.");
+  const slug = slugify(trimmed);
+
+  const { data: existing } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("slug", slug)
+    .maybeSingle();
+  if (existing) throw new Error(`La catégorie "${trimmed}" existe déjà.`);
+
+  const { data, error } = await supabase
+    .from("categories")
+    .insert({ organization_id: organizationId, name: trimmed, slug })
+    .select("id, name")
+    .single();
+  if (error || !data) throw new Error(`Impossible de créer la catégorie : ${error?.message}`);
+  return data as CategorySummary;
+}
+
+export async function renameCategory(organizationId: string, categoryId: string, name: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Le nom de la catégorie est requis.");
+  const { error } = await supabase
+    .from("categories")
+    .update({ name: trimmed, slug: slugify(trimmed) })
+    .eq("id", categoryId)
+    .eq("organization_id", organizationId);
+  if (error) throw new Error(`Impossible de renommer la catégorie : ${error.message}`);
+}
+
+/** Détache d'abord les produits/services de cette catégorie (repasse à
+ * "sans catégorie") plutôt que de bloquer sur la contrainte de clé
+ * étrangère ou de les supprimer en cascade — perdre la catégorie d'un
+ * produit est un détail, perdre le produit lui-même ne l'est pas. */
+export async function deleteCategory(organizationId: string, categoryId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  await supabase.from("products").update({ category_id: null }).eq("organization_id", organizationId).eq("category_id", categoryId);
+  await supabase.from("services").update({ category_id: null }).eq("organization_id", organizationId).eq("category_id", categoryId);
+  const { error } = await supabase.from("categories").delete().eq("id", categoryId).eq("organization_id", organizationId);
+  if (error) throw new Error(`Impossible de supprimer la catégorie : ${error.message}`);
+}
+
+/**
+ * Pré-remplit les catégories d'une organisation à partir du secteur
+ * d'activité choisi à l'onboarding (`INDUSTRY_CATEGORY_PRESETS`) — appelé
+ * une fois à la création de l'organisation (`onboarding-service.ts`,
+ * même moment que le seed de `tenant_modules`). N'écrase jamais des
+ * catégories existantes : si l'organisation en a déjà (import CSV avant
+ * la fin de l'onboarding, ou ré-appel accidentel), ne fait rien.
+ */
+export async function seedDefaultCategories(organizationId: string, industry: string | null): Promise<void> {
+  const { INDUSTRY_CATEGORY_PRESETS, DEFAULT_CATEGORY_PRESET } = await import("@/application/config/categories");
+  const supabase = getSupabaseServiceClient();
+
+  const { count } = await supabase
+    .from("categories")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+  if ((count ?? 0) > 0) return;
+
+  const preset = (industry && INDUSTRY_CATEGORY_PRESETS[industry]) || DEFAULT_CATEGORY_PRESET;
+  const rows = preset.map((name) => ({ organization_id: organizationId, name, slug: slugify(name) }));
+  await supabase.from("categories").insert(rows);
+}
+
 /**
  * Récupère les produits ACTIFS pour un discovery WhatsApp (section 15).
  * Ne renvoie jamais un produit OUT_OF_STOCK/DRAFT/INACTIVE — le statut est
@@ -481,7 +579,15 @@ export interface CreateProductInput {
   organizationId: string;
   name: string;
   description?: string;
+  /** Réservé à l'import CSV (colonne texte libre, pas de `<select>`
+   * possible sur un tableur) — voir `findOrCreateCategory`. Les
+   * formulaires dashboard doivent utiliser `categoryId` ci-dessous. */
   categoryName?: string;
+  /** Id d'une catégorie existante, choisie dans le `<select>` du
+   * formulaire (section : catégories par secteur, pas retapées à
+   * chaque produit). Prioritaire sur `categoryName` si les deux sont
+   * fournis. */
+  categoryId?: string;
   unitPrice: number;
   currentStock?: number;
   status?: "draft" | "active" | "out_of_stock" | "inactive";
@@ -502,7 +608,12 @@ export interface CreateProductInput {
 export async function createProduct(input: CreateProductInput): Promise<{ productId: string; slug: string }> {
   const supabase = getSupabaseServiceClient();
 
-  const categoryId = input.categoryName ? await findOrCreateCategory(input.organizationId, input.categoryName) : null;
+  const categoryId =
+    input.categoryId !== undefined
+      ? input.categoryId || null
+      : input.categoryName
+        ? await findOrCreateCategory(input.organizationId, input.categoryName)
+        : null;
   const slug = `${slugify(input.name)}-${Math.random().toString(36).slice(2, 7)}`;
   const stock = input.currentStock ?? 0;
   const status = input.status ?? (stock > 0 ? "active" : "draft");
@@ -660,7 +771,10 @@ export async function setPrimaryProductImage(
 export interface UpdateProductInput {
   name: string;
   description?: string;
+  /** Réservé à l'import CSV — voir la note de `CreateProductInput`. */
   categoryName?: string;
+  /** Id d'une catégorie existante — prioritaire sur `categoryName`. */
+  categoryId?: string;
   unitPrice: number;
   currentStock?: number;
   status?: "draft" | "active" | "out_of_stock" | "inactive";
@@ -690,7 +804,12 @@ export async function updateProduct(
 ): Promise<void> {
   const supabase = getSupabaseServiceClient();
 
-  const categoryId = input.categoryName ? await findOrCreateCategory(organizationId, input.categoryName) : null;
+  const categoryId =
+    input.categoryId !== undefined
+      ? input.categoryId || null
+      : input.categoryName
+        ? await findOrCreateCategory(organizationId, input.categoryName)
+        : null;
 
   // `current_stock`/`status` ne sont inclus dans le payload que s'ils sont
   // explicitement fournis — un appelant qui omettrait ces champs ne doit
@@ -738,6 +857,7 @@ export interface ProductForEdit {
   name: string;
   description: string | null;
   categoryName: string | null;
+  categoryId: string | null;
   unitPrice: number;
   compareAtPrice: number | null;
   currentStock: number;
@@ -754,7 +874,7 @@ export async function getProductForEdit(organizationId: string, productId: strin
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, description, unit_price, compare_at_price, current_stock, status, seo_title, seo_description, categories(name), product_images(url, position)",
+      "id, name, description, category_id, unit_price, compare_at_price, current_stock, status, seo_title, seo_description, categories(name), product_images(url, position)",
     )
     .eq("id", productId)
     .eq("organization_id", organizationId)
@@ -772,6 +892,7 @@ export async function getProductForEdit(organizationId: string, productId: strin
     name: data.name,
     description: data.description,
     categoryName: (data as unknown as { categories?: { name?: string } }).categories?.name ?? null,
+    categoryId: (data as unknown as { category_id?: string | null }).category_id ?? null,
     unitPrice: Number(data.unit_price),
     compareAtPrice: data.compare_at_price ? Number(data.compare_at_price) : null,
     currentStock: Number(data.current_stock),

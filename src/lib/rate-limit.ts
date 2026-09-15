@@ -61,7 +61,20 @@ const waitlistLimiter = redis
   ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(5, "60 s"), prefix: "ratelimit:waitlist" })
   : null;
 
-export type RateLimitKind = "webhook" | "auth" | "waitlist";
+/**
+ * 30 requêtes / 60s par IP — route publique /r/[code] (programme
+ * d'affiliation, 0044). Plus généreux que `waitlist` : un lien
+ * d'affiliation peut être partagé sur un post viral et recevoir un vrai
+ * pic de trafic légitime en peu de temps — la détection de vélocité
+ * fine (par ip_hash, voir affiliate.ts::exceedsClickVelocity) reste le
+ * garde-fou anti-fraude ; ce limiteur-ci n'est qu'une protection anti-flood
+ * basique, pas une mesure anti-fraude.
+ */
+const affiliateClickLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(30, "60 s"), prefix: "ratelimit:affiliate_click" })
+  : null;
+
+export type RateLimitKind = "webhook" | "auth" | "waitlist" | "affiliate_click";
 
 /**
  * Retourne `null` quand la requête est autorisée à continuer (soit
@@ -70,7 +83,14 @@ export type RateLimitKind = "webhook" | "auth" | "waitlist";
  * secondes avant réessai quand la requête doit être refusée.
  */
 export async function checkRateLimit(kind: RateLimitKind, identifier: string): Promise<number | null> {
-  const limiter = kind === "webhook" ? webhookLimiter : kind === "waitlist" ? waitlistLimiter : authLimiter;
+  const limiter =
+    kind === "webhook"
+      ? webhookLimiter
+      : kind === "waitlist"
+        ? waitlistLimiter
+        : kind === "affiliate_click"
+          ? affiliateClickLimiter
+          : authLimiter;
   if (!limiter) {
     warnNotConfigured();
     return null;

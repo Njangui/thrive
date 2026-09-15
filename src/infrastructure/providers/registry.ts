@@ -24,6 +24,12 @@ import { ResendAdapter } from "./email/resend/adapter";
 import { ResendClient } from "./email/resend/client";
 import { ConsoleLogEmailAdapter } from "./email/console-log/adapter";
 import { resolveProviderCredential, resolveCredential } from "./secrets-resolver";
+import { TelegramMessagingAdapter } from "./messaging/telegram/adapter";
+import { TelegramMessagingClient } from "./messaging/telegram/client";
+import type { NotificationProvider } from "@/domain/ports/notification-provider";
+import { TelegramAdapter } from "./telegram/adapter";
+import { TelegramClient } from "./telegram/client";
+import { ConsoleLogNotificationAdapter } from "./notification/console-log/adapter";
 
 /**
  * ProviderRegistry (section 58) : les services applicatifs appellent
@@ -110,21 +116,63 @@ export async function getEmailProvider(): Promise<EmailProvider> {
   return new ResendAdapter(new ResendClient(env.RESEND_API_KEY), env.EMAIL_FROM_ADDRESS);
 }
 
-export async function getMessagingProvider(organizationId: string): Promise<MessagingProvider> {
+/**
+ * NotificationProvider (programme d'affiliation, 0044) : un seul canal
+ * d'alerte plateforme partagé — même posture que Storage/Payment/Domain/
+ * Email ci-dessus (aucun `provider_connections` par tenant, ceci n'a
+ * rien à voir avec un tenant). `_organizationId` accepté pour rester
+ * cohérent avec la signature des autres fonctions "provider plateforme
+ * unique" de ce fichier, jamais utilisé.
+ *
+ * Repli sur `ConsoleLogNotificationAdapter` (jamais un crash) tant que
+ * `TELEGRAM_BOT_TOKEN`/`TELEGRAM_ADMIN_CHAT_ID` ne sont pas configurés —
+ * même philosophie que `getEmailProvider()` juste au-dessus.
+ *
+ * ENTIÈREMENT indépendant de `getMessagingProvider()`/
+ * `getSocialPublishingProvider()` (Zernio) ci-dessous : aucune variable,
+ * aucun adapter, aucun import partagé entre les deux (voir
+ * docs/TELEGRAM_INTEGRATION.md).
+ */
+export async function getNotificationProvider(_organizationId?: string): Promise<NotificationProvider> {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_ADMIN_CHAT_ID) {
+    return new ConsoleLogNotificationAdapter();
+  }
+  return new TelegramAdapter(new TelegramClient(env.TELEGRAM_BOT_TOKEN), env.TELEGRAM_ADMIN_CHAT_ID);
+}
+
+/**
+ * `providerName` optionnel : jusqu'ici, `.maybeSingle()` supposait
+ * implicitement qu'une organisation n'a JAMAIS plus d'une ligne
+ * `provider_connections` de type `messaging` connectée simultanément —
+ * vrai tant que Zernio était l'unique MessagingProvider. Ce n'est plus
+ * vrai depuis l'ajout de Telegram comme second canal client
+ * INDÉPENDANT de Zernio (docs/TELEGRAM_INTEGRATION.md) : un tenant peut
+ * désormais avoir WhatsApp/Zernio ET Telegram connectés en même temps,
+ * ce qui ferait échouer `.maybeSingle()` (plusieurs lignes) si rien ne
+ * les distinguait. Tous les appelants existants (webhook Zernio,
+ * conversation-admin-service.ts, whatsapp-group-service.ts) ont donc été
+ * mis à jour pour préciser explicitement `"zernio"` — comportement
+ * inchangé pour eux, ambiguïté simplement rendue impossible plutôt que
+ * silencieusement supposée.
+ */
+export async function getMessagingProvider(organizationId: string, providerName?: string): Promise<MessagingProvider> {
   const supabase = getSupabaseServiceClient();
 
-  const { data: connection, error } = await supabase
+  let query = supabase
     .from("provider_connections")
     .select("provider_name, status, metadata")
     .eq("organization_id", organizationId)
     .eq("provider_type", "messaging")
-    .eq("status", "connected")
-    .maybeSingle();
+    .eq("status", "connected");
+
+  if (providerName) query = query.eq("provider_name", providerName);
+
+  const { data: connection, error } = await query.maybeSingle();
 
   if (error) throw new Error(`Erreur lecture provider_connections: ${error.message}`);
   if (!connection) {
     throw new Error(
-      `Aucun MessagingProvider connecté pour l'organization ${organizationId}. ` +
+      `Aucun MessagingProvider${providerName ? ` "${providerName}"` : ""} connecté pour l'organization ${organizationId}. ` +
         `Complétez l'onboarding (section 31) avant d'envoyer/recevoir des messages.`,
     );
   }
@@ -139,6 +187,18 @@ export async function getMessagingProvider(organizationId: string): Promise<Mess
       }
       const apiKey = await resolveCredential(organizationId, "messaging", "zernio");
       return new ZernioAdapter(new ZernioClient(apiKey), metadata.profileId, metadata.accountId);
+    }
+    // Canal Telegram natif (tenant customer channel) — INDÉPENDANT de
+    // Zernio par construction : ni le client, ni l'adapter, ni la
+    // résolution de credential ci-dessous ne partagent quoi que ce soit
+    // avec le cas "zernio" au-dessus (voir docs/TELEGRAM_INTEGRATION.md,
+    // section "Canal client"). Chaque tenant a son PROPRE bot (jeton créé
+    // via @BotFather), stocké comme n'importe quel credential dédié
+    // (secrets-resolver.ts::resolveCredential) — jamais un bot partagé
+    // par plusieurs organisations.
+    case "telegram": {
+      const botToken = await resolveCredential(organizationId, "messaging", "telegram");
+      return new TelegramMessagingAdapter(new TelegramMessagingClient(botToken));
     }
     default:
       throw new Error(`MessagingProvider "${connection.provider_name}" non implémenté.`);

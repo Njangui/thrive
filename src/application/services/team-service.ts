@@ -172,16 +172,32 @@ export async function inviteMember(
  * Revérifie l'expiration/statut à CET appel précis (cahier, section
  * "Sécurité" : "jamais une seule fois") — jamais une valeur mise en cache
  * d'un contrôle précédent.
+ *
+ * Repasse sécurité P0 (07/09/2026, section 7 de la mission) : vérifie
+ * désormais que l'email de la session authentifiée correspond à l'email
+ * invité, AVANT de créer l'appartenance. Absent jusqu'ici : cette
+ * fonction ne prenait que `userId`, jamais son email — n'importe quel
+ * compte connecté (le sien, ou un tout nouveau créé pour l'occasion)
+ * pouvait consommer le token d'une invitation destinée à quelqu'un
+ * d'autre et rejoindre l'organisation avec SON rôle, dès lors que le
+ * lien (jeton 256 bits, donc jamais deviné, mais transmissible par
+ * erreur — email transféré, lien partagé, historique navigateur
+ * partagé) avait fuité vers la mauvaise personne. `userEmail` peut être
+ * `null` (Supabase Auth n'en garantit pas la présence pour toute
+ * méthode) : traité comme un email qui ne correspond jamais, jamais
+ * comme une correspondance par défaut (fail-closed, section 23 de la
+ * mission : "le fail-open est interdit pour les limites sensibles").
  */
 export async function acceptInvitation(
   token: string,
   userId: string,
+  userEmail: string | null,
 ): Promise<{ organizationId: string; organizationName: string }> {
   const supabase = getSupabaseServiceClient();
 
   const { data: invitation, error } = await supabase
     .from("team_invitations")
-    .select("id, organization_id, role, status, expires_at, organizations(name)")
+    .select("id, organization_id, email, role, status, expires_at, organizations(name)")
     .eq("token", token)
     .maybeSingle();
 
@@ -201,6 +217,15 @@ export async function acceptInvitation(
     }
     throw new ValidationError(
       "Cette invitation a expiré. Demandez à un administrateur de vous en envoyer une nouvelle.",
+    );
+  }
+
+  // Normalisation identique à inviteMember() (trim + lowercase) — une
+  // comparaison sensible à la casse rejetterait à tort une invitation
+  // légitime.
+  if (!userEmail || userEmail.trim().toLowerCase() !== invitation.email) {
+    throw new ValidationError(
+      `Cette invitation est destinée à ${invitation.email}. Connectez-vous avec cette adresse pour l'accepter.`,
     );
   }
 

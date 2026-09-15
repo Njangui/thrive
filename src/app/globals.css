@@ -41,6 +41,20 @@
  * par tenant) — les trois systèmes de classes coexistent dans le même bundle
  * sans jamais se toucher. Consomme les tokens `violet/magenta/navy/success/
  * warning/danger` + `font-jakarta`/`font-inter` ajoutés à tailwind.config.ts.
+ *
+ * Unification design (sept. 2026) : `adm-*` sert désormais TOUT le
+ * périmètre "app authentifiée/transactionnelle" de SME-OS — Super Admin
+ * (`/admin/*`) ET dashboard marchand (`/dashboard/*`), + login/onboarding/
+ * invite/pages légales — pas seulement la console Super Admin comme son
+ * nom historique le suggère encore. Choix volontaire de ne PAS renommer
+ * `adm-*` -> `app-*` pour ce chantier : ~19 fichiers admin déjà testés en
+ * dépendent, un renommage global aurait déplacé du risque sans bénéfice
+ * visible pour l'utilisateur final — seul le nom de la classe reste un
+ * détail d'implémentation historique. La vitrine publique tenant
+ * (`ink/paper/leaf/...` ci-dessus + `landing-sections/`) reste
+ * volontairement SUR SON PROPRE THÈME — c'est la marque du commerçant qui
+ * s'affiche à SES clients, pas celle de SME-OS (décision explicite,
+ * demandée par le porteur du projet, pas un oubli de ce chantier).
  */
 
 @layer components {
@@ -73,7 +87,8 @@
     @apply flex items-center gap-2 text-xs font-medium text-navy-900/70;
   }
 
-  /* --- Console Super Admin (/admin/*) --- */
+  /* --- Console Super Admin (/admin/*) + Dashboard marchand (/dashboard/*)
+     + login/onboarding/invite/pages légales --- */
   .adm-shell {
     @apply min-h-screen bg-[#F7F6FD] font-inter text-navy-900;
   }
@@ -145,5 +160,33 @@
   }
   .adm-sidebar-group-label {
     @apply px-3 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-wider text-white/30;
+  }
+
+  /*
+   * Bannières de feedback (formulaires dashboard/onboarding/login/invite) —
+   * remplacent l'idiome répété ~40 fois dans l'ancien thème ink/paper
+   * (`rounded-brand border border-leaf/30 bg-leaf/5 ... text-leaf` pour le
+   * succès, variante `clay` pour l'erreur) par une classe unique par ton,
+   * cohérente avec `adm-badge-*` ci-dessus.
+   */
+  .adm-alert-success {
+    @apply rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-success-700;
+  }
+  .adm-alert-danger {
+    @apply rounded-xl border border-danger-600/20 bg-danger-50 px-4 py-3 text-sm text-danger-700;
+  }
+  .adm-alert-warning {
+    @apply rounded-xl border border-warning-600/20 bg-warning-50 px-4 py-3 text-sm text-warning-700;
+  }
+  .adm-alert-neutral {
+    @apply rounded-xl border border-navy-900/10 bg-navy-900/[0.03] px-4 py-3 text-sm text-navy-900/70;
+  }
+
+  /* Carte de statistique "alerte" (ex: dashboard/page.tsx — commandes en
+     attente, produits en rupture) : variante de .adm-card avec accent
+     warning au lieu du succès/danger des bannières ci-dessus — ce sont des
+     signaux "à surveiller", pas des échecs. */
+  .adm-card-alert {
+    @apply rounded-2xl border border-warning-600/30 bg-warning-50/60 p-5 shadow-[0_1px_3px_rgba(16,23,49,0.05)];
   }
 }

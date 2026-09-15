@@ -8,6 +8,7 @@ import { DEFAULT_COUNTRY_CODE } from "./country-service";
 import { validateMoney } from "./currency-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { confirmAddonPurchase } from "./addons-service";
+import { recordAffiliateConversion } from "./affiliate-service";
 
 /**
  * Lot G, Partie 1 — Paiement d'abonnement. Flow : initiatePayment() crée
@@ -285,22 +286,43 @@ export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise
     return;
   }
 
+  await verifyAndReconcilePayment(payment as SubscriptionPaymentRow);
+}
+
+/**
+ * Repasse fiabilité P0 (07/09/2026, section 62 de la mission :
+ * "réconciliation... ne jamais dépendre exclusivement du navigateur ou
+ * d'un seul webhook") — extrait de `handlePaymentWebhook` (comportement
+ * strictement inchangé pour le webhook lui-même) pour être réutilisable
+ * par `reconcileStalePayments()` ci-dessous : un paiement `pending`
+ * n'arrive ici QUE si NotchPay a effectivement livré un webhook pour sa
+ * référence. Si la livraison échoue purement et simplement (NotchPay ne
+ * réessaie qu'un temps, ou notre endpoint était indisponible au mauvais
+ * moment), rien ne déclenchait jamais de seconde vérification — le
+ * paiement restait `pending` indéfiniment, l'abonnement jamais activé
+ * bien que le client ait payé.
+ */
+async function verifyAndReconcilePayment(payment: SubscriptionPaymentRow): Promise<"completed" | "failed" | "still_pending"> {
+  const supabase = getSupabaseServiceClient();
+
   // Idempotence (critère d'acceptation) : un webhook rejoué deux fois
-  // (même provider_reference, NotchPay documente des retries) ne doit
-  // produire aucun second effet.
+  // (même provider_reference, NotchPay documente des retries) — ou cette
+  // même fonction appelée à la fois par le webhook et par la
+  // réconciliation programmée pour le même paiement — ne doit produire
+  // aucun second effet.
   if (payment.status !== "pending") {
-    return;
+    return payment.status === "completed" ? "completed" : "failed";
   }
 
   // Ne JAMAIS faire confiance au seul corps du webhook — revérifier via
   // l'API avant de livrer quoi que ce soit ("Best Practices" NotchPay :
   // "Always verify the payment status using the API before fulfilling").
   const provider = await getPaymentProvider(payment.organization_id);
-  const verified = await provider.verifyPayment(reference);
+  const verified = await provider.verifyPayment(payment.provider_reference);
 
   if (verified.status === "succeeded") {
-    await markPaymentCompleted(payment as SubscriptionPaymentRow);
-    return;
+    await markPaymentCompleted(payment);
+    return "completed";
   }
 
   if (verified.status === "failed") {
@@ -312,7 +334,7 @@ export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise
       .select("id")
       .maybeSingle();
 
-    if (!updated) return; // course perdue contre une autre exécution — rien à notifier deux fois
+    if (!updated) return "failed"; // course perdue contre une autre exécution — rien à notifier deux fois
 
     await notifyOrgAdmins({
       organizationId: payment.organization_id,
@@ -324,8 +346,63 @@ export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise
       relatedEntityType: "subscription_payment",
       relatedEntityId: payment.id,
     });
+    return "failed";
   }
-  // 'pending'/'processing' côté NotchPay : rien à faire, un futur event le confirmera.
+
+  // 'pending'/'processing' côté NotchPay : rien à faire, un futur event (ou la prochaine réconciliation) le confirmera.
+  return "still_pending";
+}
+
+/**
+ * Section 62 de la mission : job de réconciliation. Reprend tout paiement
+ * resté `pending` plus de `staleAfterMinutes` (défaut 20 — le temps
+ * qu'un webhook NotchPay arrive normalement, avec de la marge avant de
+ * le considérer suspect) et le revérifie via l'API NotchPay, exactement
+ * comme le ferait un webhook — même fonction partagée
+ * (`verifyAndReconcilePayment`), donc mêmes garanties d'idempotence et
+ * la même règle "jamais confiance au corps, toujours revérifier via
+ * l'API". Conçu pour tourner sur cron (voir
+ * `/api/cron/process-payment-reconciliation`), mais reste une fonction
+ * de service ordinaire — testable indépendamment de la route.
+ */
+export async function reconcileStalePayments(staleAfterMinutes = 20): Promise<{
+  checked: number;
+  completed: number;
+  failed: number;
+  stillPending: number;
+}> {
+  const supabase = getSupabaseServiceClient();
+  const staleThreshold = new Date(Date.now() - staleAfterMinutes * 60 * 1000).toISOString();
+
+  const { data: stalePayments, error } = await supabase
+    .from("subscription_payments")
+    .select(
+      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, currency_code, provider_reference, status",
+    )
+    .eq("status", "pending")
+    .lt("created_at", staleThreshold)
+    .not("provider_reference", "is", null);
+
+  if (error) {
+    throw new Error(`reconcileStalePayments: erreur lecture subscription_payments: ${error.message}`);
+  }
+
+  const result = { checked: 0, completed: 0, failed: 0, stillPending: 0 };
+  for (const payment of stalePayments ?? []) {
+    result.checked += 1;
+    try {
+      const outcome = await verifyAndReconcilePayment(payment as SubscriptionPaymentRow);
+      if (outcome === "completed") result.completed += 1;
+      else if (outcome === "failed") result.failed += 1;
+      else result.stillPending += 1;
+    } catch (reconcileError) {
+      // Un paiement dont la réconciliation échoue (ex: provider
+      // temporairement indisponible) ne doit jamais bloquer les
+      // suivants — repris automatiquement au prochain passage du cron.
+      console.error(`reconcileStalePayments: échec réconciliation ${payment.id}:`, reconcileError);
+    }
+  }
+  return result;
 }
 
 /**
@@ -593,6 +670,19 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
     if (auditError) {
       console.error("markPaymentCompleted: échec journalisation audit_logs:", auditError.message);
     }
+
+    // Programme d'affiliation (0044) — best-effort par contrat de
+    // fonction (voir affiliate-service.ts) : n'affecte jamais la
+    // confirmation du paiement lui-même, qui est déjà actée ci-dessus.
+    // Scopé aux paiements d'abonnement uniquement (jamais un addon,
+    // section suivante) — c'est la valeur d'abonnement, pas un achat
+    // ponctuel, qui fonde la commission (voir 0044_affiliate_system.sql).
+    await recordAffiliateConversion({
+      id: payment.id,
+      organizationId: payment.organization_id,
+      amountFcfa: payment.amount_fcfa,
+      currencyCode: payment.currency_code,
+    });
 
     await notifyOrgAdmins({
       organizationId: payment.organization_id,

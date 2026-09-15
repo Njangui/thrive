@@ -26,29 +26,29 @@ export function FinanceForms({
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <form action={createRevenueAction} className="flex flex-col gap-2 rounded-brand border border-ink/10 bg-white p-4">
+      <form action={createRevenueAction} className="flex flex-col gap-2 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
         <input type="hidden" name="organizationId" value={organizationId} />
-        <p className="text-sm font-medium text-leaf">+ Revenu</p>
-        <input name="amount" type="number" min="0" required placeholder="Montant" className="rounded-brand border border-ink/15 px-3 py-2 text-sm" />
-        <input name="category" placeholder="Catégorie (optionnel)" className="rounded-brand border border-ink/15 px-3 py-2 text-sm" />
-        <input name="note" placeholder="Note (optionnel)" className="rounded-brand border border-ink/15 px-3 py-2 text-sm" />
+        <p className="text-sm font-medium text-success-600">+ Revenu</p>
+        <input name="amount" type="number" min="0" required placeholder="Montant" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <input name="category" placeholder="Catégorie (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <input name="note" placeholder="Note (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
         <SubmitButton
           pendingLabel="Enregistrement..."
-          className="w-fit rounded-brand bg-leaf px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="w-fit rounded-xl bg-success-600 px-4 py-2 text-sm font-medium text-white hover:bg-success-700 disabled:opacity-60"
         >
           Enregistrer
         </SubmitButton>
       </form>
 
-      <form action={createExpenseAction} className="flex flex-col gap-2 rounded-brand border border-ink/10 bg-white p-4">
+      <form action={createExpenseAction} className="flex flex-col gap-2 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
         <input type="hidden" name="organizationId" value={organizationId} />
-        <p className="text-sm font-medium text-clay">+ Dépense</p>
-        <input name="amount" type="number" min="0" required placeholder="Montant" className="rounded-brand border border-ink/15 px-3 py-2 text-sm" />
-        <input name="category" placeholder="Ex : transport, loyer..." className="rounded-brand border border-ink/15 px-3 py-2 text-sm" />
-        <input name="description" placeholder="Description (optionnel)" className="rounded-brand border border-ink/15 px-3 py-2 text-sm" />
+        <p className="text-sm font-medium text-danger-600">+ Dépense</p>
+        <input name="amount" type="number" min="0" required placeholder="Montant" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <input name="category" placeholder="Ex : transport, loyer..." className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <input name="description" placeholder="Description (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
         <SubmitButton
           pendingLabel="Enregistrement..."
-          className="w-fit rounded-brand bg-clay px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="w-fit rounded-xl bg-danger-600 px-4 py-2 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60"
         >
           Enregistrer
         </SubmitButton>

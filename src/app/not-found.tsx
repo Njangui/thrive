@@ -8,6 +8,10 @@ import Link from "next/link";
  * public d'un tenant, landing marketing) — reste volontairement neutre
  * plutôt que de deviner dans quel "univers" (section 5 du master prompt)
  * l'utilisateur se trouvait.
+ *
+ * Pour la même raison, volontairement PAS repassé en violet/navy lors du
+ * chantier d'unification design (sept. 2026) — voir la note équivalente
+ * dans `error.tsx`.
  */
 export default function NotFound() {
   return (

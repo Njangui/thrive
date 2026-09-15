@@ -71,6 +71,14 @@ const PUBLIC_REFERENCE_TABLES = new Set([
  *   anon-key direct), et l'historique de synchronisation NotchPay n'a
  *   aucun besoin de lecture applicative tenant — accès service-role
  *   uniquement pour les deux.
+ * - affiliate_payout_items (0044_affiliate_system.sql) : simple table
+ *   d'association payout<->conversions, jamais lue directement (les
+ *   deux vues affilié/admin passent par affiliate_payouts/
+ *   affiliate_conversions) — accès service-role uniquement.
+ * - affiliate_fraud_flags (0044_affiliate_system.sql) : file de revue
+ *   anti-fraude, réservée à la console Super Admin
+ *   (`affiliate-admin-service.ts`, `requirePlatformAdmin()`) — un
+ *   affilié ne doit jamais voir les signalements le concernant.
  */
 const SERVICE_ROLE_ONLY_TABLES = new Set([
   "platform_admins",
@@ -79,9 +87,22 @@ const SERVICE_ROLE_ONLY_TABLES = new Set([
   "phone_numbers",
   "country_waitlist",
   "notchpay_sync_runs",
+  "affiliate_payout_items",
+  "affiliate_fraud_flags",
 ]);
 
-const TENANT_SAFE_MARKERS = ["organization_id", "is_member_of_org", "is_platform_admin", "auth.uid()"];
+/**
+ * `is_affiliate_owner` (0044_affiliate_system.sql) rejoint
+ * `is_member_of_org`/`is_platform_admin` : même rôle exact — une
+ * fonction SECURITY DEFINER étroite qui vérifie `auth.uid()` en
+ * interne (voir sa définition) pour un troisième rôle du produit
+ * (l'affilié), ni un membre d'organisation ni un Super Admin. Une
+ * politique qui l'utilise est tenant-safe au même titre que les deux
+ * autres, même si la chaîne littérale `auth.uid()` n'apparaît pas dans
+ * la clause de la policy elle-même (elle est encapsulée dans la
+ * fonction).
+ */
+const TENANT_SAFE_MARKERS = ["organization_id", "is_member_of_org", "is_platform_admin", "is_affiliate_owner", "auth.uid()"];
 
 function readAllMigrations(): string {
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));

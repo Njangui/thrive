@@ -57,11 +57,11 @@ export default async function NotificationsPage({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Notifications</h1>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Notifications</h1>
         {hasUnread && (
           <form action={markAllReadAction}>
             <input type="hidden" name="organizationId" value={organizationId} />
-            <button type="submit" className="text-sm text-leaf hover:underline">
+            <button type="submit" className="text-sm text-violet-600 hover:underline">
               Tout marquer comme lu
             </button>
           </form>
@@ -69,7 +69,7 @@ export default async function NotificationsPage({
       </div>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
 
       {/* Lot I, Partie 1 — masqué automatiquement si VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
@@ -81,7 +81,7 @@ export default async function NotificationsPage({
       {isPushConfigured() && <PushToggle organizationId={organizationId} vapidPublicKey={env.VAPID_PUBLIC_KEY!} />}
 
       {notifications.length === 0 ? (
-        <p className="text-sm text-muted">Aucune notification pour l&apos;instant.</p>
+        <p className="text-sm text-slate-500">Aucune notification pour l&apos;instant.</p>
       ) : (
         <div className="flex flex-col gap-2">
           {notifications.map((n) => {
@@ -90,19 +90,19 @@ export default async function NotificationsPage({
             const content = (
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className={`text-sm ${isUnread ? "font-semibold text-ink" : "text-muted"}`}>{n.title}</p>
-                  <p className="text-sm text-muted">{n.body}</p>
-                  <p className="mt-1 text-xs text-muted">{new Date(n.createdAt).toLocaleString("fr-FR")}</p>
+                  <p className={`text-sm ${isUnread ? "font-semibold text-navy-900" : "text-slate-500"}`}>{n.title}</p>
+                  <p className="text-sm text-slate-500">{n.body}</p>
+                  <p className="mt-1 text-xs text-slate-500">{new Date(n.createdAt).toLocaleString("fr-FR")}</p>
                 </div>
-                {isUnread && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-leaf" aria-hidden="true" />}
+                {isUnread && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-violet-600" aria-hidden="true" />}
               </div>
             );
 
             return (
               <div
                 key={n.id}
-                className={`rounded-brand border px-4 py-3 ${
-                  isUnread ? "border-leaf/30 bg-leaf/5" : "border-ink/10 bg-white"
+                className={`rounded-xl border px-4 py-3 ${
+                  isUnread ? "border-success-600/20 bg-success-50" : "border-navy-900/10 bg-white"
                 }`}
               >
                 {url ? (
@@ -116,7 +116,7 @@ export default async function NotificationsPage({
                   <form action={markReadAction} className="mt-2">
                     <input type="hidden" name="organizationId" value={organizationId} />
                     <input type="hidden" name="notificationId" value={n.id} />
-                    <button type="submit" className="text-xs text-leaf hover:underline">
+                    <button type="submit" className="text-xs text-violet-600 hover:underline">
                       Marquer comme lu
                     </button>
                   </form>

@@ -156,7 +156,7 @@ export async function listConnectedGroups(organizationId: string): Promise<Conne
 export async function listAvailableGroupsFromZernio(organizationId: string): Promise<ListAvailableGroupsResult> {
   let provider;
   try {
-    provider = await getMessagingProvider(organizationId);
+    provider = await getMessagingProvider(organizationId, "zernio"); // groupes WhatsApp : fonctionnalité Zernio uniquement (voir MessagingProvider.listWhatsAppGroups?, optionnel par provider).
   } catch (err) {
     return { groups: [], error: err instanceof Error ? err.message : String(err) };
   }
@@ -394,7 +394,7 @@ export async function disconnectGroup(organizationId: string, groupId: string, _
 export async function syncGroupsFromZernio(organizationId: string): Promise<SyncGroupsResult> {
   let provider;
   try {
-    provider = await getMessagingProvider(organizationId);
+    provider = await getMessagingProvider(organizationId, "zernio"); // groupes WhatsApp : fonctionnalité Zernio uniquement (voir MessagingProvider.listWhatsAppGroups?, optionnel par provider).
   } catch (err) {
     return { refreshed: 0, markedError: 0, error: err instanceof Error ? err.message : String(err) };
   }
@@ -830,7 +830,7 @@ async function processOneBroadcast(
   let provider: Awaited<ReturnType<typeof getMessagingProvider>> | null = null;
   let providerError: string | null = null;
   try {
-    provider = await getMessagingProvider(organizationId);
+    provider = await getMessagingProvider(organizationId, "zernio"); // groupes WhatsApp : fonctionnalité Zernio uniquement (voir MessagingProvider.listWhatsAppGroups?, optionnel par provider).
   } catch (err) {
     providerError = err instanceof Error ? err.message : String(err);
   }

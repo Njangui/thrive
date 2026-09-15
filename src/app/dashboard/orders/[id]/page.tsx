@@ -48,10 +48,10 @@ export default async function OrderDetailPage({
     if (error instanceof NotFoundError) {
       return (
         <div className="flex flex-col gap-4">
-          <Link href="/dashboard/orders" className="text-sm text-leaf hover:underline">
+          <Link href="/dashboard/orders" className="text-sm text-violet-600 hover:underline">
             ← Retour aux commandes
           </Link>
-          <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
+          <p className="adm-alert-danger">
             Commande introuvable.
           </p>
         </div>
@@ -63,35 +63,35 @@ export default async function OrderDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href="/dashboard/orders" className="text-sm text-leaf hover:underline">
+        <Link href="/dashboard/orders" className="text-sm text-violet-600 hover:underline">
           ← Retour aux commandes
         </Link>
         <div className="mt-2 flex items-center justify-between">
-          <h1 className="font-display text-2xl font-bold tracking-tight">
+          <h1 className="font-jakarta text-2xl font-bold tracking-tight">
             Commande du {new Date(order.createdAt).toLocaleDateString("fr-FR")}
           </h1>
-          <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs">{STATUS_LABELS[order.status]}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{STATUS_LABELS[order.status]}</span>
         </div>
       </div>
 
-      {success && <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>}
+      {success && <p className="adm-alert-success">{success}</p>}
 
-      <section className="rounded-brand border border-ink/10 bg-white p-4">
-        <h2 className="font-display text-lg font-semibold">Client</h2>
+      <section className="rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+        <h2 className="font-jakarta text-lg font-semibold">Client</h2>
         <p className="mt-2 text-sm">{order.contactName ?? "Client anonyme"}</p>
-        <p className="text-sm text-muted">{order.contactPhone ?? "—"}</p>
-        {order.notes && <p className="mt-3 text-sm text-muted">Notes : {order.notes}</p>}
+        <p className="text-sm text-slate-500">{order.contactPhone ?? "—"}</p>
+        {order.notes && <p className="mt-3 text-sm text-slate-500">Notes : {order.notes}</p>}
       </section>
 
-      <section className="rounded-brand border border-ink/10 bg-white p-4">
-        <h2 className="font-display text-lg font-semibold">Articles</h2>
+      <section className="rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+        <h2 className="font-jakarta text-lg font-semibold">Articles</h2>
         <ul className="mt-3 flex flex-col gap-2 text-sm">
           {order.items.map((item) => (
-            <li key={item.id} className="flex items-center justify-between border-b border-ink/5 pb-2 last:border-0">
+            <li key={item.id} className="flex items-center justify-between border-b border-navy-900/5 pb-2 last:border-0">
               <span>
                 {item.label} × {item.quantity}
               </span>
-              <span className="text-muted">{(item.unitPrice * item.quantity).toLocaleString("fr-FR")}</span>
+              <span className="text-slate-500">{(item.unitPrice * item.quantity).toLocaleString("fr-FR")}</span>
             </li>
           ))}
         </ul>
@@ -105,14 +105,14 @@ export default async function OrderDetailPage({
           <form action={completeOrderAction}>
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="orderId" value={order.id} />
-            <SubmitButton pendingLabel="..." className="rounded-brand bg-leaf px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
+            <SubmitButton pendingLabel="..." className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
               Marquer comme terminée
             </SubmitButton>
           </form>
           <form action={cancelOrderAction}>
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="orderId" value={order.id} />
-            <SubmitButton pendingLabel="..." className="rounded-brand border border-clay/30 px-4 py-2 text-sm font-medium text-clay disabled:opacity-60">
+            <SubmitButton pendingLabel="..." className="rounded-xl border border-danger-600/20 px-4 py-2 text-sm font-medium text-danger-600 disabled:opacity-60">
               Annuler
             </SubmitButton>
           </form>

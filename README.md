@@ -84,6 +84,8 @@ tests/                  Setup Vitest
 - [`docs/SECURITY.md`](docs/SECURITY.md) — RLS, secrets, vulnérabilités connues des dépendances
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — déploiement Vercel + Supabase
 - [`docs/MVP_SCOPE.md`](docs/MVP_SCOPE.md) — ce qui est dans le MVP, ce qui est explicitement V2
+- [`docs/AFFILIATE_SYSTEM.md`](docs/AFFILIATE_SYSTEM.md) — programme d'affiliation (parrainage, commissions, anti-fraude)
+- [`docs/TELEGRAM_INTEGRATION.md`](docs/TELEGRAM_INTEGRATION.md) — bot plateforme + canal client, tous deux indépendants de Zernio
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — ce qu'il reste à faire, y compris dans ce dépôt précis
 
 ## État actuel (honnête)

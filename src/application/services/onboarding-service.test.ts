@@ -126,6 +126,14 @@ describe("createOrganization — Country Engine (section 12/13)", () => {
       if (table === "memberships" || table === "tenant_modules" || table === "ai_config") {
         return { insert: () => Promise.resolve({ error: null }) };
       }
+      if (table === "categories") {
+        // seedDefaultCategories : vérifie d'abord qu'aucune catégorie
+        // n'existe déjà (compte à 0 ici), puis insère le preset par défaut.
+        return {
+          select: () => ({ eq: () => Promise.resolve({ count: 0, error: null }) }),
+          insert: () => Promise.resolve({ error: null }),
+        };
+      }
       return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
     });
 

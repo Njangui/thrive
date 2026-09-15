@@ -101,48 +101,48 @@ export default async function AppointmentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Rendez-vous</h1>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Rendez-vous</h1>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="adm-alert-success">{success}</p>
       )}
 
-      <div className="rounded-brand border border-ink/10 bg-white p-4">
-        <h2 className="mb-3 font-display text-lg font-semibold">Nouveau rendez-vous</h2>
+      <div className="rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+        <h2 className="mb-3 font-jakarta text-lg font-semibold">Nouveau rendez-vous</h2>
         <form action={createAppointmentAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input type="hidden" name="organizationId" value={organizationId} />
 
           <label className="flex flex-col gap-1 text-sm">
             Client
-            <input name="contactName" required className="rounded-brand border border-ink/15 px-4 py-3" />
+            <input name="contactName" required className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
             Téléphone (optionnel)
-            <input name="contactPhone" placeholder="+237..." className="rounded-brand border border-ink/15 px-4 py-3" />
+            <input name="contactPhone" placeholder="+237..." className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
 
           <label className="flex flex-col gap-1 text-sm sm:col-span-2">
             Service
-            <input name="serviceLabel" required placeholder="Ex : Coupe homme" className="rounded-brand border border-ink/15 px-4 py-3" />
+            <input name="serviceLabel" required placeholder="Ex : Coupe homme" className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
             Date
-            <input name="date" type="date" required className="rounded-brand border border-ink/15 px-4 py-3" />
+            <input name="date" type="date" required className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
             Heure
-            <input name="time" type="time" required className="rounded-brand border border-ink/15 px-4 py-3" />
+            <input name="time" type="time" required className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
             Durée
-            <select name="duration" defaultValue={30} className="rounded-brand border border-ink/15 px-4 py-3">
+            <select name="duration" defaultValue={30} className="rounded-xl border border-navy-900/10 px-4 py-3">
               {DURATION_OPTIONS_MINUTES.map((m) => (
                 <option key={m} value={m}>
                   {m} min
@@ -153,7 +153,7 @@ export default async function AppointmentsPage({
 
           <label className="flex flex-col gap-1 text-sm sm:col-span-2">
             Note (optionnel)
-            <input name="notes" className="rounded-brand border border-ink/15 px-4 py-3" />
+            <input name="notes" className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
 
           <div className="sm:col-span-2">
@@ -162,12 +162,12 @@ export default async function AppointmentsPage({
         </form>
       </div>
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
         {appointments.length === 0 ? (
-          <p className="p-6 text-sm text-muted">Aucun rendez-vous pour l&apos;instant.</p>
+          <p className="p-6 text-sm text-slate-500">Aucun rendez-vous pour l&apos;instant.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-ink/5 text-left text-xs uppercase tracking-wide text-muted">
+            <thead className="bg-navy-900/5 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-2">Date</th>
                 <th className="px-4 py-2">Client</th>
@@ -177,11 +177,11 @@ export default async function AppointmentsPage({
             </thead>
             <tbody>
               {appointments.map((appt) => (
-                <tr key={appt.id} className="border-b border-ink/5 last:border-0">
+                <tr key={appt.id} className="border-b border-navy-900/5 last:border-0">
                   <td className="whitespace-nowrap px-4 py-2">{formatLocalDateTime(appt.startAt)}</td>
                   <td className="px-4 py-2">
                     {appt.contactName ?? "—"}
-                    {appt.contactPhone && <span className="block text-xs text-muted">{appt.contactPhone}</span>}
+                    {appt.contactPhone && <span className="block text-xs text-slate-500">{appt.contactPhone}</span>}
                   </td>
                   <td className="px-4 py-2">{appt.serviceLabel}</td>
                   <td className="px-4 py-2">
@@ -191,7 +191,7 @@ export default async function AppointmentsPage({
                       <select
                         name="status"
                         defaultValue={appt.status}
-                        className="rounded-brand border border-ink/15 px-2 py-1 text-xs outline-none focus:border-leaf"
+                        className="rounded-xl border border-navy-900/10 px-2 py-1 text-xs outline-none focus:border-violet-400"
                       >
                         {APPOINTMENT_STATUSES.map((s) => (
                           <option key={s} value={s}>
@@ -201,7 +201,7 @@ export default async function AppointmentsPage({
                       </select>
                       <SubmitButton
                         pendingLabel="..."
-                        className="rounded-brand bg-ink/5 px-2 py-1 text-xs font-medium text-ink transition-colors hover:bg-ink/10 disabled:opacity-60"
+                        className="rounded-xl bg-navy-900/5 px-2 py-1 text-xs font-medium text-navy-900 transition-colors hover:bg-navy-900/10 disabled:opacity-60"
                       >
                         OK
                       </SubmitButton>

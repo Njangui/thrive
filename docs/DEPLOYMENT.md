@@ -124,6 +124,24 @@ vers un groupe fraîchement connecté — voir `docs/ZERNIO_INTEGRATION.md`,
 section "Groupes WhatsApp", pour la limitation réelle et documentée de
 l'API Zernio (pas un bug de cette route).
 
+## 4ter. Réconciliation des paiements NotchPay (section 62, 07/09/2026) — cron externe
+
+`app/api/cron/process-payment-reconciliation/route.ts` reprend tout
+paiement resté `pending` plus de 20 minutes et le revérifie directement
+auprès de l'API NotchPay — filet de sécurité pour le cas où le webhook
+NotchPay n'est simplement jamais arrivé (livraison échouée, endpoint
+indisponible au mauvais moment) : sans ce job, un tel paiement resterait
+`pending` indéfiniment bien que le client ait réellement payé.
+
+Même mise en place que `process-broadcasts` ci-dessus (même
+`CRON_SECRET`) :
+1. Programmer un appel `GET` (ou `POST`) toutes les 15 à 30 minutes vers
+   `https://votre-domaine.com/api/cron/process-payment-reconciliation`,
+   avec l'en-tête `Authorization: Bearer <CRON_SECRET>`.
+2. La réponse JSON (`{ ok, checked, completed, failed, stillPending }`)
+   permet de vérifier rapidement que le cron tourne et de repérer un
+   volume anormal de paiements bloqués.
+
 ## 5. Domaines custom par tenant
 
 `middleware.ts` gère déjà la résolution par sous-domaine
@@ -166,10 +184,12 @@ n'est pas dans cette table reçoit un 404 générique sur tout `/admin/*`
       HTTPS pour être actifs (hors `localhost`) — tester l'installabilité
       sur le domaine de prod réel, pas seulement en local
 - [ ] Configurer `CRON_SECRET` et le déclencheur externe pour
-      `/api/cron/process-broadcasts` ET `/api/cron/process-subscription-renewals`
-      (Lot F puis Lot N) — sans lui, ces deux routes refusent désormais
-      la requête en production (`NODE_ENV === "production"`, correctif
-      Lot 1, voir `docs/SECURITY.md`) plutôt que de l'accepter silencieusement
+      `/api/cron/process-broadcasts`, `/api/cron/process-subscription-renewals`
+      ET `/api/cron/process-payment-reconciliation` (Lot F, Lot N, puis
+      section 62 du 07/09/2026) — sans lui, ces trois routes refusent
+      désormais la requête en production (`NODE_ENV === "production"`,
+      correctif Lot 1, voir `docs/SECURITY.md`) plutôt que de l'accepter
+      silencieusement
 - [ ] Configurer le webhook NotchPay + `NOTCHPAY_WEBHOOK_SECRET` (Lot G,
       section 3bis) avant d'annoncer le paiement d'abonnement/add-ons
 - [ ] Vérifier l'activation carte bancaire NotchPay dans le dashboard du

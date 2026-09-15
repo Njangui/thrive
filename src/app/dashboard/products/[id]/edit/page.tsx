@@ -9,11 +9,13 @@ import {
   moveProductImage,
   setPrimaryProductImage,
   restockProduct,
+  listCategories,
 } from "@/application/services/catalog-service";
 import { resolveImageFromFormData } from "@/application/services/media-service";
 import { AppError, NotFoundError } from "@/lib/errors";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { CategorySelect } from "../../../_components/category-select";
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Brouillon" },
@@ -33,7 +35,7 @@ async function updateProductAction(formData: FormData) {
     await updateProduct(productId, organizationId, {
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? "") || undefined,
-      categoryName: String(formData.get("category") ?? "") || undefined,
+      categoryId: String(formData.get("categoryId") ?? ""),
       unitPrice: Number(formData.get("price") ?? 0),
       compareAtPrice: formData.get("compareAtPrice") ? Number(formData.get("compareAtPrice")) : null,
       currentStock: Number(formData.get("stock") ?? 0),
@@ -177,17 +179,17 @@ export default async function EditProductPage({
     throw err;
   }
 
-  const images = await listProductImages(organizationId, id);
+  const [images, categories] = await Promise.all([listProductImages(organizationId, id), listCategories(organizationId)]);
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Modifier le produit</h1>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Modifier le produit</h1>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="adm-alert-success">{success}</p>
       )}
 
       <form action={updateProductAction} className="flex flex-col gap-3">
@@ -196,7 +198,7 @@ export default async function EditProductPage({
 
         <label className="flex flex-col gap-1 text-sm">
           Nom
-          <input name="name" required defaultValue={product.name} className="rounded-brand border border-ink/15 px-4 py-3" />
+          <input name="name" required defaultValue={product.name} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
@@ -207,7 +209,7 @@ export default async function EditProductPage({
             min="0"
             required
             defaultValue={product.unitPrice}
-            className="rounded-brand border border-ink/15 px-4 py-3"
+            className="rounded-xl border border-navy-900/10 px-4 py-3"
           />
         </label>
 
@@ -219,9 +221,9 @@ export default async function EditProductPage({
             min="0"
             defaultValue={product.compareAtPrice ?? ""}
             placeholder="Laissez vide si pas de promotion"
-            className="rounded-brand border border-ink/15 px-4 py-3"
+            className="rounded-xl border border-navy-900/10 px-4 py-3"
           />
-          <span className="text-xs text-muted">
+          <span className="text-xs text-slate-500">
             Doit être supérieur au prix ci-dessus — affiché barré, avec un badge « Promo », sur la fiche produit et
             dans la section Promotions de votre site.
           </span>
@@ -234,30 +236,22 @@ export default async function EditProductPage({
             type="number"
             min="0"
             defaultValue={product.currentStock}
-            className="rounded-brand border border-ink/15 px-4 py-3"
+            className="rounded-xl border border-navy-900/10 px-4 py-3"
           />
-          <span className="text-xs text-muted">
+          <span className="text-xs text-slate-500">
             Fixe la valeur exacte du stock. Pour un réassort (nouvelle livraison reçue), utilisez plutôt
             « Réapprovisionner » ci-dessous — ça réactive automatiquement le produit s&apos;il était en rupture.
           </span>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Catégorie
-          <input
-            name="category"
-            placeholder="Ex : Chaussures"
-            defaultValue={product.categoryName ?? ""}
-            className="rounded-brand border border-ink/15 px-4 py-3"
-          />
-        </label>
+        <CategorySelect categories={categories} defaultValue={product.categoryId} />
 
         <label className="flex flex-col gap-1 text-sm">
           Statut
           <select
             name="status"
             defaultValue={product.status}
-            className="rounded-brand border border-ink/15 px-4 py-3 outline-none focus:border-leaf"
+            className="rounded-xl border border-navy-900/10 px-4 py-3 outline-none focus:border-violet-400"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -273,14 +267,14 @@ export default async function EditProductPage({
             name="description"
             rows={3}
             defaultValue={product.description ?? ""}
-            className="rounded-brand border border-ink/15 px-4 py-3"
+            className="rounded-xl border border-navy-900/10 px-4 py-3"
           />
         </label>
 
-        <div className="flex flex-col gap-3 rounded-brand border border-ink/15 p-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
           <div>
             <p className="text-sm font-medium">Référencement sur Google (optionnel)</p>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-slate-500">
               Laissez vide pour utiliser automatiquement le nom du produit et celui de votre entreprise.
             </p>
           </div>
@@ -292,7 +286,7 @@ export default async function EditProductPage({
               maxLength={70}
               defaultValue={product.seoTitle ?? ""}
               placeholder={`${product.name} — ...`}
-              className="rounded-brand border border-ink/15 px-4 py-3"
+              className="rounded-xl border border-navy-900/10 px-4 py-3"
             />
           </label>
 
@@ -303,7 +297,7 @@ export default async function EditProductPage({
               rows={2}
               maxLength={160}
               defaultValue={product.seoDescription ?? ""}
-              className="rounded-brand border border-ink/15 px-4 py-3"
+              className="rounded-xl border border-navy-900/10 px-4 py-3"
             />
           </label>
         </div>
@@ -312,11 +306,11 @@ export default async function EditProductPage({
       </form>
 
       {/* Réapprovisionnement — séparé du formulaire ci-dessus (delta, pas une valeur absolue). */}
-      <form action={restockProductAction} className="flex flex-col gap-2 rounded-brand border border-ink/15 p-4">
+      <form action={restockProductAction} className="flex flex-col gap-2 rounded-xl border border-navy-900/10 p-4">
         <input type="hidden" name="organizationId" value={organizationId} />
         <input type="hidden" name="productId" value={product.id} />
         <p className="text-sm font-medium">Réapprovisionner</p>
-        <p className="text-xs text-muted">
+        <p className="text-xs text-slate-500">
           Nouvelle livraison reçue ? Indiquez la quantité ajoutée — le stock actuel ({product.currentStock}) sera
           augmenté d&apos;autant, et le produit repassera automatiquement en « Actif » s&apos;il était en rupture.
         </p>
@@ -327,32 +321,32 @@ export default async function EditProductPage({
             min="1"
             placeholder="Quantité reçue"
             required
-            className="w-32 rounded-brand border border-ink/15 px-4 py-3"
+            className="w-32 rounded-xl border border-navy-900/10 px-4 py-3"
           />
           <SubmitButton pendingLabel="Ajout...">Ajouter au stock</SubmitButton>
         </div>
       </form>
 
       {/* Galerie photos — séparée du formulaire ci-dessus (voir en-tête du fichier). */}
-      <div className="flex flex-col gap-3 rounded-brand border border-ink/15 p-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
         <div>
           <p className="text-sm font-medium">Photos du produit</p>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-slate-500">
             La première photo est celle utilisée sur votre site, dans WhatsApp et vos publications.
           </p>
         </div>
 
         {images.length === 0 ? (
-          <p className="text-sm text-muted">Aucune photo pour l&apos;instant.</p>
+          <p className="text-sm text-slate-500">Aucune photo pour l&apos;instant.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {images.map((image, index) => (
-              <li key={image.id} className="flex items-center gap-3 rounded-brand border border-ink/10 p-2">
+              <li key={image.id} className="flex items-center gap-3 rounded-xl border border-navy-900/10 p-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} alt="" className="h-16 w-16 shrink-0 rounded-brand object-cover" />
+                <img src={image.url} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
                 <div className="min-w-0 flex-1">
                   {index === 0 ? (
-                    <span className="rounded-full bg-leaf/10 px-2 py-0.5 text-xs font-medium text-leaf">
+                    <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-violet-600">
                       Photo principale
                     </span>
                   ) : (
@@ -360,7 +354,7 @@ export default async function EditProductPage({
                       <input type="hidden" name="organizationId" value={organizationId} />
                       <input type="hidden" name="productId" value={product.id} />
                       <input type="hidden" name="imageId" value={image.id} />
-                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-leaf hover:underline disabled:opacity-60">
+                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-violet-600 hover:underline disabled:opacity-60">
                         Définir comme principale
                       </SubmitButton>
                     </form>
@@ -373,7 +367,7 @@ export default async function EditProductPage({
                       <input type="hidden" name="productId" value={product.id} />
                       <input type="hidden" name="imageId" value={image.id} />
                       <input type="hidden" name="direction" value="up" />
-                      <button type="submit" aria-label="Monter" className="flex h-7 w-7 items-center justify-center rounded-brand text-muted hover:bg-ink/5">
+                      <button type="submit" aria-label="Monter" className="flex h-7 w-7 items-center justify-center rounded-xl text-slate-500 hover:bg-navy-900/5">
                         ↑
                       </button>
                     </form>
@@ -384,7 +378,7 @@ export default async function EditProductPage({
                       <input type="hidden" name="productId" value={product.id} />
                       <input type="hidden" name="imageId" value={image.id} />
                       <input type="hidden" name="direction" value="down" />
-                      <button type="submit" aria-label="Descendre" className="flex h-7 w-7 items-center justify-center rounded-brand text-muted hover:bg-ink/5">
+                      <button type="submit" aria-label="Descendre" className="flex h-7 w-7 items-center justify-center rounded-xl text-slate-500 hover:bg-navy-900/5">
                         ↓
                       </button>
                     </form>
@@ -393,7 +387,7 @@ export default async function EditProductPage({
                     <input type="hidden" name="organizationId" value={organizationId} />
                     <input type="hidden" name="productId" value={product.id} />
                     <input type="hidden" name="imageId" value={image.id} />
-                    <SubmitButton pendingLabel="..." className="flex h-7 w-7 items-center justify-center rounded-brand text-clay hover:bg-clay/5 disabled:opacity-60">
+                    <SubmitButton pendingLabel="..." className="flex h-7 w-7 items-center justify-center rounded-xl text-danger-600 hover:bg-danger-50 disabled:opacity-60">
                       ✕
                     </SubmitButton>
                   </form>
@@ -403,11 +397,11 @@ export default async function EditProductPage({
           </ul>
         )}
 
-        <form action={addProductImageAction} className="flex flex-col gap-3 border-t border-ink/10 pt-3">
+        <form action={addProductImageAction} className="flex flex-col gap-3 border-t border-navy-900/10 pt-3">
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="productId" value={product.id} />
           <ImageUploadField name="newImage" label="Ajouter une photo" />
-          <SubmitButton pendingLabel="Ajout..." className="w-fit rounded-brand bg-ink/5 px-4 py-2 text-sm font-medium text-ink hover:bg-ink/10 disabled:opacity-60">
+          <SubmitButton pendingLabel="Ajout..." className="w-fit rounded-xl bg-navy-900/5 px-4 py-2 text-sm font-medium text-navy-900 hover:bg-navy-900/10 disabled:opacity-60">
             Ajouter cette photo
           </SubmitButton>
         </form>

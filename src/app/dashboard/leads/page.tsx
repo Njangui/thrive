@@ -17,12 +17,12 @@ const STATUS_LABELS: Record<LeadStatus, string> = {
 };
 
 const STATUS_STYLES: Record<LeadStatus, string> = {
-  visitor: "bg-ink/10 text-muted",
-  lead: "bg-ink/10 text-ink",
+  visitor: "bg-slate-100 text-slate-600",
+  lead: "bg-slate-100 text-navy-900",
   qualified: "bg-amber-500/10 text-amber-600",
   opportunity: "bg-amber-500/10 text-amber-600",
-  customer: "bg-leaf/10 text-leaf",
-  lost: "bg-clay/10 text-clay",
+  customer: "bg-success-50 text-success-700",
+  lost: "bg-danger-50 text-danger-700",
 };
 
 function isLeadStatus(value: string): value is LeadStatus {
@@ -68,17 +68,17 @@ export default async function LeadsPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Clients</h1>
-        <p className="mt-1 text-sm text-muted">Prospects et clients de votre pipeline commercial.</p>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Clients</h1>
+        <p className="mt-1 text-sm text-slate-500">Prospects et clients de votre pipeline commercial.</p>
       </div>
 
-      {success && <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>}
-      {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
+      {success && <p className="adm-alert-success">{success}</p>}
+      {error && <p className="adm-alert-danger">{error}</p>}
 
       <div className="flex flex-wrap gap-2 text-xs">
         <Link
           href="/dashboard/leads"
-          className={`rounded-full px-3 py-1 ${!status ? "bg-ink text-white" : "bg-ink/10 text-muted"}`}
+          className={`rounded-full px-3 py-1 ${!status ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-600"}`}
         >
           Tous
         </Link>
@@ -86,19 +86,19 @@ export default async function LeadsPage({
           <Link
             key={s}
             href={`/dashboard/leads?status=${s}`}
-            className={`rounded-full px-3 py-1 ${status === s ? "bg-ink text-white" : "bg-ink/10 text-muted"}`}
+            className={`rounded-full px-3 py-1 ${status === s ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-600"}`}
           >
             {STATUS_LABELS[s]}
           </Link>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
         {leads.length === 0 ? (
-          <p className="p-6 text-sm text-muted">Aucun prospect pour l&apos;instant.</p>
+          <p className="p-6 text-sm text-slate-500">Aucun prospect pour l&apos;instant.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Contact</th>
                 <th className="px-4 py-2">Statut</th>
@@ -109,10 +109,10 @@ export default async function LeadsPage({
             </thead>
             <tbody>
               {leads.map((lead) => (
-                <tr key={lead.id} className="border-b border-ink/5 last:border-0">
+                <tr key={lead.id} className="border-b border-navy-900/5 last:border-0">
                   <td className="px-4 py-2">
                     <p>{lead.contactName ?? "Sans nom"}</p>
-                    <p className="text-xs text-muted">{lead.contactPhone ?? "—"}</p>
+                    <p className="text-xs text-slate-500">{lead.contactPhone ?? "—"}</p>
                   </td>
                   <td className="px-4 py-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[lead.status]}`}>
@@ -122,20 +122,20 @@ export default async function LeadsPage({
                   <td className="px-4 py-2" title={lead.scoreReason ?? undefined}>
                     {lead.score ?? "—"}
                   </td>
-                  <td className="px-4 py-2 text-muted">{lead.source ?? "—"}</td>
+                  <td className="px-4 py-2 text-slate-500">{lead.source ?? "—"}</td>
                   <td className="px-4 py-2 text-right">
                     <form action={updateLeadStatusAction} className="flex items-center justify-end gap-2">
                       <input type="hidden" name="organizationId" value={organizationId} />
                       <input type="hidden" name="leadId" value={lead.id} />
                       <input type="hidden" name="currentQuery" value={currentQuery} />
-                      <select name="status" defaultValue={lead.status} className="rounded-brand border border-ink/15 px-2 py-1 text-xs">
+                      <select name="status" defaultValue={lead.status} className="rounded-xl border border-navy-900/10 px-2 py-1 text-xs">
                         {LEAD_STATUSES.map((s) => (
                           <option key={s} value={s}>
                             {STATUS_LABELS[s]}
                           </option>
                         ))}
                       </select>
-                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-leaf hover:underline disabled:opacity-60">
+                      <SubmitButton pendingLabel="..." className="text-xs font-medium text-violet-600 hover:underline disabled:opacity-60">
                         OK
                       </SubmitButton>
                     </form>
@@ -148,7 +148,7 @@ export default async function LeadsPage({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted">
+        <div className="flex items-center justify-between text-sm text-slate-500">
           <p>
             Page {page} sur {totalPages} — {totalCount} prospect{totalCount > 1 ? "s" : ""} au total
           </p>
@@ -156,7 +156,7 @@ export default async function LeadsPage({
             {page > 1 && (
               <Link
                 href={`/dashboard/leads?page=${page - 1}${status ? `&status=${status}` : ""}`}
-                className="rounded-brand border border-ink/15 px-3 py-1.5 font-medium hover:border-ink/30"
+                className="rounded-xl border border-navy-900/10 px-3 py-1.5 font-medium hover:border-navy-900/20"
               >
                 Précédent
               </Link>
@@ -164,7 +164,7 @@ export default async function LeadsPage({
             {page < totalPages && (
               <Link
                 href={`/dashboard/leads?page=${page + 1}${status ? `&status=${status}` : ""}`}
-                className="rounded-brand border border-ink/15 px-3 py-1.5 font-medium hover:border-ink/30"
+                className="rounded-xl border border-navy-900/10 px-3 py-1.5 font-medium hover:border-navy-900/20"
               >
                 Suivant
               </Link>

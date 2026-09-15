@@ -1,7 +1,9 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { createOrganization, updateOnboardingStep, markOnboardingComplete } from "@/application/services/onboarding-service";
 import { requireMembership } from "@/application/services/auth-service";
+import { AFFILIATE_COOKIE_NAME } from "@/application/services/affiliate-link-security";
 import { resolveImageFromFormData } from "@/application/services/media-service";
 import { updateSiteMedia } from "@/application/services/site-service";
 import { createProduct } from "@/application/services/catalog-service";
@@ -79,7 +81,11 @@ export async function submitBusinessStep(
   countryCode: string,
 ): Promise<OnboardingStepResult & { organizationId?: string }> {
   try {
-    const { organizationId } = await createOrganization({ name, industry: industry || undefined, countryCode });
+    const cookieStore = await cookies();
+    const { organizationId } = await createOrganization(
+      { name, industry: industry || undefined, countryCode },
+      cookieStore.get(AFFILIATE_COOKIE_NAME)?.value,
+    );
     await persistStep(organizationId, 2);
     return { ok: true, organizationId };
   } catch (error) {

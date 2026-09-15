@@ -134,7 +134,7 @@ export async function sendHumanReply(
 
   const { data: conversation, error } = await supabase
     .from("conversations")
-    .select("external_thread_id, contacts(phone_e164)")
+    .select("channel, external_thread_id, contacts(phone_e164)")
     .eq("organization_id", organizationId)
     .eq("id", conversationId)
     .single();
@@ -145,10 +145,17 @@ export async function sendHumanReply(
 
   const contactPhone = (conversation as unknown as { contacts?: { phone_e164?: string } }).contacts?.phone_e164;
 
-  const messaging = await getMessagingProvider(organizationId);
+  // `conversation.channel` ('whatsapp' | 'telegram', voir
+  // conversation-service.ts::handleInboundMessage) désigne à la fois LE
+  // provider à résoudre (registry.ts::getMessagingProvider accepte
+  // désormais ce second paramètre pour distinguer plusieurs canaux
+  // simultanés) et le canal à déclarer dans l'OutboundMessage — jamais
+  // "whatsapp" supposé en dur, ce qui casserait une réponse manuelle sur
+  // une conversation Telegram.
+  const messaging = await getMessagingProvider(organizationId, conversation.channel);
   await messaging.sendMessage(organizationId, {
     to: contactPhone ?? conversation.external_thread_id,
-    channel: "whatsapp",
+    channel: conversation.channel as "whatsapp" | "telegram",
     content,
     externalThreadId: conversation.external_thread_id,
   });

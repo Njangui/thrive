@@ -31,6 +31,25 @@ export function middleware(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers);
 
+  // Repasse sécurité P0 (07/09/2026, section 8/9 de la mission) :
+  // `new Headers(request.headers)` clone TOUS les headers entrants, y
+  // compris ceux qu'un client aurait pu forger lui-même. Avant ce
+  // correctif, ces deux headers n'étaient écrasés QUE dans les branches
+  // subdomain/domaine-custom ci-dessous — sur le domaine racine
+  // (aucune des deux branches ne s'exécute), un `x-tenant-slug` forgé
+  // par le client survivait tel quel jusqu'à `resolveRequestTenant()`,
+  // qui l'utilise pour choisir QUEL tenant afficher sur `/` (voir
+  // page.tsx : bascule entre TenantLanding et MarketingLanding). Un
+  // visiteur du domaine racine pouvait ainsi forcer l'affichage de la
+  // vitrine publique d'une AUTRE organisation à cet endroit — jamais de
+  // données privées (resolveRequestTenant() ne sert que du contenu déjà
+  // public sur le domaine du tenant), mais un contournement réel du
+  // routage par hostname, jamais voulu. Suppression inconditionnelle
+  // AVANT toute logique conditionnelle : aucun chemin ne peut plus
+  // laisser passer une valeur fournie par le client.
+  requestHeaders.delete("x-tenant-slug");
+  requestHeaders.delete("x-tenant-custom-domain");
+
   if (hostname !== rootDomain && hostname.endsWith(`.${rootDomain}`)) {
     // Sous-domaine plateforme : tenant.sme-os.app
     const subdomain = hostname.replace(`.${rootDomain}`, "");

@@ -40,6 +40,7 @@ export interface ServiceListItem {
   durationMinutes: number | null;
   status: string;
   categoryName: string | null;
+  categoryId: string | null;
 }
 
 export interface ServiceForEdit extends ServiceListItem {
@@ -53,6 +54,7 @@ interface ServiceRow {
   price: number | string;
   duration_minutes: number | null;
   status: string;
+  category_id: string | null;
   categories?: { name?: string | null } | null;
 }
 
@@ -65,6 +67,7 @@ function mapServiceRow(row: ServiceRow): ServiceForEdit {
     durationMinutes: row.duration_minutes,
     status: row.status,
     categoryName: row.categories?.name ?? null,
+    categoryId: row.category_id,
   };
 }
 
@@ -72,7 +75,7 @@ export async function listServicesForOrg(organizationId: string): Promise<Servic
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, price, duration_minutes, status, categories(name)")
+    .select("id, name, price, duration_minutes, status, category_id, categories(name)")
     .eq("organization_id", organizationId)
     .order("name", { ascending: true });
 
@@ -84,7 +87,7 @@ export async function getServiceForEdit(organizationId: string, serviceId: strin
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, description, price, duration_minutes, status, categories(name)")
+    .select("id, name, description, price, duration_minutes, status, category_id, categories(name)")
     .eq("id", serviceId)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -99,7 +102,12 @@ export interface CreateServiceInput {
   organizationId: string;
   name: string;
   description?: string;
+  /** Réservé à un éventuel import en masse — voir la note équivalente de
+   * `CreateProductInput` (catalog-service.ts). Le formulaire dashboard
+   * doit utiliser `categoryId`. */
   categoryName?: string;
+  /** Id d'une catégorie existante — prioritaire sur `categoryName`. */
+  categoryId?: string;
   price: number;
   durationMinutes?: number | null;
   status?: ServiceStatus;
@@ -117,9 +125,12 @@ export async function createService(input: CreateServiceInput): Promise<{ servic
   assertValidServiceInput(input.name, input.price, input.durationMinutes);
 
   const supabase = getSupabaseServiceClient();
-  const categoryId = input.categoryName
-    ? await findOrCreateCategory(input.organizationId, input.categoryName)
-    : null;
+  const categoryId =
+    input.categoryId !== undefined
+      ? input.categoryId || null
+      : input.categoryName
+        ? await findOrCreateCategory(input.organizationId, input.categoryName)
+        : null;
   const slug = `${slugify(input.name)}-${Math.random().toString(36).slice(2, 7)}`;
 
   const { data, error } = await supabase
@@ -147,6 +158,7 @@ export interface UpdateServiceInput {
   name: string;
   description?: string;
   categoryName?: string;
+  categoryId?: string;
   price: number;
   durationMinutes?: number | null;
   status?: ServiceStatus;
@@ -160,7 +172,12 @@ export async function updateService(
   assertValidServiceInput(input.name, input.price, input.durationMinutes);
 
   const supabase = getSupabaseServiceClient();
-  const categoryId = input.categoryName ? await findOrCreateCategory(organizationId, input.categoryName) : null;
+  const categoryId =
+    input.categoryId !== undefined
+      ? input.categoryId || null
+      : input.categoryName
+        ? await findOrCreateCategory(organizationId, input.categoryName)
+        : null;
 
   const updatePayload: Record<string, unknown> = {
     name: input.name.trim(),

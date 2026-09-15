@@ -17,6 +17,7 @@ import { AppError, ValidationError } from "@/lib/errors";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { DomainSearchField } from "./domain-search-field";
+import { env } from "@/lib/env";
 
 /**
  * NOTE DE PORTÉE (voir RAPPORT_LOT_E.md) : cette page n'existait pas dans
@@ -289,16 +290,16 @@ export default async function SitePage({
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Mon site</h1>
-      <p className="text-sm text-muted">
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Mon site</h1>
+      <p className="text-sm text-slate-500">
         Le logo, la bannière et l&apos;icône de votre site apparaissent sur la page que voient vos clients.
       </p>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="adm-alert-success">{success}</p>
       )}
 
       <form action={updateSiteAction} className="flex flex-col gap-4">
@@ -329,10 +330,10 @@ export default async function SitePage({
           helpText="Petite icône affichée dans l'onglet du navigateur. Optionnel."
         />
 
-        <div className="flex flex-col gap-4 rounded-brand border border-ink/15 p-4">
+        <div className="flex flex-col gap-4 rounded-xl border border-navy-900/10 p-4">
           <div>
             <p className="text-sm font-medium">Référencement sur Google</p>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-slate-500">
               Ce que Google et les réseaux sociaux affichent quand quelqu&apos;un trouve votre page. Laissez
               vide pour utiliser le nom et la description de votre entreprise par défaut.
             </p>
@@ -346,7 +347,7 @@ export default async function SitePage({
               defaultValue={media.seoTitle ?? ""}
               maxLength={70}
               placeholder="Ex : Salon Élégance — Coiffure à Douala"
-              className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
             />
           </label>
 
@@ -358,7 +359,7 @@ export default async function SitePage({
               maxLength={160}
               rows={3}
               placeholder="Une ou deux phrases qui donnent envie de cliquer."
-              className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
             />
           </label>
 
@@ -370,10 +371,10 @@ export default async function SitePage({
           />
         </div>
 
-        <div className="flex flex-col gap-4 rounded-brand border border-ink/15 p-4">
+        <div className="flex flex-col gap-4 rounded-xl border border-navy-900/10 p-4">
           <div>
             <p className="text-sm font-medium">Réseaux sociaux</p>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-slate-500">
               Affichés dans la section « Réseaux sociaux » de votre page si elle est activée. Laissez vide ce
               que vous n&apos;avez pas.
             </p>
@@ -385,7 +386,7 @@ export default async function SitePage({
               name="socialFacebook"
               defaultValue={media.socialLinks.facebook ?? ""}
               placeholder="https://facebook.com/..."
-              className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -395,7 +396,7 @@ export default async function SitePage({
               name="socialInstagram"
               defaultValue={media.socialLinks.instagram ?? ""}
               placeholder="https://instagram.com/..."
-              className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -405,7 +406,7 @@ export default async function SitePage({
               name="socialTiktok"
               defaultValue={media.socialLinks.tiktok ?? ""}
               placeholder="https://tiktok.com/@..."
-              className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -415,7 +416,7 @@ export default async function SitePage({
               name="socialLinkedin"
               defaultValue={media.socialLinks.linkedin ?? ""}
               placeholder="https://linkedin.com/company/..."
-              className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
             />
           </label>
         </div>
@@ -424,10 +425,10 @@ export default async function SitePage({
       </form>
 
       {/* Lot K — Sections de ma page */}
-      <div className="mt-4 flex flex-col gap-4 border-t border-ink/10 pt-6">
+      <div className="mt-4 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
-          <h2 className="font-display text-lg font-semibold">Sections de ma page</h2>
-          <p className="mt-1 text-sm text-muted">
+          <h2 className="font-jakarta text-lg font-semibold">Sections de ma page</h2>
+          <p className="mt-1 text-sm text-slate-500">
             Activez, désactivez et réordonnez les sections affichées sur votre page publique.
             {!landingConfig.isCustomized &&
               " Cette liste correspond aux sections par défaut de votre secteur d'activité — personnalisez-la librement, elle ne sera enregistrée qu'à votre première modification."}
@@ -438,7 +439,7 @@ export default async function SitePage({
           {landingConfig.sections.map((section, index) => (
             <li
               key={section.type}
-              className="flex items-center gap-3 rounded-brand border border-ink/10 bg-white px-3 py-2"
+              className="flex items-center gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] px-3 py-2"
             >
               <form action={toggleSectionAction}>
                 <input type="hidden" name="organizationId" value={organizationId} />
@@ -447,7 +448,7 @@ export default async function SitePage({
                 <SubmitButton
                   pendingLabel="…"
                   className={`flex h-6 w-6 items-center justify-center rounded border text-xs font-bold ${
-                    section.enabled ? "border-leaf bg-leaf text-white" : "border-ink/20 bg-white text-transparent"
+                    section.enabled ? "border-violet-400 bg-violet-600 text-white" : "border-navy-900/15 bg-white text-transparent"
                   }`}
                 >
                   ✓
@@ -463,7 +464,7 @@ export default async function SitePage({
                 <SubmitButton
                   disabled={index === 0}
                   pendingLabel="…"
-                  className="rounded-brand border border-ink/15 px-2 py-1 text-xs disabled:opacity-30"
+                  className="rounded-xl border border-navy-900/10 px-2 py-1 text-xs disabled:opacity-30"
                 >
                   ↑
                 </SubmitButton>
@@ -475,7 +476,7 @@ export default async function SitePage({
                 <SubmitButton
                   disabled={index === landingConfig.sections.length - 1}
                   pendingLabel="…"
-                  className="rounded-brand border border-ink/15 px-2 py-1 text-xs disabled:opacity-30"
+                  className="rounded-xl border border-navy-900/10 px-2 py-1 text-xs disabled:opacity-30"
                 >
                   ↓
                 </SubmitButton>
@@ -483,11 +484,11 @@ export default async function SitePage({
             </li>
           ))}
         </ul>
-        <p className="text-xs text-muted">
+        <p className="text-xs text-slate-500">
           Le pied de page (coordonnées, mentions) est toujours affiché, quelle que soit cette configuration.
         </p>
 
-        <form action={updateBrandingAction} className="flex flex-col gap-3 rounded-brand border border-ink/15 p-4">
+        <form action={updateBrandingAction} className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
           <input type="hidden" name="organizationId" value={organizationId} />
           <p className="text-sm font-medium">Couleurs et police</p>
           <div className="flex gap-6">
@@ -497,7 +498,7 @@ export default async function SitePage({
                 type="color"
                 name="brandColorPrimary"
                 defaultValue={landingConfig.brandColorPrimary ?? "#0f172a"}
-                className="h-10 w-16 rounded-brand border border-ink/15"
+                className="h-10 w-16 rounded-xl border border-navy-900/10"
               />
             </label>
             <label className="flex flex-col gap-1.5 text-sm">
@@ -506,7 +507,7 @@ export default async function SitePage({
                 type="color"
                 name="brandColorSecondary"
                 defaultValue={landingConfig.brandColorSecondary ?? "#10b981"}
-                className="h-10 w-16 rounded-brand border border-ink/15"
+                className="h-10 w-16 rounded-xl border border-navy-900/10"
               />
             </label>
           </div>
@@ -515,7 +516,7 @@ export default async function SitePage({
             <select
               name="fontChoice"
               defaultValue={landingConfig.fontChoice}
-              className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
             >
               {FONT_CHOICES.map((choice) => (
                 <option key={choice} value={choice}>
@@ -527,33 +528,45 @@ export default async function SitePage({
           <SubmitButton pendingLabel="Enregistrement...">Enregistrer l&apos;apparence</SubmitButton>
         </form>
 
-        <a href="/" target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-brand hover:underline">
-          Voir mon site →
-        </a>
+        {env.NEXT_PUBLIC_ROOT_DOMAIN === "localhost:3000" ? (
+          <p className="adm-muted text-sm">
+            Votre site sera accessible dès qu&apos;un nom de domaine sera configuré pour la plateforme (réglage
+            technique, pas encore fait).
+          </p>
+        ) : (
+          <a
+            href={`https://${media.slug}.${env.NEXT_PUBLIC_ROOT_DOMAIN}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-brand hover:underline"
+          >
+            Voir mon site →
+          </a>
+        )}
       </div>
 
       {/* Lot K — Témoignages */}
-      <div className="mt-4 flex flex-col gap-4 border-t border-ink/10 pt-6">
+      <div className="mt-4 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
-          <h2 className="font-display text-lg font-semibold">Témoignages</h2>
-          <p className="mt-1 text-sm text-muted">
+          <h2 className="font-jakarta text-lg font-semibold">Témoignages</h2>
+          <p className="mt-1 text-sm text-slate-500">
             Affichés dans la section « Témoignages » de votre page si elle est activée.
           </p>
         </div>
 
-        <form action={createTestimonialAction} className="flex flex-col gap-3 rounded-brand border border-ink/15 p-4">
+        <form action={createTestimonialAction} className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
           <input type="hidden" name="organizationId" value={organizationId} />
           <label className="flex flex-col gap-1 text-sm">
             Nom du client
-            <input name="authorName" required className="rounded-brand border border-ink/15 px-4 py-3" />
+            <input name="authorName" required className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Témoignage
-            <textarea name="content" required rows={2} className="rounded-brand border border-ink/15 px-4 py-3" />
+            <textarea name="content" required rows={2} className="rounded-xl border border-navy-900/10 px-4 py-3" />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Note (optionnel)
-            <select name="rating" defaultValue="" className="rounded-brand border border-ink/15 px-4 py-3">
+            <select name="rating" defaultValue="" className="rounded-xl border border-navy-900/10 px-4 py-3">
               <option value="">Aucune note</option>
               {[5, 4, 3, 2, 1].map((n) => (
                 <option key={n} value={n}>
@@ -570,21 +583,21 @@ export default async function SitePage({
             {testimonials.map((testimonial) => (
               <li
                 key={testimonial.id}
-                className="flex items-start justify-between gap-3 rounded-brand border border-ink/10 bg-white px-4 py-3 text-sm"
+                className="flex items-start justify-between gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] px-4 py-3 text-sm"
               >
                 <div>
                   <p className="font-medium">
                     {testimonial.authorName}
                     {testimonial.rating ? ` — ${testimonial.rating}★` : ""}
                   </p>
-                  <p className="text-muted">{testimonial.content}</p>
+                  <p className="text-slate-500">{testimonial.content}</p>
                 </div>
                 <form action={deleteTestimonialAction}>
                   <input type="hidden" name="organizationId" value={organizationId} />
                   <input type="hidden" name="testimonialId" value={testimonial.id} />
                   <SubmitButton
                     pendingLabel="…"
-                    className="shrink-0 rounded-brand bg-ink/5 px-2 py-1 text-xs font-medium text-ink transition-colors hover:bg-clay/10 hover:text-clay disabled:opacity-60"
+                    className="shrink-0 rounded-xl bg-navy-900/5 px-2 py-1 text-xs font-medium text-navy-900 transition-colors hover:bg-danger-50 hover:text-danger-600 disabled:opacity-60"
                   >
                     Retirer
                   </SubmitButton>
@@ -595,23 +608,23 @@ export default async function SitePage({
         )}
       </div>
 
-      <div className="mt-4 flex flex-col gap-4 border-t border-ink/10 pt-6">
+      <div className="mt-4 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
-          <h2 className="font-display text-lg font-semibold">Domaine personnalisé</h2>
-          <p className="mt-1 text-sm text-muted">
+          <h2 className="font-jakarta text-lg font-semibold">Domaine personnalisé</h2>
+          <p className="mt-1 text-sm text-slate-500">
             Demandez un nom de domaine pour votre boutique — traité manuellement par notre équipe (aucun registrar
             n&apos;est encore branché automatiquement).
           </p>
         </div>
 
         {tldPricing.length === 0 ? (
-          <p className="text-sm text-muted">Aucune extension n&apos;est proposée à la vente pour le moment.</p>
+          <p className="text-sm text-slate-500">Aucune extension n&apos;est proposée à la vente pour le moment.</p>
         ) : (
           <>
             <form action={requestDomainAction} className="flex flex-col gap-2">
               <input type="hidden" name="organizationId" value={organizationId} />
               <DomainSearchField organizationId={organizationId} />
-              <p className="text-xs text-muted">
+              <p className="text-xs text-slate-500">
                 Extensions disponibles :{" "}
                 {tldPricing.map((t) => `${t.tld} (${t.soldPriceFcfa.toLocaleString("fr-FR")} FCFA)`).join(", ")}
               </p>
@@ -623,10 +636,10 @@ export default async function SitePage({
                 {domainRequests.map((r) => (
                   <li
                     key={r.id}
-                    className="flex items-center justify-between rounded-brand border border-ink/10 bg-white px-4 py-3 text-sm"
+                    className="flex items-center justify-between rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] px-4 py-3 text-sm"
                   >
-                    <span className="font-medium text-ink">{r.domainName}</span>
-                    <span className="text-xs text-muted">{DOMAIN_STATUS_LABEL[r.status] ?? r.status}</span>
+                    <span className="font-medium text-navy-900">{r.domainName}</span>
+                    <span className="text-xs text-slate-500">{DOMAIN_STATUS_LABEL[r.status] ?? r.status}</span>
                   </li>
                 ))}
               </ul>

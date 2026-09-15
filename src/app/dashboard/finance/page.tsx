@@ -60,31 +60,31 @@ export default async function FinancePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Finance</h1>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Finance</h1>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="adm-alert-success">{success}</p>
       )}
 
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-brand border border-ink/10 bg-white p-4">
-          <p className="text-xs text-muted">CA (30j)</p>
-          <p className="mt-1 font-display text-lg font-semibold text-leaf">
+        <div className="rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+          <p className="text-xs text-slate-500">CA (30j)</p>
+          <p className="mt-1 font-jakarta text-lg font-semibold text-success-600">
             {summary.revenueLast30Days.toLocaleString("fr-FR")} {summary.currency}
           </p>
         </div>
-        <div className="rounded-brand border border-ink/10 bg-white p-4">
-          <p className="text-xs text-muted">Dépenses (30j)</p>
-          <p className="mt-1 font-display text-lg font-semibold text-clay">
+        <div className="rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+          <p className="text-xs text-slate-500">Dépenses (30j)</p>
+          <p className="mt-1 font-jakarta text-lg font-semibold text-danger-600">
             {summary.expensesLast30Days.toLocaleString("fr-FR")} {summary.currency}
           </p>
         </div>
-        <div className="rounded-brand border border-ink/10 bg-white p-4">
-          <p className="text-xs text-muted">Résultat (30j)</p>
-          <p className="mt-1 font-display text-lg font-semibold">
+        <div className="rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+          <p className="text-xs text-slate-500">Résultat (30j)</p>
+          <p className="mt-1 font-jakarta text-lg font-semibold">
             {summary.resultLast30Days.toLocaleString("fr-FR")} {summary.currency}
           </p>
         </div>
@@ -96,12 +96,12 @@ export default async function FinancePage({
         createExpenseAction={createExpenseAction}
       />
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
         {entries.length === 0 ? (
-          <p className="p-6 text-sm text-muted">Aucune écriture pour l&apos;instant.</p>
+          <p className="p-6 text-sm text-slate-500">Aucune écriture pour l&apos;instant.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Date</th>
                 <th className="px-4 py-2">Libellé</th>
@@ -110,10 +110,10 @@ export default async function FinancePage({
             </thead>
             <tbody>
               {entries.map((e) => (
-                <tr key={`${e.type}-${e.id}`} className="border-b border-ink/5 last:border-0">
-                  <td className="px-4 py-2 text-muted">{e.date}</td>
+                <tr key={`${e.type}-${e.id}`} className="border-b border-navy-900/5 last:border-0">
+                  <td className="px-4 py-2 text-slate-500">{e.date}</td>
                   <td className="px-4 py-2">{e.label}</td>
-                  <td className={`px-4 py-2 font-medium ${e.type === "revenue" ? "text-leaf" : "text-clay"}`}>
+                  <td className={`px-4 py-2 font-medium ${e.type === "revenue" ? "text-success-600" : "text-danger-600"}`}>
                     {e.type === "revenue" ? "+" : "-"}
                     {e.amount.toLocaleString("fr-FR")} {summary.currency}
                   </td>

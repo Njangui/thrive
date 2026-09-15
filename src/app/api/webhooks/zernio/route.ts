@@ -24,6 +24,7 @@ import { activateGroupFromInboundConversation } from "@/application/services/wha
 import { handlePostStatusWebhook } from "@/application/services/marketing-service";
 import { handleAccountStatusChanged } from "@/application/services/provider-connection-service";
 import { notifyOrgAdmins } from "@/application/services/notification-service";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Pipeline (section 37) :
@@ -39,8 +40,24 @@ import { notifyOrgAdmins } from "@/application/services/notification-service";
  * routées par `account.id`) et publications (`post.*`, routées par
  * `social_posts.provider_post_id` — voir resolve-organization.ts pour le
  * détail de pourquoi `account.id` n'est pas fiable pour cette catégorie).
+ *
+ * Repasse sécurité P0 (07/09/2026, section 12 de la mission) : rate
+ * limiting ajouté — absent jusqu'ici alors que le webhook NotchPay
+ * (même famille, même exposition publique) en a un depuis son origine.
+ * Ce webhook fait PLUS de travail par requête que NotchPay (route
+ * jusqu'à l'IA, l'activation de groupe, les publications) — au moins
+ * aussi justifié d'être protégé. Vérifié AVANT la vérification de
+ * signature, même raisonnement que NotchPay : un flood ne doit pas
+ * faire consommer du temps de vérification cryptographique pour rien.
  */
 export async function POST(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const clientIp = forwardedFor?.split(",")[0]?.trim() ?? "unknown";
+  const retryAfter = await checkRateLimit("webhook", clientIp);
+  if (retryAfter !== null) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
+  }
+
   const rawBody = await request.text();
   // CONFIRMÉ (docs.zernio.com/webhooks) : header `X-Zernio-Signature`.
   const signature = request.headers.get("x-zernio-signature");
@@ -142,7 +159,7 @@ export async function POST(request: Request) {
           }
 
           if (routing.replyText) {
-            const messaging = await getMessagingProvider(organizationId);
+            const messaging = await getMessagingProvider(organizationId, "zernio");
             await messaging.sendMessage(organizationId, {
               to: domainEvent.payload.phoneE164 ?? domainEvent.payload.externalContactId,
               channel: "whatsapp",

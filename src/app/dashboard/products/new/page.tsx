@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { requireMembership, requireCurrentOrganization } from "@/application/services/auth-service";
-import { createProduct } from "@/application/services/catalog-service";
+import { createProduct, listCategories } from "@/application/services/catalog-service";
 import { resolveImageFromFormData } from "@/application/services/media-service";
 import { AppError } from "@/lib/errors";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { CategorySelect } from "../../_components/category-select";
 
 async function createProductAction(formData: FormData) {
   "use server";
@@ -24,7 +25,7 @@ async function createProductAction(formData: FormData) {
       organizationId,
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? "") || undefined,
-      categoryName: String(formData.get("category") ?? "") || undefined,
+      categoryId: String(formData.get("categoryId") ?? ""),
       unitPrice: Number(formData.get("price") ?? 0),
       compareAtPrice: formData.get("compareAtPrice") ? Number(formData.get("compareAtPrice")) : undefined,
       currentStock: Number(formData.get("stock") ?? 0),
@@ -45,13 +46,14 @@ export default async function NewProductPage({
 }) {
   const { error } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
+  const categories = await listCategories(organizationId);
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Nouveau produit</h1>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Nouveau produit</h1>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
 
       <form action={createProductAction} className="flex flex-col gap-3">
@@ -59,12 +61,12 @@ export default async function NewProductPage({
 
         <label className="flex flex-col gap-1 text-sm">
           Nom
-          <input name="name" required className="rounded-brand border border-ink/15 px-4 py-3" />
+          <input name="name" required className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
           Prix (FCFA)
-          <input name="price" type="number" min="0" required className="rounded-brand border border-ink/15 px-4 py-3" />
+          <input name="price" type="number" min="0" required className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
@@ -74,9 +76,9 @@ export default async function NewProductPage({
             type="number"
             min="0"
             placeholder="Laissez vide si pas de promotion"
-            className="rounded-brand border border-ink/15 px-4 py-3"
+            className="rounded-xl border border-navy-900/10 px-4 py-3"
           />
-          <span className="text-xs text-muted">
+          <span className="text-xs text-slate-500">
             Doit être supérieur au prix ci-dessus — affiché barré, avec un badge « Promo », sur la fiche produit et
             dans la section Promotions de votre site.
           </span>
@@ -84,17 +86,14 @@ export default async function NewProductPage({
 
         <label className="flex flex-col gap-1 text-sm">
           Stock initial
-          <input name="stock" type="number" min="0" defaultValue={0} className="rounded-brand border border-ink/15 px-4 py-3" />
+          <input name="stock" type="number" min="0" defaultValue={0} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Catégorie
-          <input name="category" placeholder="Ex : Chaussures" className="rounded-brand border border-ink/15 px-4 py-3" />
-        </label>
+        <CategorySelect categories={categories} />
 
         <label className="flex flex-col gap-1 text-sm">
           Description
-          <textarea name="description" rows={3} className="rounded-brand border border-ink/15 px-4 py-3" />
+          <textarea name="description" rows={3} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
         <ImageUploadField

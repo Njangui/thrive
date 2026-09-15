@@ -13,6 +13,7 @@ import {
   IconPlug,
   IconCard,
   IconList,
+  IconUsers,
 } from "./icons";
 
 /**
@@ -57,6 +58,10 @@ export const ADMIN_NAV_GROUPS: { label: string | null; items: { href: string; la
   {
     label: "Finance",
     items: [{ href: "/admin/payments", label: "Paiements", icon: IconCard }],
+  },
+  {
+    label: "Croissance",
+    items: [{ href: "/admin/affiliates", label: "Affiliation", icon: IconUsers }],
   },
   {
     label: "Système",

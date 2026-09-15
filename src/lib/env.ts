@@ -69,6 +69,41 @@ const EnvSchema = z.object({
   // titulaire du compte — pas vers un vrai destinataire d'invitation.
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM_ADDRESS: z.string().default("SME-OS <onboarding@resend.dev>"),
+
+  // --- Programme d'affiliation (0044_affiliate_system.sql) — secret de
+  // signature HMAC des jetons de cookie d'attribution
+  // (affiliate-link-security.ts) ET pepper de hachage IP/user-agent
+  // anti-fraude. Optionnel pour ne jamais bloquer un déploiement qui
+  // n'active pas encore le programme : tant qu'il est absent,
+  // /r/[code] répond 503 explicite plutôt que de signer un cookie avec
+  // un secret vide (voir affiliate-link-security.ts::requireSecret).
+  AFFILIATE_LINK_SECRET: z.string().optional(),
+
+  // --- Telegram — canal de notification INDÉPENDANT de Zernio
+  // (docs/TELEGRAM_INTEGRATION.md). Utilisé pour : (1) les alertes
+  // admin plateforme (nouvelle candidature affilié, fraude détectée,
+  // demande de paiement) via NotificationProvider
+  // (infrastructure/providers/telegram/adapter.ts), et (2) le bot
+  // affilié (stats, liaison de compte, commandes /mystats /payout).
+  // Optionnelles : en leur absence, getNotificationProvider() (registry.ts)
+  // retombe sur un adapter "console log" muet, jamais un crash — même
+  // philosophie que RESEND_API_KEY/OPENPROVIDER_*.
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  // Valeur arbitraire choisie à la configuration du webhook
+  // (setWebhook `secret_token`), jamais un HMAC du corps — Telegram la
+  // renvoie telle quelle dans le header
+  // `X-Telegram-Bot-Api-Secret-Token` à chaque delivery, voir
+  // infrastructure/providers/telegram/webhook-handler.ts.
+  TELEGRAM_BOT_WEBHOOK_SECRET: z.string().optional(),
+  // Nom d'utilisateur du bot SANS le @ (ex: "smeos_partenaires_bot") —
+  // sert à construire les liens de liaison profonds
+  // `https://t.me/<username>?start=<token>` affichés dans
+  // /affiliate/dashboard/telegram.
+  TELEGRAM_BOT_USERNAME: z.string().optional(),
+  // Identifiant du chat/groupe Telegram recevant les alertes de
+  // l'opérateur plateforme (peut être négatif pour un groupe/supergroupe
+  // Telegram — d'où `string`, jamais coercé en `number`).
+  TELEGRAM_ADMIN_CHAT_ID: z.string().optional(),
 });
 
 function loadEnv() {

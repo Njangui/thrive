@@ -1,0 +1,51 @@
+/**
+ * Sous-ensemble de l'API Bot Telegram (core.telegram.org/bots/api) pour
+ * le canal CLIENT (MessagingProvider — un tenant connecte son propre
+ * bot pour que SES clients puissent lui écrire). Duplique
+ * volontairement `infrastructure/providers/telegram/types.ts` (bot
+ * plateforme, alertes admin/affiliés) plutôt que de le réutiliser — même
+ * précédent que ce projet applique déjà entre
+ * `messaging/zernio/types.ts` et `social/zernio/types.ts` (même
+ * fournisseur, deux ports, deux fichiers) : un changement de forme pour
+ * l'un des deux usages ne doit jamais risquer de faire dévier l'autre.
+ */
+
+export interface TelegramUser {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+}
+
+export interface TelegramChat {
+  id: number;
+  type: "private" | "group" | "supergroup" | "channel";
+}
+
+export interface TelegramMessage {
+  message_id: number;
+  from?: TelegramUser;
+  chat: TelegramChat;
+  date: number;
+  text?: string;
+}
+
+/** Une "update" telle que livrée au webhook tenant. `update_id` n'est PAS globalement unique (propre à chaque bot tenant) — voir resolve-organization.ts/webhook-handler.ts pour la clé d'idempotence réellement utilisée. */
+export interface TelegramUpdate {
+  update_id: number;
+  message?: TelegramMessage;
+}
+
+export interface TelegramSendMessageParams {
+  chat_id: number | string;
+  text: string;
+  parse_mode?: "Markdown" | "HTML";
+}
+
+export interface TelegramApiResponse<T> {
+  ok: boolean;
+  result?: T;
+  description?: string;
+  error_code?: number;
+}

@@ -10,14 +10,16 @@ import { getSupabaseBrowserClient } from "@/infrastructure/supabase/browser-clie
  * jusqu'à `emailRedirectTo` pour l'inscription (confirmation email),
  * relu par `/auth/callback` (voir route.ts) pour rediriger un utilisateur
  * SANS organisation vers l'invitation plutôt que vers /onboarding par
- * défaut — sinon un nouvel utilisateur invité se retrouverait à créer sa
- * PROPRE organisation au lieu de rejoindre celle qui l'a invité.
+ * défaut.
  *
- * Remplace l'ancien flux "lien magique" (signInWithOtp) par email + mot
- * de passe (signInWithPassword / signUp). Le round-trip par email ne
- * reste nécessaire QUE pour la confirmation d'inscription (si activée
- * côté Supabase) et la réinitialisation de mot de passe — pas pour une
- * connexion normale, qui obtient sa session directement.
+ * Email + mot de passe (signInWithPassword / signUp) plutôt que le lien
+ * magique d'origine — le round-trip par email ne reste nécessaire QUE
+ * pour la confirmation d'inscription (si activée côté Supabase) et la
+ * réinitialisation de mot de passe, pas pour une connexion normale.
+ *
+ * Habillage repris en violet/navy (chantier d'unification design, sept.
+ * 2026), même vocabulaire que l'ancienne version magic-link : carte
+ * centrée + badge "S", `adm-input`/`adm-btn-primary`/`adm-alert-*`.
  */
 function sanitizeNext(next: string | null): string | null {
   if (!next) return null;
@@ -101,15 +103,11 @@ function LoginForm() {
     }
 
     if (data.session) {
-      // Confirmation email désactivée côté Supabase : session immédiate,
-      // pas besoin d'attendre un email.
       router.push(next ?? "/dashboard");
       router.refresh();
       return;
     }
 
-    // Confirmation email requise (réglage Supabase par défaut) : l'utilisateur
-    // doit cliquer le lien reçu avant de pouvoir se connecter.
     setStatus("sent");
   }
 
@@ -134,7 +132,7 @@ function LoginForm() {
 
   if (status === "sent") {
     return (
-      <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">
+      <p className="adm-alert-success">
         {mode === "forgot"
           ? `Email envoyé à ${email}. Suivez le lien pour choisir un nouveau mot de passe.`
           : `Compte créé. Vérifiez votre boîte de réception (${email}) pour confirmer votre email avant de vous connecter.`}
@@ -145,9 +143,7 @@ function LoginForm() {
   return (
     <>
       {next && mode !== "forgot" && (
-        <p className="rounded-brand border border-ink/10 bg-ink/5 px-4 py-3 text-sm text-muted">
-          Connectez-vous pour accepter votre invitation.
-        </p>
+        <p className="adm-alert-neutral">Connectez-vous pour accepter votre invitation.</p>
       )}
 
       <form
@@ -160,7 +156,7 @@ function LoginForm() {
           placeholder="vous@entreprise.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+          className="adm-input"
         />
 
         {mode !== "forgot" && (
@@ -171,7 +167,7 @@ function LoginForm() {
             placeholder="Mot de passe"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+            className="adm-input"
           />
         )}
 
@@ -183,25 +179,17 @@ function LoginForm() {
             placeholder="Confirmer le mot de passe"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+            className="adm-input"
           />
         )}
 
         {mode === "signin" && (
-          <button
-            type="button"
-            onClick={() => switchMode("forgot")}
-            className="self-end text-xs text-muted hover:text-leaf"
-          >
+          <button type="button" onClick={() => switchMode("forgot")} className="self-end text-xs adm-muted hover:text-violet-600">
             Mot de passe oublié ?
           </button>
         )}
 
-        <button
-          type="submit"
-          disabled={status === "sending"}
-          className="rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
+        <button type="submit" disabled={status === "sending"} className="adm-btn-primary w-full">
           {status === "sending"
             ? "Envoi..."
             : mode === "signin"
@@ -211,14 +199,10 @@ function LoginForm() {
                 : "Envoyer le lien de réinitialisation"}
         </button>
 
-        {errorMessage && <p className="text-sm text-clay">{errorMessage}</p>}
+        {errorMessage && <p className="text-sm text-danger-600">{errorMessage}</p>}
       </form>
 
-      <button
-        type="button"
-        onClick={() => switchMode(mode === "signin" ? "signup" : "signin")}
-        className="text-center text-sm text-muted hover:text-leaf"
-      >
+      <button type="button" onClick={() => switchMode(mode === "signin" ? "signup" : "signin")} className="text-center text-sm adm-muted hover:text-violet-600">
         {mode === "signin"
           ? "Pas encore de compte ? Créer un compte"
           : mode === "signup"
@@ -231,14 +215,23 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-5">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Connexion</h1>
-        <p className="mt-1 text-sm text-muted">Accédez à votre espace avec votre email et votre mot de passe.</p>
+    <main className="adm-shell flex min-h-screen flex-col items-center justify-center px-5 py-10">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 font-jakarta text-lg font-bold text-white">
+            S
+          </span>
+          <div>
+            <h1 className="font-jakarta text-2xl font-bold tracking-tight text-navy-900">Connexion</h1>
+            <p className="mt-1 text-sm adm-muted">Accédez à votre espace avec votre email et votre mot de passe.</p>
+          </div>
+        </div>
+        <div className="adm-card flex flex-col gap-4">
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
+        </div>
       </div>
-      <Suspense fallback={null}>
-        <LoginForm />
-      </Suspense>
     </main>
   );
 }

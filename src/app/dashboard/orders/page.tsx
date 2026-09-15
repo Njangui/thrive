@@ -1,22 +1,9 @@
 import Link from "next/link";
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { listOrdersForOrg, ORDER_STATUSES, type OrderStatus } from "@/application/services/order-service";
+import { ORDER_STATUS_LABELS as STATUS_LABELS, ORDER_STATUS_STYLES as STATUS_STYLES } from "../_components/order-status";
 
 const PAGE_SIZE = 50;
-
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: "En attente",
-  confirmed: "Confirmée",
-  completed: "Terminée",
-  cancelled: "Annulée",
-};
-
-const STATUS_STYLES: Record<OrderStatus, string> = {
-  pending: "bg-ink/10 text-muted",
-  confirmed: "bg-amber-500/10 text-amber-600",
-  completed: "bg-leaf/10 text-leaf",
-  cancelled: "bg-clay/10 text-clay",
-};
 
 function isOrderStatus(value: string): value is OrderStatus {
   return (ORDER_STATUSES as readonly string[]).includes(value);
@@ -39,31 +26,31 @@ export default async function OrdersPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Commandes</h1>
-        <p className="mt-1 text-sm text-muted">Toutes les commandes de votre boutique.</p>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Commandes</h1>
+        <p className="mt-1 text-sm text-slate-500">Toutes les commandes de votre boutique.</p>
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs">
-        <Link href="/dashboard/orders" className={`rounded-full px-3 py-1 ${!status ? "bg-ink text-white" : "bg-ink/10 text-muted"}`}>
+        <Link href="/dashboard/orders" className={`rounded-full px-3 py-1 ${!status ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-600"}`}>
           Toutes
         </Link>
         {ORDER_STATUSES.map((s) => (
           <Link
             key={s}
             href={`/dashboard/orders?status=${s}`}
-            className={`rounded-full px-3 py-1 ${status === s ? "bg-ink text-white" : "bg-ink/10 text-muted"}`}
+            className={`rounded-full px-3 py-1 ${status === s ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-600"}`}
           >
             {STATUS_LABELS[s]}
           </Link>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-brand border border-ink/10 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
         {orders.length === 0 ? (
-          <p className="p-6 text-sm text-muted">Aucune commande pour l&apos;instant.</p>
+          <p className="p-6 text-sm text-slate-500">Aucune commande pour l&apos;instant.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Client</th>
                 <th className="px-4 py-2">Total</th>
@@ -74,10 +61,10 @@ export default async function OrdersPage({
             </thead>
             <tbody>
               {orders.map((order) => (
-                <tr key={order.id} className="border-b border-ink/5 last:border-0">
+                <tr key={order.id} className="border-b border-navy-900/5 last:border-0">
                   <td className="px-4 py-2">
                     <p>{order.contactName ?? "Client anonyme"}</p>
-                    <p className="text-xs text-muted">{order.contactPhone ?? "—"}</p>
+                    <p className="text-xs text-slate-500">{order.contactPhone ?? "—"}</p>
                   </td>
                   <td className="px-4 py-2">
                     {order.totalAmount.toLocaleString("fr-FR")} {order.currency}
@@ -87,9 +74,9 @@ export default async function OrdersPage({
                       {STATUS_LABELS[order.status]}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-muted">{new Date(order.createdAt).toLocaleDateString("fr-FR")}</td>
+                  <td className="px-4 py-2 text-slate-500">{new Date(order.createdAt).toLocaleDateString("fr-FR")}</td>
                   <td className="px-4 py-2 text-right">
-                    <Link href={`/dashboard/orders/${order.id}`} className="text-xs font-medium text-leaf hover:underline">
+                    <Link href={`/dashboard/orders/${order.id}`} className="text-xs font-medium text-violet-600 hover:underline">
                       Détail
                     </Link>
                   </td>
@@ -101,7 +88,7 @@ export default async function OrdersPage({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted">
+        <div className="flex items-center justify-between text-sm text-slate-500">
           <p>
             Page {page} sur {totalPages} — {totalCount} commande{totalCount > 1 ? "s" : ""} au total
           </p>
@@ -109,7 +96,7 @@ export default async function OrdersPage({
             {page > 1 && (
               <Link
                 href={`/dashboard/orders?page=${page - 1}${status ? `&status=${status}` : ""}`}
-                className="rounded-brand border border-ink/15 px-3 py-1.5 font-medium hover:border-ink/30"
+                className="rounded-xl border border-navy-900/10 px-3 py-1.5 font-medium hover:border-navy-900/20"
               >
                 Précédent
               </Link>
@@ -117,7 +104,7 @@ export default async function OrdersPage({
             {page < totalPages && (
               <Link
                 href={`/dashboard/orders?page=${page + 1}${status ? `&status=${status}` : ""}`}
-                className="rounded-brand border border-ink/15 px-3 py-1.5 font-medium hover:border-ink/30"
+                className="rounded-xl border border-navy-900/10 px-3 py-1.5 font-medium hover:border-navy-900/20"
               >
                 Suivant
               </Link>

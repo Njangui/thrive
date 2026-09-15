@@ -10,6 +10,15 @@ import { useEffect } from "react";
  * client final (section 66 du master prompt : jamais "Something went
  * wrong" brut). Le détail technique reste dans les logs serveur/navigateur
  * (`console.error`), jamais affiché à l'écran.
+ *
+ * Volontairement PAS repassé en violet/navy lors du chantier
+ * d'unification design (sept. 2026) : cette page capte les erreurs de
+ * TOUS les contextes (dashboard, admin, mais aussi la vitrine publique
+ * d'un tenant) sans moyen fiable de savoir dans lequel on se trouvait au
+ * moment du crash. La passer en violet SME-OS afficherait la marque de
+ * la plateforme sur l'écran d'erreur d'un client en train d'acheter chez
+ * un commerçant — contraire à la séparation vitrine tenant/SME-OS
+ * demandée pour ce chantier. Reste donc sur le thème neutre existant.
  */
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {

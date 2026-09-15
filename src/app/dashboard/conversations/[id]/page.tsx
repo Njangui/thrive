@@ -56,12 +56,12 @@ export default async function ConversationDetailPage({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-xs text-muted">Conversation avec</p>
-        <h1 className="font-display text-xl font-bold">{thread.contactName ?? thread.contactPhone ?? "Contact"}</h1>
+        <p className="text-xs text-slate-500">Conversation avec</p>
+        <h1 className="font-jakarta text-xl font-bold">{thread.contactName ?? thread.contactPhone ?? "Contact"}</h1>
       </div>
 
       {error && (
-        <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>
+        <p className="adm-alert-danger">{error}</p>
       )}
 
       <ConversationThreadView

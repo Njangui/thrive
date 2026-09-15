@@ -10,6 +10,8 @@ import { getSupabaseBrowserClient } from "@/infrastructure/supabase/browser-clie
  * `/auth/callback` (`next=/reset-password`), qui échange le code contre
  * une session AVANT d'arriver ici — `updateUser` ci-dessous s'appuie donc
  * sur cette session déjà active, jamais sur un jeton lu depuis l'URL.
+ *
+ * Habillage aligné sur /login (chantier d'unification design, sept. 2026).
  */
 function sanitizeNext(next: string | null): string | null {
   if (!next) return null;
@@ -65,7 +67,7 @@ function ResetPasswordForm() {
         placeholder="Nouveau mot de passe"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+        className="adm-input"
       />
       <input
         type="password"
@@ -74,30 +76,35 @@ function ResetPasswordForm() {
         placeholder="Confirmer le nouveau mot de passe"
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
-        className="rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf"
+        className="adm-input"
       />
-      <button
-        type="submit"
-        disabled={status === "sending"}
-        className="rounded-brand bg-leaf px-4 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-      >
+      <button type="submit" disabled={status === "sending"} className="adm-btn-primary w-full">
         {status === "sending" ? "Enregistrement..." : "Enregistrer le nouveau mot de passe"}
       </button>
-      {errorMessage && <p className="text-sm text-clay">{errorMessage}</p>}
+      {errorMessage && <p className="text-sm text-danger-600">{errorMessage}</p>}
     </form>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-5">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Nouveau mot de passe</h1>
-        <p className="mt-1 text-sm text-muted">Choisissez un nouveau mot de passe pour votre compte.</p>
+    <main className="adm-shell flex min-h-screen flex-col items-center justify-center px-5 py-10">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 font-jakarta text-lg font-bold text-white">
+            S
+          </span>
+          <div>
+            <h1 className="font-jakarta text-2xl font-bold tracking-tight text-navy-900">Nouveau mot de passe</h1>
+            <p className="mt-1 text-sm adm-muted">Choisissez un nouveau mot de passe pour votre compte.</p>
+          </div>
+        </div>
+        <div className="adm-card flex flex-col gap-4">
+          <Suspense fallback={null}>
+            <ResetPasswordForm />
+          </Suspense>
+        </div>
       </div>
-      <Suspense fallback={null}>
-        <ResetPasswordForm />
-      </Suspense>
     </main>
   );
 }

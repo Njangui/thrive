@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireMembership, requireCurrentOrganization } from "@/application/services/auth-service";
 import { getServiceForEdit, updateService } from "@/application/services/service-service";
+import { listCategories } from "@/application/services/catalog-service";
 import { AppError, NotFoundError } from "@/lib/errors";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { CategorySelect } from "../../../_components/category-select";
 
 async function updateServiceAction(formData: FormData) {
   "use server";
@@ -14,7 +16,7 @@ async function updateServiceAction(formData: FormData) {
     await updateService(serviceId, organizationId, {
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? "") || undefined,
-      categoryName: String(formData.get("category") ?? "") || undefined,
+      categoryId: String(formData.get("categoryId") ?? ""),
       price: Number(formData.get("price") ?? 0),
       durationMinutes: formData.get("durationMinutes") ? Number(formData.get("durationMinutes")) : null,
     });
@@ -44,7 +46,7 @@ export default async function EditServicePage({
     if (err instanceof NotFoundError) {
       return (
         <div className="mx-auto max-w-md">
-          <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
+          <p className="adm-alert-danger">
             Service introuvable.
           </p>
         </div>
@@ -53,11 +55,13 @@ export default async function EditServicePage({
     throw err;
   }
 
+  const categories = await listCategories(organizationId);
+
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Modifier le service</h1>
+      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Modifier le service</h1>
 
-      {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
+      {error && <p className="adm-alert-danger">{error}</p>}
 
       <form action={updateServiceAction} className="flex flex-col gap-3">
         <input type="hidden" name="organizationId" value={organizationId} />
@@ -65,7 +69,7 @@ export default async function EditServicePage({
 
         <label className="flex flex-col gap-1 text-sm">
           Nom
-          <input name="name" required defaultValue={service.name} className="rounded-brand border border-ink/15 px-4 py-3" />
+          <input name="name" required defaultValue={service.name} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
@@ -76,7 +80,7 @@ export default async function EditServicePage({
             min="0"
             required
             defaultValue={service.price}
-            className="rounded-brand border border-ink/15 px-4 py-3"
+            className="rounded-xl border border-navy-900/10 px-4 py-3"
           />
         </label>
 
@@ -87,18 +91,15 @@ export default async function EditServicePage({
             type="number"
             min="1"
             defaultValue={service.durationMinutes ?? ""}
-            className="rounded-brand border border-ink/15 px-4 py-3"
+            className="rounded-xl border border-navy-900/10 px-4 py-3"
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Catégorie
-          <input name="category" defaultValue={service.categoryName ?? ""} className="rounded-brand border border-ink/15 px-4 py-3" />
-        </label>
+        <CategorySelect categories={categories} defaultValue={service.categoryId} />
 
         <label className="flex flex-col gap-1 text-sm">
           Description
-          <textarea name="description" rows={3} defaultValue={service.description ?? ""} className="rounded-brand border border-ink/15 px-4 py-3" />
+          <textarea name="description" rows={3} defaultValue={service.description ?? ""} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
         <SubmitButton pendingLabel="Enregistrement...">Enregistrer</SubmitButton>

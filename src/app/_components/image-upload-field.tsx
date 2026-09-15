@@ -29,7 +29,7 @@ export function ImageUploadField({
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentUrl ?? null);
 
   return (
-    <div className="flex flex-col gap-3 rounded-brand border border-ink/15 p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{label}</p>
         <div className="flex gap-1 text-xs">
@@ -38,7 +38,7 @@ export function ImageUploadField({
             onClick={() => setMode("upload")}
             aria-pressed={mode === "upload"}
             className={`rounded-full px-3 py-1 transition-colors ${
-              mode === "upload" ? "bg-ink text-white" : "bg-ink/5 text-muted hover:bg-ink/10"
+              mode === "upload" ? "bg-navy-900 text-white" : "bg-navy-900/5 text-slate-500 hover:bg-navy-900/10"
             }`}
           >
             Importer une photo
@@ -48,7 +48,7 @@ export function ImageUploadField({
             onClick={() => setMode("url")}
             aria-pressed={mode === "url"}
             className={`rounded-full px-3 py-1 transition-colors ${
-              mode === "url" ? "bg-ink text-white" : "bg-ink/5 text-muted hover:bg-ink/10"
+              mode === "url" ? "bg-navy-900 text-white" : "bg-navy-900/5 text-slate-500 hover:bg-navy-900/10"
             }`}
           >
             Lien existant
@@ -61,7 +61,7 @@ export function ImageUploadField({
         <img
           src={previewUrl}
           alt=""
-          className="h-24 w-24 rounded-brand border border-ink/10 object-cover"
+          className="h-24 w-24 rounded-xl border border-navy-900/10 object-cover"
         />
       )}
 
@@ -69,7 +69,7 @@ export function ImageUploadField({
         type="file"
         name={`${name}File`}
         accept="image/*"
-        className={mode === "upload" ? "text-sm text-muted file:mr-3 file:rounded-brand file:border-0 file:bg-ink/5 file:px-3 file:py-2 file:text-sm file:font-medium" : "hidden"}
+        className={mode === "upload" ? "text-sm text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-navy-900/5 file:px-3 file:py-2 file:text-sm file:font-medium" : "hidden"}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (!file) return;
@@ -85,10 +85,10 @@ export function ImageUploadField({
         placeholder="https://..."
         defaultValue={currentUrl ?? ""}
         onChange={(event) => setPreviewUrl(event.target.value || currentUrl || null)}
-        className={mode === "url" ? "rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-leaf" : "hidden"}
+        className={mode === "url" ? "rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400" : "hidden"}
       />
 
-      {helpText && <p className="text-xs text-muted">{helpText}</p>}
+      {helpText && <p className="text-xs text-slate-500">{helpText}</p>}
     </div>
   );
 }

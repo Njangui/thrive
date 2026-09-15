@@ -18,9 +18,9 @@ function GaugeBar({ used, limit }: { used: number; limit: number }) {
   const pct = limit <= 0 ? 100 : Math.min((used / limit) * 100, 100);
   const nearLimit = pct >= 90;
   return (
-    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-paper">
+    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#F7F6FD]">
       <div
-        className={`h-full rounded-full transition-[width] ${nearLimit ? "bg-clay" : "bg-leaf"}`}
+        className={`h-full rounded-full transition-[width] ${nearLimit ? "bg-warning-600" : "bg-violet-600"}`}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -29,22 +29,22 @@ function GaugeBar({ used, limit }: { used: number; limit: number }) {
 
 function UsageCard({ gauge }: { gauge: UsageGauge }) {
   return (
-    <div className="rounded-brand border border-ink/10 bg-white p-4">
-      <p className="text-xs text-muted">{gauge.label}</p>
+    <div className="rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
+      <p className="text-xs text-slate-500">{gauge.label}</p>
       {gauge.mode === "cumulative" ? (
         <>
-          <p className="mt-1 font-display text-lg font-semibold">
+          <p className="mt-1 font-jakarta text-lg font-semibold">
             {gauge.result.used.toLocaleString("fr-FR")}
             {gauge.result.limit === -1 ? (
-              <span className="ml-1 text-sm font-normal text-muted">(illimité)</span>
+              <span className="ml-1 text-sm font-normal text-slate-500">(illimité)</span>
             ) : (
-              <span className="text-sm font-normal text-muted"> / {formatLimit(gauge.result.limit)}</span>
+              <span className="text-sm font-normal text-slate-500"> / {formatLimit(gauge.result.limit)}</span>
             )}
           </p>
           <GaugeBar used={gauge.result.used} limit={gauge.result.limit} />
         </>
       ) : (
-        <p className="mt-1 font-display text-lg font-semibold">
+        <p className="mt-1 font-jakarta text-lg font-semibold">
           {gauge.result.limit === -1 ? "Illimité" : `Jusqu'à ${formatLimit(gauge.result.limit)}`}
         </p>
       )}
@@ -53,11 +53,11 @@ function UsageCard({ gauge }: { gauge: UsageGauge }) {
 }
 
 const PAYMENT_STATUS_LABEL: Record<string, { label: string; className: string }> = {
-  pending: { label: "En attente", className: "text-clay" },
-  completed: { label: "Payé", className: "text-leaf" },
-  failed: { label: "Échoué", className: "text-clay" },
-  refunded: { label: "Remboursé", className: "text-muted" },
-  cancelled: { label: "Annulé", className: "text-muted" },
+  pending: { label: "En attente", className: "text-danger-600" },
+  completed: { label: "Payé", className: "text-violet-600" },
+  failed: { label: "Échoué", className: "text-danger-600" },
+  refunded: { label: "Remboursé", className: "text-slate-500" },
+  cancelled: { label: "Annulé", className: "text-slate-500" },
 };
 
 async function payPlanAction(formData: FormData) {
@@ -114,25 +114,25 @@ export default async function SubscriptionPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Mon abonnement</h1>
-        <p className="mt-1 text-sm text-muted">
-          Forfait actuel : <span className="font-medium text-ink">{overview.planName}</span>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Mon abonnement</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Forfait actuel : <span className="font-medium text-navy-900">{overview.planName}</span>
         </p>
       </div>
 
-      {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
+      {error && <p className="adm-alert-danger">{error}</p>}
       {success && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">{success}</p>
+        <p className="adm-alert-success">{success}</p>
       )}
 
       {overview.trialDaysRemaining !== null && (
-        <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">
+        <p className="adm-alert-success">
           Il vous reste {overview.trialDaysRemaining} {overview.trialDaysRemaining === 1 ? "jour" : "jours"} d&apos;essai.
         </p>
       )}
 
       <div>
-        <h2 className="font-display text-lg font-semibold">Mon utilisation</h2>
+        <h2 className="font-jakarta text-lg font-semibold">Mon utilisation</h2>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {overview.usage.map((gauge) => (
             <UsageCard key={gauge.key} gauge={gauge} />
@@ -141,44 +141,44 @@ export default async function SubscriptionPage({
       </div>
 
       <div>
-        <h2 className="font-display text-lg font-semibold">Fonctionnalités incluses</h2>
+        <h2 className="font-jakarta text-lg font-semibold">Fonctionnalités incluses</h2>
         <ul className="mt-3 flex flex-col gap-2">
           {overview.features.map((f) => (
             <li
               key={f.key}
-              className="flex items-center gap-2 rounded-brand border border-ink/10 bg-white px-4 py-3 text-sm"
+              className="flex items-center gap-2 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] px-4 py-3 text-sm"
             >
-              <span className={f.included ? "text-leaf" : "text-muted"} aria-hidden>
+              <span className={f.included ? "text-violet-600" : "text-slate-500"} aria-hidden>
                 {f.included ? "✓" : "—"}
               </span>
-              <span className={f.included ? "text-ink" : "text-muted"}>{f.label}</span>
+              <span className={f.included ? "text-navy-900" : "text-slate-500"}>{f.label}</span>
             </li>
           ))}
         </ul>
       </div>
 
       <div>
-        <h2 className="font-display text-lg font-semibold">Les forfaits</h2>
+        <h2 className="font-jakarta text-lg font-semibold">Les forfaits</h2>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {overview.plans.map((p) => (
             <div
               key={p.key}
-              className={`rounded-brand border p-4 ${p.isCurrent ? "border-leaf bg-leaf/5" : "border-ink/10 bg-white"}`}
+              className={`rounded-xl border p-4 ${p.isCurrent ? "border-violet-400 bg-success-50" : "border-navy-900/10 bg-white"}`}
             >
-              <p className="font-display text-base font-semibold">{p.name}</p>
+              <p className="font-jakarta text-base font-semibold">{p.name}</p>
               <p className="mt-1 text-lg font-semibold">
-                {p.priceFcfa.toLocaleString("fr-FR")} FCFA<span className="text-xs font-normal text-muted">/mois</span>
+                {p.priceFcfa.toLocaleString("fr-FR")} FCFA<span className="text-xs font-normal text-slate-500">/mois</span>
               </p>
-              {p.description && <p className="mt-2 text-xs text-muted">{p.description}</p>}
+              {p.description && <p className="mt-2 text-xs text-slate-500">{p.description}</p>}
               {p.isCurrent ? (
-                <p className="mt-3 text-xs font-medium text-leaf">Votre forfait actuel</p>
+                <p className="mt-3 text-xs font-medium text-violet-600">Votre forfait actuel</p>
               ) : (
                 <form action={payPlanAction} className="mt-3">
                   <input type="hidden" name="organizationId" value={organizationId} />
                   <input type="hidden" name="planKey" value={p.key} />
                   <button
                     type="submit"
-                    className="w-full rounded-brand bg-ink px-3 py-2 text-xs font-medium text-white transition hover:opacity-90"
+                    className="w-full rounded-xl bg-navy-900 px-3 py-2 text-xs font-medium text-white transition hover:opacity-90"
                   >
                     Passer à ce forfait
                   </button>
@@ -191,7 +191,7 @@ export default async function SubscriptionPage({
           <form action={payPlanAction} className="mt-3">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="planKey" value={overview.planKey} />
-            <button type="submit" className="rounded-brand border border-ink/20 px-3 py-2 text-xs font-medium hover:bg-paper">
+            <button type="submit" className="rounded-xl border border-navy-900/15 px-3 py-2 text-xs font-medium hover:bg-[#F7F6FD]">
               Renouveler mon forfait actuel
             </button>
           </form>
@@ -199,13 +199,13 @@ export default async function SubscriptionPage({
       </div>
 
       <div>
-        <h2 className="font-display text-lg font-semibold">Historique des paiements</h2>
-        <div className="mt-3 overflow-x-auto rounded-brand border border-ink/10 bg-white">
+        <h2 className="font-jakarta text-lg font-semibold">Historique des paiements</h2>
+        <div className="mt-3 overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
           {payments.length === 0 ? (
-            <p className="p-6 text-sm text-muted">Aucun paiement pour l&apos;instant.</p>
+            <p className="p-6 text-sm text-slate-500">Aucun paiement pour l&apos;instant.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
+              <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2">Objet</th>
@@ -216,10 +216,10 @@ export default async function SubscriptionPage({
               </thead>
               <tbody>
                 {payments.map((payment) => {
-                  const statusInfo = PAYMENT_STATUS_LABEL[payment.status] ?? { label: payment.status, className: "text-muted" };
+                  const statusInfo = PAYMENT_STATUS_LABEL[payment.status] ?? { label: payment.status, className: "text-slate-500" };
                   return (
-                    <tr key={payment.id} className="border-b border-ink/5 last:border-0">
-                      <td className="px-4 py-2 text-muted">{new Date(payment.createdAt).toLocaleDateString("fr-FR")}</td>
+                    <tr key={payment.id} className="border-b border-navy-900/5 last:border-0">
+                      <td className="px-4 py-2 text-slate-500">{new Date(payment.createdAt).toLocaleDateString("fr-FR")}</td>
                       <td className="px-4 py-2">
                         {payment.paymentType === "plan_subscription"
                           ? `Abonnement — forfait ${payment.planKey}`
@@ -232,7 +232,7 @@ export default async function SubscriptionPage({
                           <form action={cancelPaymentAction}>
                             <input type="hidden" name="organizationId" value={organizationId} />
                             <input type="hidden" name="paymentId" value={payment.id} />
-                            <button type="submit" className="text-xs text-clay hover:underline">
+                            <button type="submit" className="text-xs text-danger-600 hover:underline">
                               Annuler
                             </button>
                           </form>
