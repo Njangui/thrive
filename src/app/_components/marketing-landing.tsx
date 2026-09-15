@@ -571,6 +571,7 @@ export async function MarketingLanding({
           <nav className="flex flex-wrap items-center justify-center gap-5">
             <Link href="#fonctionnalites" className="hover:text-navy-900">Fonctionnalités</Link>
             <Link href="#tarifs" className="hover:text-navy-900">Tarifs</Link>
+            <Link href="/devenir-affilie" className="hover:text-navy-900">Devenir affilié</Link>
             <Link href="/login" className="hover:text-navy-900">Connexion</Link>
             <Link href="/cgu" className="hover:text-navy-900">CGU</Link>
             <Link href="/confidentialite" className="hover:text-navy-900">Confidentialité</Link>

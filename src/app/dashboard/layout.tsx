@@ -8,6 +8,7 @@ import { getEnabledModules } from "@/application/services/module-service";
 import { getCreditStatus } from "@/application/services/ai-credits-service";
 import { DashboardSidebar } from "./_components/dashboard-nav";
 import { DashboardTopbar } from "./_components/topbar";
+import { InstallAppBanner } from "./_components/install-app-banner";
 import { ROLE_LABELS } from "./_components/role-labels";
 
 /**
@@ -86,6 +87,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           roleLabel={roleLabel}
           initials={initials}
         />
+        <InstallAppBanner />
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>

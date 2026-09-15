@@ -76,6 +76,24 @@ export async function POST(request: Request) {
     // d'événement.
     const externalEventId = rawEvent.id;
 
+    // CORRECTIF (15/09/2026) : le bouton "Send test webhook" du dashboard
+    // Zernio envoie `{ id, event: "webhook.test", message, timestamp }` —
+    // un événement hors de toute catégorie confirmée (ni `post.*`, ni
+    // inbox), sans `account`. Le code plus bas suppose `rawEvent.account.id`
+    // dès qu'il ne s'agit pas d'un post event, ce qui plantait sur ce
+    // payload (TypeError: Cannot read properties of undefined (reading
+    // 'id')) -> 500 -> "Send test webhook" échoue côté Zernio, et par
+    // extension tout futur type d'événement non documenté planterait pareil.
+    // Comme pour un tenant non résolu juste en dessous (section 38 :
+    // toujours 200, jamais de retry inutile), on ignore proprement plutôt
+    // que de laisser remonter l'exception.
+    if (!isZernioPostEvent(rawEvent) && !rawEvent.account?.id) {
+      console.info(
+        `Zernio webhook: événement "${rawEvent.event}" (${externalEventId}) sans "account" exploitable (ex: test webhook du dashboard), ignoré.`,
+      );
+      continue;
+    }
+
     const organizationId = isZernioPostEvent(rawEvent)
       ? await resolveOrganizationIdByProviderPostId(
           rawEvent.post?._id ?? rawEvent.post?.id ?? rawEvent.postId ?? "",
