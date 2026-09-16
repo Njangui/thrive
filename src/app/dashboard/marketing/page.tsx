@@ -56,12 +56,15 @@ export default async function MarketingPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Publications</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+        <p className="adm-eyebrow">Marketing social</p>
+        <h1 className="mt-1 font-jakarta text-2xl font-bold tracking-tight">Publications</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Statut réel de vos publications sociales, plateforme par plateforme — mis à jour automatiquement dès
-          que Zernio confirme une diffusion.
+          Statut réel de vos publications sociales, plateforme par plateforme — mis à jour automatiquement après confirmation de diffusion.
         </p>
+        </div>
+        <a href="/dashboard/analytics" className="adm-btn-secondary w-fit">Voir les analytics</a>
       </div>
 
       <section className="flex flex-col gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">

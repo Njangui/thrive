@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ModuleKey } from "@/application/config/modules";
 import type { CreditStatus } from "@/application/services/ai-credits-service";
+import { getIndustryUi } from "@/application/config/industry-ui";
 import {
   IconGrid,
   IconTag,
@@ -73,6 +74,7 @@ export const DASHBOARD_NAV_GROUPS: {
       { href: "/dashboard/comments", label: "Commentaires", icon: IconComment, module: "marketing" },
       { href: "/dashboard/groups", label: "Groupes WhatsApp", icon: IconGroupChat, module: "whatsapp" },
       { href: "/dashboard/marketing", label: "Publications", icon: IconMegaphone, module: "marketing" },
+      { href: "/dashboard/analytics", label: "Analytics réseaux", icon: IconGlobe, module: "marketing" },
     ],
   },
   {
@@ -101,10 +103,22 @@ export function isActive(pathname: string | null, href: string): boolean {
 
 /** Groupes filtrés par modules activés, groupes devenus vides retirés
  * entièrement (jamais un titre "GESTION" affiché au-dessus de rien). */
-export function useVisibleNavGroups(enabledModules: ModuleKey[]) {
+export function useVisibleNavGroups(enabledModules: ModuleKey[], industry?: string | null) {
+  const ui = getIndustryUi(industry);
   return DASHBOARD_NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.module || enabledModules.includes(item.module)),
+    items: group.items
+      .filter((item) => !item.module || enabledModules.includes(item.module))
+      .filter((item) => {
+        if (item.href === "/dashboard/products") return !["beauty", "professional_services"].includes(ui.key);
+        if (item.href === "/dashboard/services") return ["beauty", "professional_services"].includes(ui.key);
+        return true;
+      })
+      .map((item) => {
+        if (item.href === "/dashboard/products") return { ...item, label: ui.catalogLabel };
+        if (item.href === "/dashboard/services") return { ...item, label: ui.catalogLabel };
+        return item;
+      }),
   })).filter((group) => group.items.length > 0);
 }
 
@@ -118,7 +132,7 @@ function CreditsWidget({ credits }: { credits: CreditStatus }) {
         {credits.usedCredits} / {credits.includedCredits} utilisés
       </p>
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full rounded-full ${pct >= 90 ? "bg-warning-500" : "bg-violet-500"}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full ${pct >= 90 ? "bg-warning-600" : "bg-violet-500"}`} style={{ width: `${pct}%` }} />
       </div>
       <Link href="/dashboard/subscription" className="mt-2 inline-block text-xs font-medium text-violet-300 hover:underline">
         Voir les détails
@@ -148,6 +162,7 @@ export function DashboardSidebar({
   displayName,
   roleLabel,
   initials,
+  industry,
 }: {
   organizationName: string;
   enabledModules: ModuleKey[];
@@ -155,9 +170,10 @@ export function DashboardSidebar({
   displayName: string;
   roleLabel: string;
   initials: string;
+  industry?: string | null;
 }) {
   const pathname = usePathname();
-  const groups = useVisibleNavGroups(enabledModules);
+  const groups = useVisibleNavGroups(enabledModules, industry);
 
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">

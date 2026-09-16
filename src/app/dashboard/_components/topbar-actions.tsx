@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DASHBOARD_NAV_GROUPS } from "./dashboard-nav";
+import { useVisibleNavGroups } from "./dashboard-nav";
 import { IconSearch, IconTag, IconBriefcase, IconClock, IconBanknote } from "@/app/_components/app-icons";
 import type { ModuleKey } from "@/application/config/modules";
 
@@ -24,20 +24,17 @@ import type { ModuleKey } from "@/application/config/modules";
  *    raisonnement dans la conversation).
  */
 
-function useNavItems(enabledModules: ModuleKey[]) {
-  return useMemo(
-    () =>
-      DASHBOARD_NAV_GROUPS.flatMap((g) => g.items).filter((item) => !item.module || enabledModules.includes(item.module)),
-    [enabledModules],
-  );
+function useNavItems(enabledModules: ModuleKey[], industry?: string | null) {
+  const groups = useVisibleNavGroups(enabledModules, industry);
+  return useMemo(() => groups.flatMap((g) => g.items), [groups]);
 }
 
-export function TopbarSearch({ enabledModules }: { enabledModules: ModuleKey[] }) {
+export function TopbarSearch({ enabledModules, industry }: { enabledModules: ModuleKey[]; industry?: string | null }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const items = useNavItems(enabledModules);
+  const items = useNavItems(enabledModules, industry);
 
   const results = query.trim()
     ? items.filter((i) => i.label.toLowerCase().includes(query.trim().toLowerCase()))
@@ -63,7 +60,7 @@ export function TopbarSearch({ enabledModules }: { enabledModules: ModuleKey[] }
   }
 
   return (
-    <div className="relative w-full max-w-sm">
+    <div className="relative min-w-0 flex-1 max-w-sm">
       <button
         type="button"
         onClick={() => {
@@ -121,14 +118,16 @@ export function TopbarSearch({ enabledModules }: { enabledModules: ModuleKey[] }
 }
 
 const CREATE_LINKS = [
-  { href: "/dashboard/products/new", label: "Nouveau produit", icon: IconTag },
-  { href: "/dashboard/services/new", label: "Nouveau service", icon: IconBriefcase },
-  { href: "/dashboard/appointments", label: "Nouveau rendez-vous", icon: IconClock },
-  { href: "/dashboard/finance", label: "Écriture finance", icon: IconBanknote },
+  { href: "/dashboard/products/new", label: "Nouveau produit", icon: IconTag, module: "catalog" as ModuleKey },
+  { href: "/dashboard/services/new", label: "Nouvelle prestation", icon: IconBriefcase, module: "catalog" as ModuleKey },
+  { href: "/dashboard/appointments", label: "Nouveau rendez-vous", icon: IconClock, module: "appointments" as ModuleKey },
+  { href: "/dashboard/finance", label: "Écriture finance", icon: IconBanknote, module: "finance" as ModuleKey },
 ];
 
-export function TopbarCreateMenu() {
+export function TopbarCreateMenu({ enabledModules }: { enabledModules: ModuleKey[] }) {
   const [open, setOpen] = useState(false);
+
+  const links = CREATE_LINKS.filter(item => enabledModules.includes(item.module));
 
   return (
     <div className="relative">
@@ -144,7 +143,7 @@ export function TopbarCreateMenu() {
         <>
           <button type="button" aria-label="Fermer" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
           <ul className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-navy-900/[0.06] bg-white p-1.5 shadow-lg">
-            {CREATE_LINKS.map((item) => {
+            {links.map((item) => {
               const Icon = item.icon;
               return (
                 <li key={item.href}>

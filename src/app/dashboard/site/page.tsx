@@ -10,7 +10,7 @@ import {
   createTestimonial,
   deleteTestimonial,
 } from "@/application/services/landing-config-service";
-import { LANDING_SECTION_LABELS } from "@/application/config/landing-presets";
+import { LANDING_SECTION_LABELS, LANDING_PRESET_KEYS, buildDefaultSections } from "@/application/config/landing-presets";
 import { FONT_CHOICES, type FontChoice } from "@/domain/entities/landing";
 import { FONT_CHOICE_LABELS } from "@/app/fonts";
 import { AppError, ValidationError } from "@/lib/errors";
@@ -149,6 +149,11 @@ async function toggleSectionAction(formData: FormData) {
       brandColorPrimary: config.brandColorPrimary,
       brandColorSecondary: config.brandColorSecondary,
       fontChoice: config.fontChoice,
+      heroTitle: config.heroTitle,
+      heroSubtitle: config.heroSubtitle,
+      ctaLabel: config.ctaLabel,
+      ctaUrl: config.ctaUrl,
+      visualStyle: config.visualStyle,
     });
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour de la section.";
@@ -199,6 +204,11 @@ async function moveSectionAction(formData: FormData) {
       brandColorPrimary: config.brandColorPrimary,
       brandColorSecondary: config.brandColorSecondary,
       fontChoice: config.fontChoice,
+      heroTitle: config.heroTitle,
+      heroSubtitle: config.heroSubtitle,
+      ctaLabel: config.ctaLabel,
+      ctaUrl: config.ctaUrl,
+      visualStyle: config.visualStyle,
     });
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors du réordonnancement.";
@@ -206,6 +216,36 @@ async function moveSectionAction(formData: FormData) {
   }
 
   redirect("/dashboard/site?success=" + encodeURIComponent("Ordre mis à jour."));
+}
+
+async function applyPresetAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+  const preset = String(formData.get("preset") ?? "default") as (typeof LANDING_PRESET_KEYS)[number];
+  if (!LANDING_PRESET_KEYS.includes(preset)) redirect("/dashboard/site?error=Preset%20invalide");
+  try {
+    const config = await getLandingConfig(organizationId);
+    await updateLandingConfig(organizationId, { sections: buildDefaultSections(preset), brandColorPrimary: config.brandColorPrimary, brandColorSecondary: config.brandColorSecondary, fontChoice: config.fontChoice, heroTitle: config.heroTitle, heroSubtitle: config.heroSubtitle, ctaLabel: config.ctaLabel, ctaUrl: config.ctaUrl, visualStyle: config.visualStyle });
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Impossible d'appliquer ce modèle.";
+    redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
+  }
+  redirect("/dashboard/site?success=" + encodeURIComponent("Structure de page appliquée."));
+}
+
+async function updateHeroAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+  try {
+    const config = await getLandingConfig(organizationId);
+    await updateLandingConfig(organizationId, { sections: config.sections, brandColorPrimary: config.brandColorPrimary, brandColorSecondary: config.brandColorSecondary, fontChoice: config.fontChoice, heroTitle: String(formData.get("heroTitle") ?? "") || null, heroSubtitle: String(formData.get("heroSubtitle") ?? "") || null, ctaLabel: String(formData.get("ctaLabel") ?? "") || null, ctaUrl: String(formData.get("ctaUrl") ?? "") || null, visualStyle: (String(formData.get("visualStyle") ?? "soft") || "soft") as "soft" | "clean" | "bold" });
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors de la personnalisation.";
+    redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
+  }
+  redirect("/dashboard/site?success=" + encodeURIComponent("Personnalisation enregistrée."));
 }
 
 async function updateBrandingAction(formData: FormData) {
@@ -220,6 +260,11 @@ async function updateBrandingAction(formData: FormData) {
       brandColorPrimary: String(formData.get("brandColorPrimary") ?? "") || null,
       brandColorSecondary: String(formData.get("brandColorSecondary") ?? "") || null,
       fontChoice: (String(formData.get("fontChoice") ?? "") || null) as FontChoice | null,
+      heroTitle: config.heroTitle,
+      heroSubtitle: config.heroSubtitle,
+      ctaLabel: config.ctaLabel,
+      ctaUrl: config.ctaUrl,
+      visualStyle: config.visualStyle,
     });
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour de l'apparence.";
@@ -427,6 +472,29 @@ export default async function SitePage({
       {/* Lot K — Sections de ma page */}
       <div className="mt-4 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {LANDING_PRESET_KEYS.filter((key) => key !== "default").map((preset) => (
+              <form key={preset} action={applyPresetAction} className="rounded-2xl border border-navy-900/[0.06] bg-[#FBFAFF] p-4">
+                <input type="hidden" name="organizationId" value={organizationId} />
+                <input type="hidden" name="preset" value={preset} />
+                <p className="text-sm font-bold capitalize">{preset === "boutique" ? "Boutique" : preset === "salon" ? "Salon / beauté" : "Restaurant"}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Une structure optimisée pour ce type d&apos;activité.</p>
+                <SubmitButton pendingLabel="Application…" className="mt-3 w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700">Utiliser ce modèle</SubmitButton>
+              </form>
+            ))}
+          </div>
+
+          <form action={updateHeroAction} className="grid gap-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-4 lg:grid-cols-2">
+            <input type="hidden" name="organizationId" value={organizationId} />
+            <div className="lg:col-span-2"><p className="text-sm font-bold">Personnaliser votre première impression</p><p className="mt-1 text-xs text-slate-500">Modifiez le message principal, le bouton et le style sans toucher au code.</p></div>
+            <label className="text-sm font-semibold">Titre principal<input name="heroTitle" defaultValue={landingConfig.heroTitle ?? ""} placeholder="Ex. Votre beauté, notre savoir-faire." className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
+            <label className="text-sm font-semibold">Sous-titre<textarea name="heroSubtitle" defaultValue={landingConfig.heroSubtitle ?? ""} rows={2} placeholder="Une phrase qui explique votre valeur." className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
+            <label className="text-sm font-semibold">Texte du bouton<input name="ctaLabel" defaultValue={landingConfig.ctaLabel ?? ""} placeholder="Nous contacter" className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
+            <label className="text-sm font-semibold">Lien du bouton<input name="ctaUrl" defaultValue={landingConfig.ctaUrl ?? ""} placeholder="https://wa.me/..." className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
+            <label className="text-sm font-semibold">Ambiance visuelle<select name="visualStyle" defaultValue={landingConfig.visualStyle} className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal"><option value="soft">Douce</option><option value="clean">Épurée</option><option value="bold">Impactante</option></select></label>
+            <div className="flex items-end"><SubmitButton pendingLabel="Enregistrement…" className="w-full rounded-xl bg-navy-900 px-4 py-3 text-sm font-semibold text-white">Enregistrer la personnalisation</SubmitButton></div>
+          </form>
+
           <h2 className="font-jakarta text-lg font-semibold">Sections de ma page</h2>
           <p className="mt-1 text-sm text-slate-500">
             Activez, désactivez et réordonnez les sections affichées sur votre page publique.

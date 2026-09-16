@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 
 const LINKS = [
-  { href: "#apercu-fonctionnalites", label: "Fonctionnalités" },
+  { href: "#fonctionnalites", label: "Fonctionnalités" },
   { href: "#comment-ca-marche", label: "Comment ça marche" },
-  { href: "#tarifs", label: "Tarifs" },
+  { href: "/tarifs", label: "Tarifs" },
   { href: "#faq", label: "FAQ" },
+  { href: "/devenir-affilie", label: "Devenir affilié" },
 ];
 
 /** Menu mobile de la landing marketing (§6/§93) — même esprit que dashboard-nav.tsx : simple, léger, jamais bloquant. */
@@ -44,7 +45,7 @@ export function MarketingMobileMenu() {
               Connexion
             </Link>
             <Link
-              href="/login"
+              href="/signup"
               onClick={() => setIsOpen(false)}
               className="rounded-xl bg-violet-600 px-4 py-2.5 text-center font-medium text-white"
             >

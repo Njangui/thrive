@@ -1,4 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { getNotificationProvider } from "@/infrastructure/providers/registry";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { grantCredits, type CreditStatus } from "./ai-credits-service";
 import {
@@ -220,6 +221,33 @@ export async function writeAdminAuditLog(params: {
     // un audit log. On lève plutôt que de laisser une action admin passer
     // silencieusement sans trace.
     throw new Error(`Erreur écriture audit_logs: ${error.message}`);
+  }
+
+  // Telegram opérateur : uniquement les événements majeurs, jamais les
+  // secrets/états sensibles. Le canal est best-effort et ne doit jamais
+  // bloquer l'action métier qui vient d'être auditée.
+  const MAJOR_ACTIONS = new Set([
+    "ORGANIZATION_CREATED", "ORGANIZATION_SUSPENDED", "ORGANIZATION_ACTIVATED",
+    "ORGANIZATION_PLAN_CHANGED", "SUBSCRIPTION_PAYMENT_COMPLETED", "SUBSCRIPTION_PAYMENT_FAILED",
+    "TELEGRAM_CHANNEL_CONNECTED", "TELEGRAM_CHANNEL_DISCONNECTED", "AFFILIATE_APPLICATION_CREATED",
+    "AFFILIATE_FRAUD_DETECTED", "AFFILIATE_PAYOUT_REQUESTED", "DOMAIN_REQUEST_RESOLVED",
+    "ADDON_CREATED", "ADDON_UPDATED", "AI_CREDITS_GRANTED",
+    "PHONE_NUMBER_ADDED", "PHONE_NUMBER_ASSIGNED",
+    "AFFILIATE_APPROVED", "AFFILIATE_REJECTED", "AFFILIATE_SUSPENDED", "AFFILIATE_PAYOUT_PAID",
+  ]);
+  if (MAJOR_ACTIONS.has(params.action)) {
+    try {
+      const notifier = await getNotificationProvider();
+      await notifier.send({
+        title: `SME-OS · ${params.action.replaceAll("_", " ")}`,
+        body: `Organisation: ${params.organizationId ?? "plateforme"}\nType: ${params.entityType}${params.entityId ? `\nID: ${params.entityId}` : ""}`,
+        channel: "telegram",
+        relatedEntityType: params.entityType,
+        relatedEntityId: params.entityId ?? params.organizationId ?? undefined,
+      });
+    } catch (notificationError) {
+      console.warn("[admin-audit] notification Telegram non envoyée:", notificationError);
+    }
   }
 }
 

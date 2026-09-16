@@ -265,7 +265,7 @@ export default async function GroupsPage({
                   </td>
                   <td
                     className="px-2 py-2"
-                    title="Une diffusion ne peut atteindre ce groupe que si Zernio a déjà une conversation active avec lui (voir docs/ZERNIO_INTEGRATION.md)."
+                    title="Une diffusion ne peut atteindre ce groupe que si SME-OS dispose déjà d'une conversation active avec lui."
                   >
                     {g.isSendable ? (
                       <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs text-violet-600">Prêt</span>

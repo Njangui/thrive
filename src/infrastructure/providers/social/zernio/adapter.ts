@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   CreateSocialPostRequest,
   SocialAnalyticsEntry,
+  SocialDailyMetric,
   SocialAnalyticsQuery,
   SocialPostStatus,
   SocialPostResult,
@@ -99,6 +100,27 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
    */
   async cancelPost(providerPostId: string): Promise<void> {
     await this.client.deletePost(providerPostId);
+  }
+
+  async getDailyMetrics(fromDate: string, toDate: string): Promise<SocialDailyMetric[]> {
+    if (!this.profileId) return [];
+    const response = await this.client.getDailyMetrics(this.profileId, fromDate, toDate);
+    return (response.dailyData ?? []).map((day) => ({
+      date: day.date,
+      postCount: day.postCount ?? 0,
+      platforms: day.platforms ?? {},
+      metrics: {
+        impressions: day.metrics?.impressions ?? 0,
+        reach: day.metrics?.reach ?? 0,
+        likes: day.metrics?.likes ?? 0,
+        comments: day.metrics?.comments ?? 0,
+        shares: day.metrics?.shares ?? 0,
+        saves: day.metrics?.saves ?? 0,
+        clicks: day.metrics?.clicks ?? 0,
+        views: day.metrics?.views ?? 0,
+        follows: day.metrics?.follows ?? 0,
+      },
+    }));
   }
 
   async getAnalytics(query: SocialAnalyticsQuery): Promise<SocialAnalyticsEntry[]> {

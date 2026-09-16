@@ -17,6 +17,11 @@ const EnvSchema = z.object({
   ZERNIO_API_BASE_URL: z.string().url().default("https://zernio.com/api/v1"),
   ZERNIO_WEBHOOK_SIGNING_SECRET: z.string().optional(),
 
+  // YouTube natif : OAuth Google, indépendant des connecteurs sociaux tiers.
+  YOUTUBE_CLIENT_ID: z.string().optional(),
+  YOUTUBE_CLIENT_SECRET: z.string().optional(),
+  YOUTUBE_OAUTH_STATE_SECRET: z.string().optional(),
+
   AI_PROVIDER_DEFAULT: z.enum(["mistral", "claude", "openai"]).default("mistral"),
   MISTRAL_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),

@@ -30,6 +30,9 @@ import type { NotificationProvider } from "@/domain/ports/notification-provider"
 import { TelegramAdapter } from "./telegram/adapter";
 import { TelegramClient } from "./telegram/client";
 import { ConsoleLogNotificationAdapter } from "./notification/console-log/adapter";
+import { CompositeSocialAdapter } from "./social/composite-adapter";
+import { YouTubeSocialAdapter } from "./social/youtube/adapter";
+import { YouTubeClient } from "./social/youtube/client";
 
 /**
  * ProviderRegistry (section 58) : les services applicatifs appellent
@@ -298,36 +301,32 @@ export async function getAIProvider(organizationId: string): Promise<AIProviderB
 
 export async function getSocialPublishingProvider(organizationId: string): Promise<SocialPublishingProvider> {
   const supabase = getSupabaseServiceClient();
-
-  const { data: connection, error } = await supabase
+  const { data: connections, error } = await supabase
     .from("provider_connections")
-    .select("provider_name, status, metadata")
+    .select("provider_name, status, metadata, credential_reference")
     .eq("organization_id", organizationId)
     .eq("provider_type", "social")
-    .eq("status", "connected")
-    .maybeSingle();
+    .eq("status", "connected");
+  if (error) throw new Error(`Erreur lecture connexions sociales: ${error.message}`);
+  if (!connections || connections.length === 0) throw new Error(`Aucun canal social connecté pour l'organisation ${organizationId}.`);
 
-  if (error) throw new Error(`Erreur lecture provider_connections: ${error.message}`);
-  if (!connection) {
-    throw new Error(
-      `Aucun SocialPublishingProvider connecté pour l'organization ${organizationId}. ` +
-        `Connectez des comptes sociaux (Marketing → Paramètres) avant de publier.`,
-    );
-  }
-
-  switch (connection.provider_name) {
-    case "zernio": {
+  const adapters: Array<{ name: string; adapter: SocialPublishingProvider; platforms: Set<string> }> = [];
+  for (const connection of connections) {
+    if (connection.provider_name === "zernio") {
       const apiKey = await resolveCredential(organizationId, "social", "zernio");
-      // Lot 3 (audit master prompt §39) : `profileId` scope
-      // listAccounts() au tenant plutôt qu'à toute l'équipe Zernio (voir
-      // client.ts). Optionnel ici (contrairement à la messagerie) — un
-      // tenant sans metadata.profileId reste fonctionnel pour publier,
-      // seul le COMPTAGE d'entitlement peut alors sur-compter si la clé
-      // API est partagée avec d'autres tenants (voir RAPPORT_LOT_3.md).
       const metadata = (connection.metadata ?? {}) as { profileId?: string };
-      return new ZernioSocialAdapter(new ZernioSocialClient(apiKey), metadata.profileId);
+      adapters.push({ name: "zernio", adapter: new ZernioSocialAdapter(new ZernioSocialClient(apiKey), metadata.profileId), platforms: new Set(["facebook", "instagram", "linkedin", "tiktok", "twitter", "threads", "reddit", "pinterest", "bluesky", "google_business", "snapchat", "discord"]) });
     }
-    default:
-      throw new Error(`SocialPublishingProvider "${connection.provider_name}" non implémenté.`);
+    if (connection.provider_name === "youtube" && connection.credential_reference) {
+      const { data: secret } = await supabase.rpc("vault_read_secret", { secret_id: connection.credential_reference });
+      if (!secret) continue;
+      const tokens = JSON.parse(secret as string) as { access_token: string; refresh_token: string; expires_at: number };
+      const metadata = (connection.metadata ?? {}) as { channelId?: string; title?: string; username?: string };
+      const account = { accountId: metadata.channelId ?? "youtube", platform: "youtube", username: metadata.username ?? metadata.title ?? "YouTube" };
+      adapters.push({ name: "youtube", adapter: new YouTubeSocialAdapter(new YouTubeClient(tokens), account), platforms: new Set(["youtube"]) });
+    }
   }
+  if (adapters.length === 0) throw new Error("Aucun canal social utilisable n'est connecté.");
+  if (adapters.length === 1) return adapters[0].adapter;
+  return new CompositeSocialAdapter(adapters);
 }

@@ -62,11 +62,11 @@ export async function TenantLanding({
 
   return (
     <div className={fontClassName} style={brandingStyle}>
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-12 px-5 py-10 sm:py-16">
+      <main className="tenant-site mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-6 sm:gap-10 sm:px-6 sm:py-12">
         {enabledSections.map((section) => {
           switch (section.type) {
             case "hero":
-              return <HeroSection key="hero" tenant={tenant} />;
+              return <HeroSection key="hero" tenant={tenant} config={config} />;
             case "about":
               return <AboutSection key="about" tenant={tenant} />;
             case "contact":

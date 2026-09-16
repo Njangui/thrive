@@ -168,10 +168,20 @@ export async function sendHumanReply(
     content,
   });
 
+  const nowIso = new Date().toISOString();
   await supabase
     .from("conversations")
-    .update({ handoff_status: "human", assigned_user_id: actorUserId, last_message_at: new Date().toISOString() })
+    .update({ handoff_status: "human", assigned_user_id: actorUserId, last_message_at: nowIso })
     .eq("id", conversationId);
+
+  const { data: contact } = await supabase
+    .from("conversations")
+    .select("contact_id")
+    .eq("id", conversationId)
+    .single();
+  if (contact?.contact_id) {
+    await supabase.from("leads").update({ last_contact_at: nowIso }).eq("organization_id", organizationId).eq("contact_id", contact.contact_id);
+  }
 }
 
 export async function returnConversationToAI(organizationId: string, conversationId: string): Promise<void> {

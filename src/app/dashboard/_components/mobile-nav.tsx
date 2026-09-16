@@ -19,13 +19,15 @@ import { isActive, useVisibleNavGroups } from "./dashboard-nav";
 export function DashboardMobileNav({
   organizationName,
   enabledModules,
+  industry,
 }: {
   organizationName: string;
   enabledModules: ModuleKey[];
+  industry?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const groups = useVisibleNavGroups(enabledModules);
+  const groups = useVisibleNavGroups(enabledModules, industry);
 
   return (
     <div className="lg:hidden">

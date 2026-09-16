@@ -1,110 +1,16 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/infrastructure/supabase/browser-client";
+import { AuthShell } from "@/app/_components/auth-shell";
 
-/**
- * Atteinte uniquement via le lien envoyé par `resetPasswordForEmail`
- * (voir login/page.tsx, mode "forgot") : le round-trip passe par
- * `/auth/callback` (`next=/reset-password`), qui échange le code contre
- * une session AVANT d'arriver ici — `updateUser` ci-dessous s'appuie donc
- * sur cette session déjà active, jamais sur un jeton lu depuis l'URL.
- *
- * Habillage aligné sur /login (chantier d'unification design, sept. 2026).
- */
-function sanitizeNext(next: string | null): string | null {
-  if (!next) return null;
-  if (!next.startsWith("/") || next.startsWith("//")) return null;
-  return next;
+function ResetForm() {
+  const router = useRouter(); const params = useSearchParams(); const next = params.get("next")?.startsWith("/") && !params.get("next")?.startsWith("//") ? params.get("next") : null;
+  const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState(""); const [pending, setPending] = useState(false); const [error, setError] = useState<string | null>(null); const [done, setDone] = useState(false);
+  async function submit(e: React.FormEvent) { e.preventDefault(); setError(null); if (password.length < 6) return setError("Le mot de passe doit contenir au moins 6 caractères."); if (password !== confirm) return setError("Les mots de passe ne correspondent pas."); setPending(true); const { error } = await getSupabaseBrowserClient().auth.updateUser({ password }); if (error) { setPending(false); setError(error.message); return; } setDone(true); setPending(false); }
+  if (done) return <div className="auth-success"><span>✓</span><div><strong>Mot de passe mis à jour</strong><p>Votre compte est sécurisé. Vous pouvez maintenant accéder à votre espace.</p><Link href={next ?? "/dashboard"} className="auth-inline-link">Continuer →</Link></div></div>;
+  return <form onSubmit={submit} className="auth-form-stack"><label className="auth-field"><span>Nouveau mot de passe</span><input type="password" required minLength={6} autoComplete="new-password" placeholder="6 caractères minimum" value={password} onChange={e => setPassword(e.target.value)} className="adm-input" /></label><label className="auth-field"><span>Confirmer le nouveau mot de passe</span><input type="password" required minLength={6} autoComplete="new-password" placeholder="Retapez votre mot de passe" value={confirm} onChange={e => setConfirm(e.target.value)} className="adm-input" /></label><div className="auth-password-rules"><span>✓ 6 caractères minimum</span><span>✓ Les deux mots de passe doivent correspondre</span></div><button type="submit" disabled={pending} className="adm-btn-primary auth-submit">{pending ? "Mise à jour..." : "Enregistrer le nouveau mot de passe"}</button>{error && <p className="adm-alert-danger">{error}</p>}</form>;
 }
-
-function ResetPasswordForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = sanitizeNext(searchParams.get("next"));
-
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "error">("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (password.length < 6) {
-      setStatus("error");
-      setErrorMessage("Le mot de passe doit contenir au moins 6 caractères.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setStatus("error");
-      setErrorMessage("Les mots de passe ne correspondent pas.");
-      return;
-    }
-
-    setStatus("sending");
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.auth.updateUser({ password });
-
-    if (error) {
-      setStatus("error");
-      setErrorMessage(error.message);
-      return;
-    }
-
-    router.push(next ?? "/dashboard");
-    router.refresh();
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <input
-        type="password"
-        required
-        minLength={6}
-        placeholder="Nouveau mot de passe"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="adm-input"
-      />
-      <input
-        type="password"
-        required
-        minLength={6}
-        placeholder="Confirmer le nouveau mot de passe"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        className="adm-input"
-      />
-      <button type="submit" disabled={status === "sending"} className="adm-btn-primary w-full">
-        {status === "sending" ? "Enregistrement..." : "Enregistrer le nouveau mot de passe"}
-      </button>
-      {errorMessage && <p className="text-sm text-danger-600">{errorMessage}</p>}
-    </form>
-  );
-}
-
-export default function ResetPasswordPage() {
-  return (
-    <main className="adm-shell flex min-h-screen flex-col items-center justify-center px-5 py-10">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 font-jakarta text-lg font-bold text-white">
-            S
-          </span>
-          <div>
-            <h1 className="font-jakarta text-2xl font-bold tracking-tight text-navy-900">Nouveau mot de passe</h1>
-            <p className="mt-1 text-sm adm-muted">Choisissez un nouveau mot de passe pour votre compte.</p>
-          </div>
-        </div>
-        <div className="adm-card flex flex-col gap-4">
-          <Suspense fallback={null}>
-            <ResetPasswordForm />
-          </Suspense>
-        </div>
-      </div>
-    </main>
-  );
-}
+export default function ResetPasswordPage() { return <Suspense fallback={null}><AuthShell mode="reset" title="Réinitialiser votre mot de passe" subtitle="Choisissez un nouveau mot de passe pour retrouver votre espace SME-OS."><ResetForm /></AuthShell></Suspense>; }

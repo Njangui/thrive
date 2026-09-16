@@ -48,35 +48,39 @@ export default async function ProductsPage({
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
+  const items = products ?? [];
+  const activeCount = items.filter((p) => p.status === "active").length;
+  const outCount = items.filter((p) => Number(p.current_stock) <= 0).length;
+  const draftCount = items.filter((p) => p.status === "draft").length;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-jakarta text-2xl font-bold tracking-tight">Catalogue</h1>
-          <Link href="/dashboard/products/categories" className="text-xs font-medium text-violet-600 hover:underline">
-            Gérer les catégories
-          </Link>
+      <header className="relative overflow-hidden rounded-3xl bg-navy-900 p-6 text-white shadow-[0_20px_60px_-35px_rgba(14,17,48,.7)] sm:p-8">
+        <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-violet-500/25 blur-3xl" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div><p className="text-xs font-bold uppercase tracking-[.16em] text-violet-300">Vitrine · catalogue · ventes</p><h1 className="mt-2 font-jakarta text-3xl font-extrabold tracking-tight">Votre catalogue, au cœur de SME-OS.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">Une seule fiche produit alimente votre site, votre suivi commercial et vos actions de communication.</p></div>
+          <div className="flex flex-wrap gap-2"><Link href="/dashboard/products/categories" className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/10">Catégories</Link><Link href="/dashboard/products/new" className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500">+ Ajouter</Link></div>
         </div>
-        <Link
-          href="/dashboard/products/new"
-          className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          + Ajouter un produit
-        </Link>
-      </div>
+      </header>
+
+      <section className="grid gap-3 sm:grid-cols-4">
+        {[["Total", totalCount, "Produits enregistrés"],["Actifs", activeCount, "Visibles sur la vitrine"],["Ruptures", outCount, "À traiter en priorité"],["Brouillons", draftCount, "Pas encore publiés"]].map(([label,value,help]) => <div key={String(label)} className="adm-kpi"><p className="adm-label">{label}</p><p className="mt-1 adm-value">{value}</p><p className="mt-1 text-xs adm-muted">{help}</p></div>)}
+      </section>
 
       {success && (
         <p className="adm-alert-success">{success}</p>
       )}
 
+      <section className="adm-card bg-gradient-to-r from-violet-50 via-white to-white"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="adm-eyebrow">Méthode recommandée</p><h2 className="mt-1 adm-heading-2 text-base">Créez des fiches simples mais complètes</h2><p className="mt-1 text-xs leading-5 text-slate-500">Photo · nom · prix · catégorie · stock · description. Une information manquante peut réduire la qualité de vos réponses et de votre vitrine.</p></div><span className="adm-badge-violet">Catalogue connecté</span></div></section>
+
       <CsvImportForm organizationId={organizationId} />
 
-      <div className="overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
+      <div className="adm-table-wrap">
         {(products ?? []).length === 0 ? (
           <p className="p-6 text-sm text-slate-500">Aucun produit pour l&apos;instant.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
+            <thead className="border-b border-navy-900/10 bg-[#FBFAFF] text-left text-xs uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-4 py-2" colSpan={2}>Produit</th>
                 <th className="px-4 py-2">Catégorie</th>

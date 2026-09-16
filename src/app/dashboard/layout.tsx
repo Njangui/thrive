@@ -10,6 +10,7 @@ import { DashboardSidebar } from "./_components/dashboard-nav";
 import { DashboardTopbar } from "./_components/topbar";
 import { InstallAppBanner } from "./_components/install-app-banner";
 import { ROLE_LABELS } from "./_components/role-labels";
+import { DashboardHelp } from "./_components/dashboard-help";
 
 /**
  * Coquille du dashboard marchand — sidebar navy + topbar, reprise de
@@ -48,11 +49,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const onboardingStatus = await getOnboardingStatus(currentOrg.organizationId);
   if (!onboardingStatus.completedAt) redirect("/onboarding");
 
-  const [unreadCount, enabledModules, credits, profile] = await Promise.all([
+  const [unreadCount, enabledModules, credits, profile, organization] = await Promise.all([
     getUnreadNotificationCount(currentOrg.organizationId, user.id),
     getEnabledModules(currentOrg.organizationId),
     getCreditStatus(currentOrg.organizationId),
     getSupabaseServiceClient().from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+    getSupabaseServiceClient().from("organizations").select("industry").eq("id", currentOrg.organizationId).maybeSingle(),
   ]);
 
   // Aucun écran de ce projet n'écrit encore `profiles.full_name` (voir la
@@ -69,7 +71,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const roleLabel = ROLE_LABELS[currentOrg.role];
 
   return (
-    <div className="adm-shell flex min-h-screen">
+    <div className="adm-shell flex min-h-screen w-full min-w-0 overflow-x-clip">
       <DashboardSidebar
         organizationName={currentOrg.organizationName}
         enabledModules={enabledModules}
@@ -77,8 +79,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         displayName={displayName}
         roleLabel={roleLabel}
         initials={initials}
+        industry={organization.data?.industry ?? null}
       />
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <DashboardTopbar
           organizationName={currentOrg.organizationName}
           enabledModules={enabledModules}
@@ -86,10 +89,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           displayName={displayName}
           roleLabel={roleLabel}
           initials={initials}
+          industry={organization.data?.industry ?? null}
         />
         <InstallAppBanner />
-        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
+        <DashboardHelp />
+        <main className="min-w-0 flex-1 overflow-x-clip px-3 py-5 sm:px-6 sm:py-8">
+          <div className="mx-auto w-full max-w-7xl min-w-0">{children}</div>
         </main>
       </div>
     </div>

@@ -63,6 +63,8 @@ export default async function LeadsPage({
   const currentQuery = new URLSearchParams({ page: String(page), ...(status ? { status } : {}) }).toString();
 
   const { leads, totalCount } = await listLeadsForOrg(organizationId, { status, page, pageSize: PAGE_SIZE });
+  const supabase = (await import("@/infrastructure/supabase/server-client")).getSupabaseServiceClient();
+  const { count: pendingFollowUps } = await supabase.from("automated_followups").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "pending");
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
@@ -74,6 +76,11 @@ export default async function LeadsPage({
 
       {success && <p className="adm-alert-success">{success}</p>}
       {error && <p className="adm-alert-danger">{error}</p>}
+
+      <section className="grid gap-4 lg:grid-cols-[1fr_auto]">
+        <div className="adm-card bg-gradient-to-r from-violet-50 via-white to-white"><p className="adm-eyebrow">Relance intelligente</p><h2 className="mt-1 adm-heading-2 text-lg">24 h pour les plus engagés · 48 h pour les autres</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Le système s'appuie d'abord sur les signaux réellement observés et des messages sûrs. L'IA intervient seulement en dernière position pour personnaliser une relance, sans décider qui doit être relancé.</p><div className="mt-4 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-violet-100 px-3 py-1.5 font-semibold text-violet-700">Engagement élevé · 24 h</span><span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">Engagement standard · 48 h</span><span className="rounded-full bg-emerald-100 px-3 py-1.5 font-semibold text-emerald-700">{pendingFollowUps ?? 0} relance(s) en attente</span></div></div>
+        <div className="adm-kpi min-w-[170px]"><p className="adm-label">Automatisées</p><p className="mt-1 adm-value">Actif</p><p className="mt-1 text-xs adm-muted">Traitement périodique sécurisé</p></div>
+      </section>
 
       <div className="flex flex-wrap gap-2 text-xs">
         <Link

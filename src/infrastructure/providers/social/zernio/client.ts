@@ -6,6 +6,7 @@ import type {
   ZernioAnalyticsResponse,
   ZernioInboxCommentsResponse,
   ZernioListAccountsResponse,
+  ZernioDailyMetricsResponse,
 } from "./types";
 
 /**
@@ -78,6 +79,19 @@ export class ZernioSocialClient {
     }
 
     return res.json() as Promise<ZernioGetPostResponse>;
+  }
+
+  async getDailyMetrics(profileId: string, fromDate: string, toDate: string): Promise<ZernioDailyMetricsResponse> {
+    this.assertConfigured();
+    const params = new URLSearchParams({ profileId, fromDate, toDate });
+    const res = await fetch(`${this.baseUrl}/analytics/daily-metrics?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio getDailyMetrics failed (${res.status}): ${body}`);
+    }
+    return res.json() as Promise<ZernioDailyMetricsResponse>;
   }
 
   async getAnalytics(sortBy: string, limit: number): Promise<ZernioAnalyticsResponse> {
@@ -177,6 +191,59 @@ export class ZernioSocialClient {
    * TOUS les tenants utilisant cette clé (voir adapter.ts pour la portée
    * exacte de ce que ça affecte vs pas).
    */
+  async createProfile(payload: { name: string; description?: string; color?: string }): Promise<{ profile: { _id: string; name: string } }> {
+    this.assertConfigured();
+    const res = await fetch(`${this.baseUrl}/profiles`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio createProfile failed (${res.status}): ${body}`);
+    }
+    return res.json() as Promise<{ profile: { _id: string; name: string } }> ;
+  }
+
+  async getConnectUrl(platform: string, profileId: string, redirectUrl: string): Promise<{ authUrl: string; state?: string }> {
+    this.assertConfigured();
+    const params = new URLSearchParams({ profileId, redirect_url: redirectUrl });
+    if (platform === "whatsapp") params.set("onboarding", "api");
+    const res = await fetch(`${this.baseUrl}/connect/${encodeURIComponent(platform)}?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio connect ${platform} failed (${res.status}): ${body}`);
+    }
+    return res.json() as Promise<{ authUrl: string; state?: string }>;
+  }
+
+  async getTelegramConnectStatus(profileId: string): Promise<{ code: string; expiresAt: string; expiresIn: number; botUsername: string; instructions: string[] }> {
+    this.assertConfigured();
+    const res = await fetch(`${this.baseUrl}/connect/telegram?profileId=${encodeURIComponent(profileId)}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio Telegram code failed (${res.status}): ${body}`);
+    }
+    return res.json();
+  }
+
+  async completeTelegramConnect(code: string): Promise<{ status: string; expiresAt?: string; expiresIn?: number; chatId?: string; chatTitle?: string; chatType?: string; account?: { _id: string; username?: string; displayName?: string } }> {
+    this.assertConfigured();
+    const res = await fetch(`${this.baseUrl}/connect/telegram?code=${encodeURIComponent(code)}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio Telegram status failed (${res.status}): ${body}`);
+    }
+    return res.json();
+  }
+
   async listAccounts(profileId?: string): Promise<ZernioListAccountsResponse> {
     this.assertConfigured();
 

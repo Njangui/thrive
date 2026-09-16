@@ -95,6 +95,8 @@ export async function handleInboundMessage(
   // 5. Score V1 (rule-based, section 12) — recalculé à chaque message entrant
   await computeRuleBasedScore(lead.id);
 
+  await supabase.from("leads").update({ last_contact_at: event.occurredAt }).eq("id", lead.id);
+
   return {
     contactId: contact.id,
     conversationId: conversation.id,

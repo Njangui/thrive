@@ -26,6 +26,7 @@ export function DashboardTopbar({
   displayName,
   roleLabel,
   initials,
+  industry,
 }: {
   organizationName: string;
   enabledModules: ModuleKey[];
@@ -33,15 +34,16 @@ export function DashboardTopbar({
   displayName: string;
   roleLabel: string;
   initials: string;
+  industry?: string | null;
 }) {
   return (
-    <header className="flex items-center gap-3 border-b border-navy-900/[0.06] bg-white/80 px-4 py-3 backdrop-blur sm:px-6">
-      <DashboardMobileNav organizationName={organizationName} enabledModules={enabledModules} />
+    <header className="flex min-w-0 items-center gap-2 border-b border-navy-900/[0.06] bg-white/80 px-4 py-3 backdrop-blur sm:px-6">
+      <DashboardMobileNav organizationName={organizationName} enabledModules={enabledModules} industry={industry} />
 
-      <TopbarSearch enabledModules={enabledModules} />
+      <TopbarSearch enabledModules={enabledModules} industry={industry} />
 
       <div className="ml-auto flex items-center gap-2">
-        <TopbarCreateMenu />
+        <TopbarCreateMenu enabledModules={enabledModules} />
 
         <Link
           href="/dashboard/notifications"

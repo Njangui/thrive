@@ -28,6 +28,11 @@ export interface LandingConfig {
   brandColorPrimary: string | null;
   brandColorSecondary: string | null;
   fontChoice: FontChoice;
+  heroTitle: string | null;
+  heroSubtitle: string | null;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  visualStyle: "soft" | "clean" | "bold";
   /**
    * `false` = aucune ligne `organization_landing_config` n'existe encore
    * pour cette organisation : `sections` reflète le preset calculé de son
@@ -75,7 +80,7 @@ export async function getLandingConfig(
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("organization_landing_config")
-    .select("sections, brand_color_primary, brand_color_secondary, font_choice")
+    .select("sections, brand_color_primary, brand_color_secondary, font_choice, hero_title, hero_subtitle, cta_label, cta_url, visual_style")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -100,6 +105,11 @@ export async function getLandingConfig(
         brandColorPrimary: data.brand_color_primary,
         brandColorSecondary: data.brand_color_secondary,
         fontChoice: (data.font_choice as FontChoice | null) ?? "modern",
+        heroTitle: data.hero_title ?? null,
+        heroSubtitle: data.hero_subtitle ?? null,
+        ctaLabel: data.cta_label ?? null,
+        ctaUrl: data.cta_url ?? null,
+        visualStyle: (data.visual_style as "soft" | "clean" | "bold" | null) ?? "soft",
         isCustomized: true,
       };
     }
@@ -114,6 +124,11 @@ export async function getLandingConfig(
     brandColorPrimary: null,
     brandColorSecondary: null,
     fontChoice: "modern",
+    heroTitle: null,
+    heroSubtitle: null,
+    ctaLabel: null,
+    ctaUrl: null,
+    visualStyle: "soft",
     isCustomized: false,
   };
 }
@@ -129,6 +144,11 @@ export interface UpdateLandingConfigInput {
   brandColorPrimary?: string | null;
   brandColorSecondary?: string | null;
   fontChoice?: FontChoice | null;
+  heroTitle?: string | null;
+  heroSubtitle?: string | null;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+  visualStyle?: "soft" | "clean" | "bold" | null;
 }
 
 /**
@@ -168,6 +188,12 @@ export async function updateLandingConfig(organizationId: string, input: UpdateL
   if (input.fontChoice && !FONT_CHOICES.includes(input.fontChoice)) {
     throw new ValidationError("Police invalide.");
   }
+  if (input.visualStyle && !["soft", "clean", "bold"].includes(input.visualStyle)) {
+    throw new ValidationError("Style visuel invalide.");
+  }
+  for (const [label, value] of [["Titre", input.heroTitle], ["Sous-titre", input.heroSubtitle], ["Bouton", input.ctaLabel]] as const) {
+    if (value && value.length > 140) throw new ValidationError(`${label} trop long.`);
+  }
 
   const supabase = getSupabaseServiceClient();
   const { error } = await supabase.from("organization_landing_config").upsert({
@@ -176,6 +202,11 @@ export async function updateLandingConfig(organizationId: string, input: UpdateL
     brand_color_primary: input.brandColorPrimary || null,
     brand_color_secondary: input.brandColorSecondary || null,
     font_choice: input.fontChoice || null,
+    hero_title: input.heroTitle || null,
+    hero_subtitle: input.heroSubtitle || null,
+    cta_label: input.ctaLabel || null,
+    cta_url: input.ctaUrl || null,
+    visual_style: input.visualStyle || "soft",
   });
 
   if (error) {

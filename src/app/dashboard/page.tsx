@@ -5,6 +5,9 @@ import { getAnalyticsSummary } from "@/application/services/analytics-service";
 import { DashCard, DashStatCard, DashTableCard, DashEmptyState } from "./_components/ui";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "./_components/order-status";
 import { AppLineChart, AppDonutChart } from "@/app/_components/app-charts";
+import { getIndustryUi } from "@/application/config/industry-ui";
+import { getEnabledModules } from "@/application/services/module-service";
+import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 
 function formatAmount(amount: number, currency: string): string {
   return `${amount.toLocaleString("fr-FR")} ${currency}`;
@@ -48,11 +51,16 @@ function timeAgo(iso: string): string {
  */
 export default async function DashboardHomePage() {
   const { organizationId } = await requireCurrentOrganization();
-  const [summary, charts, activity] = await Promise.all([
+  const [summary, charts, activity, organization, enabledModules] = await Promise.all([
     getDashboardSummary(organizationId),
     getDashboardCharts(organizationId, 14),
     getAnalyticsSummary(organizationId, 30),
+    getSupabaseServiceClient().from("organizations").select("name, industry").eq("id", organizationId).maybeSingle(),
+    getEnabledModules(organizationId),
   ]);
+
+  const industry = getIndustryUi(organization.data?.industry);
+  const hasInventory = enabledModules.includes("inventory");
 
   const donutPalette = ["#5B21E5", "#8B5CF6", "#C4B5FD", "#F0EDFB", "#94A3B8"];
   const donutSegments = charts.salesByCategory.map((c, i) => ({
@@ -63,16 +71,16 @@ export default async function DashboardHomePage() {
   const totalCategoryRevenue = charts.salesByCategory.reduce((sum, c) => sum + c.revenue, 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="adm-heading-1">Bonjour 👋</h1>
-          <p className="mt-1 text-sm adm-muted">Voici ce qui se passe avec votre entreprise.</p>
+          <div className="flex items-center gap-3"><span className="hidden h-10 w-10 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 sm:flex">✦</span><div><p className="adm-eyebrow">{industry.eyebrow}</p><h1 className="adm-heading-1 mt-1">Bonjour 👋</h1></div></div>
+          <p className="mt-1 text-sm adm-muted">Voici ce qui se passe avec {organization.data?.name ?? "votre entreprise"}.</p>
         </div>
         <span className="adm-badge-neutral shrink-0">Fenêtre : 30 derniers jours</span>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <DashStatCard
           label="Ventes totales (30j)"
           value={formatAmount(summary.revenueLast30Days, summary.currency)}
@@ -102,8 +110,32 @@ export default async function DashboardHomePage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <DashCard className="lg:col-span-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[1.5fr_1fr]">
+        <div className="overflow-hidden rounded-[24px] bg-navy-900 p-5 text-white shadow-[0_20px_45px_-28px_rgba(14,17,48,.65)] sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-[.16em] text-violet-300">Votre espace</span>
+              <h2 className="mt-2 font-jakarta text-xl font-extrabold tracking-tight sm:text-2xl">{industry.label}</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-white/55">{industry.catalogDescription} Les outils visibles dans votre menu sont automatiquement adaptés à cette activité.</p>
+            </div>
+            <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xl sm:flex">✦</span>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link href={enabledModules.includes("catalog") ? "/dashboard/products" : "/dashboard"} className="rounded-xl bg-violet-600 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-violet-500">{industry.primaryAction}</Link>
+            {enabledModules.includes("appointments") && <Link href="/dashboard/appointments" className="rounded-xl bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-white/15">Nouveau rendez-vous</Link>}
+            {enabledModules.includes("orders") && <Link href="/dashboard/orders" className="rounded-xl bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-white/15">Voir les commandes</Link>}
+          </div>
+        </div>
+        <div className="rounded-[24px] border border-violet-200 bg-violet-50 p-5 sm:p-6">
+          <span className="text-[10px] font-bold uppercase tracking-[.16em] text-violet-600">Assistant</span>
+          <h2 className="mt-2 font-jakarta text-lg font-extrabold">Besoin d’un coup de main ?</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Retrouvez vos conversations, votre FAQ et les outils d’assistance depuis un seul endroit.</p>
+          <Link href="/dashboard/ai" className="mt-4 inline-flex rounded-xl bg-white px-3.5 py-2.5 text-xs font-semibold text-violet-700 shadow-sm ring-1 ring-violet-200 transition hover:bg-violet-100">Ouvrir l’assistant →</Link>
+        </div>
+      </div>
+
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
+        <DashCard className="min-w-0 overflow-hidden lg:col-span-2">
           <div className="flex items-center justify-between">
             <h2 className="adm-heading-2">Évolution des ventes</h2>
             <span className="adm-label">14 derniers jours</span>
@@ -113,7 +145,7 @@ export default async function DashboardHomePage() {
           </div>
         </DashCard>
 
-        <DashCard>
+        <DashCard className="min-w-0">
           <h2 className="adm-heading-2">Répartition des ventes</h2>
           <p className="text-xs adm-muted">Par catégorie (30j)</p>
           <div className="mt-4">
@@ -130,7 +162,7 @@ export default async function DashboardHomePage() {
         </DashCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <DashTableCard
           title="Commandes récentes"
           action={
@@ -179,7 +211,7 @@ export default async function DashboardHomePage() {
           }
         >
           {charts.criticalStock.length === 0 ? (
-            <DashEmptyState>Aucun produit sous son seuil d&apos;alerte.</DashEmptyState>
+            <DashEmptyState>Aucun signal critique pour le moment.</DashEmptyState>
           ) : (
             <ul className="flex flex-col divide-y divide-navy-900/5 px-5 pb-4">
               {charts.criticalStock.map((p) => (
@@ -200,7 +232,7 @@ export default async function DashboardHomePage() {
         </DashTableCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <DashTableCard title="Activité récente">
           {charts.recentActivity.length === 0 ? (
             <DashEmptyState>Rien à signaler pour l&apos;instant.</DashEmptyState>

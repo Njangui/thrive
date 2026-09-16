@@ -43,6 +43,13 @@ export interface SocialAnalyticsQuery {
   limit?: number;
 }
 
+export interface SocialDailyMetric {
+  date: string;
+  postCount: number;
+  platforms: Record<string, number>;
+  metrics: { impressions: number; reach: number; likes: number; comments: number; shares: number; saves: number; clicks: number; views: number; follows: number };
+}
+
 export interface SocialAnalyticsEntry {
   providerPostId: string;
   platform: string;
@@ -107,6 +114,8 @@ export interface SocialPublishingProvider {
   cancelPost(providerPostId: string): Promise<void>;
 
   getAnalytics(query: SocialAnalyticsQuery): Promise<SocialAnalyticsEntry[]>;
+
+  getDailyMetrics(fromDate: string, toDate: string): Promise<SocialDailyMetric[]>;
 
   /**
    * Lot 3 (audit master prompt §39) — liste les comptes RÉELLEMENT

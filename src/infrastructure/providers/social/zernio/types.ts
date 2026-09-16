@@ -87,6 +87,18 @@ export interface ZernioAnalyticsResponse {
   posts: ZernioAnalyticsEntry[];
 }
 
+export interface ZernioDailyMetric {
+  date: string;
+  postCount?: number;
+  platforms?: Record<string, number>;
+  metrics?: { impressions?: number; reach?: number; likes?: number; comments?: number; shares?: number; saves?: number; clicks?: number; views?: number; follows?: number };
+}
+
+export interface ZernioDailyMetricsResponse {
+  dailyData: ZernioDailyMetric[];
+  platformBreakdown?: Array<{ platform: string; postCount?: number; impressions?: number; reach?: number; likes?: number; comments?: number; shares?: number; saves?: number; clicks?: number; views?: number }>;
+}
+
 /**
  * Types Zernio — Comments API (Lot I). Confirmés via docs.zernio.com
  * ("Get post comments" - API Reference, "Social Media Comments API",

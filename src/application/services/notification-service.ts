@@ -1,5 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { sendPush } from "./push-service";
+import { getNotificationProvider } from "@/infrastructure/providers/registry";
 
 /**
  * Notifications admin in-app (Lot D, section 28), étendues Lot I, Partie 1
@@ -110,6 +111,25 @@ export async function notifyOrgAdmins(input: NotifyOrgAdminsInput): Promise<void
     await sendPush(input.organizationId, input.title, input.body, url ?? undefined).catch((err) =>
       console.warn(`[notifications] échec canal push (org ${input.organizationId}):`, err),
     );
+
+    // Alerte Telegram opérateur pour les événements commerciaux réellement
+    // importants. On garde une liste explicite afin de ne pas transformer
+    // Telegram en flux de logs.
+    const platformAlert = /nouveau prospect|nouvelle commande|paiement|rupture|demande de domaine|fraude|affiliation/i.test(input.title);
+    if (platformAlert) {
+      try {
+        const notifier = await getNotificationProvider();
+        await notifier.send({
+          title: `SME-OS · ${input.title}`,
+          body: `${input.body}\nOrganisation: ${input.organizationId}`,
+          channel: "telegram",
+          relatedEntityType: input.relatedEntityType,
+          relatedEntityId: input.relatedEntityId,
+        });
+      } catch (err) {
+        console.warn("[notifications] échec alerte Telegram opérateur:", err);
+      }
+    }
   } catch (err) {
     console.warn(`[notifications] erreur inattendue notifyOrgAdmins (org ${input.organizationId}):`, err);
   }

@@ -36,11 +36,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="adm-shell flex">
+    <div className="adm-shell flex min-h-screen w-full min-w-0 overflow-x-clip">
       <AdminSidebar />
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <AdminTopbar role={admin.role} email={admin.email} />
-        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:py-8">{children}</main>
+        <main className="mx-auto w-full min-w-0 max-w-[1400px] flex-1 overflow-x-clip px-3 py-5 sm:px-6 lg:py-8">{children}</main>
       </div>
     </div>
   );
