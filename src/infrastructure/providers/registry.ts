@@ -327,6 +327,6 @@ export async function getSocialPublishingProvider(organizationId: string): Promi
     }
   }
   if (adapters.length === 0) throw new Error("Aucun canal social utilisable n'est connecté.");
-  if (adapters.length === 1) return adapters[0].adapter;
+  if (adapters.length === 1) return adapters[0]!.adapter;
   return new CompositeSocialAdapter(adapters);
 }
