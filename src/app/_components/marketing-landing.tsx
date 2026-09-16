@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { listPlans, listPlanEntitlements, type PlanKey } from "@/application/services/plans-repository";
 import { listPublicCountries, isoCodeToFlagEmoji } from "@/application/services/country-service";
@@ -85,6 +86,29 @@ const FEATURES = [
     title: "Suivi d'activité",
     description: "Visites, demandes, commandes — voyez ce qui marche vraiment dans votre boutique.",
     icon: IconTrendUp,
+  },
+];
+
+const REFERENCE_FEATURES = [
+  {
+    title: "Catalogue & Stock",
+    description: "Gérez vos produits, votre stock et vos catégories facilement.",
+    icon: IconBox,
+  },
+  {
+    title: "Commandes & Clients",
+    description: "Suivez vos commandes et fidélisez vos meilleurs clients.",
+    icon: IconUsersGroup,
+  },
+  {
+    title: "Marketing Multicanal",
+    description: "Diffusez vos produits sur WhatsApp, Facebook, Instagram et plus.",
+    icon: IconMegaphone,
+  },
+  {
+    title: "IA & Automatisation",
+    description: "Répondez automatiquement, qualifiez vos leads et gagnez du temps.",
+    icon: IconBotAssist,
   },
 ];
 
@@ -181,46 +205,17 @@ async function getPricingPlans() {
  * sur de vraies données via `getPricingPlans()`).
  */
 function HeroPreview() {
-  const bars = [38, 55, 44, 68, 52, 74, 60];
   return (
-    <div className="mkt-card mx-auto max-w-3xl !p-3 sm:!p-4">
-      <div className="flex items-center gap-1.5 px-2 pb-3 pt-1">
-        <span className="h-2.5 w-2.5 rounded-full bg-navy-900/10" />
-        <span className="h-2.5 w-2.5 rounded-full bg-navy-900/10" />
-        <span className="h-2.5 w-2.5 rounded-full bg-navy-900/10" />
-      </div>
-      <div className="grid grid-cols-2 gap-3 rounded-xl bg-[#F7F6FD] p-3 sm:grid-cols-4 sm:p-5">
-        {[
-          { label: "Ventes du mois", value: "—" },
-          { label: "Commandes", value: "—" },
-          { label: "Nouveaux clients", value: "—" },
-          { label: "Panier moyen", value: "—" },
-        ].map((chip) => (
-          <div key={chip.label} className="rounded-xl bg-white p-3 shadow-[0_1px_2px_rgba(16,23,49,0.05)]">
-            <p className="text-[11px] text-slate-400">{chip.label}</p>
-            <p className="mt-1 font-jakarta text-base font-bold text-navy-900">{chip.value}</p>
-          </div>
-        ))}
-        <div className="col-span-2 rounded-xl bg-white p-4 shadow-[0_1px_2px_rgba(16,23,49,0.05)] sm:col-span-3">
-          <p className="text-[11px] text-slate-400">Évolution</p>
-          <div className="mt-3 flex h-24 items-end gap-2">
-            {bars.map((h, i) => (
-              <div key={i} className="flex-1 rounded-t-md bg-gradient-to-t from-violet-600 to-violet-300" style={{ height: `${h}%` }} />
-            ))}
-          </div>
-        </div>
-        <div className="rounded-xl bg-white p-4 shadow-[0_1px_2px_rgba(16,23,49,0.05)]">
-          <p className="text-[11px] text-slate-400">Répartition</p>
-          <div className="mt-3 flex items-center justify-center">
-            <div
-              className="relative h-16 w-16 rounded-full"
-              style={{ background: "conic-gradient(#5B21E5 0% 40%, #8F6AEA 40% 68%, #B29CF0 68% 88%, #E4DFFB 88% 100%)" }}
-            >
-              <div className="absolute inset-[5px] rounded-full bg-white" />
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="mkt-dashboard-frame relative overflow-hidden rounded-[1.35rem] border border-white/80 bg-white shadow-[0_30px_80px_-30px_rgba(14,17,48,0.38)]">
+      <div className="absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b from-white/90 to-transparent" />
+      <Image
+        src="/images/landing-dashboard-reference.png"
+        alt="Aperçu du tableau de bord SME-OS"
+        width={826}
+        height={1024}
+        priority
+        className="h-auto w-full object-cover object-top"
+      />
     </div>
   );
 }
@@ -241,65 +236,95 @@ export async function MarketingLanding({
   return (
     <div className="mkt-shell">
       {/* HEADER */}
-      <header className="sticky top-0 z-40 border-b border-navy-900/[0.06] bg-white/85 backdrop-blur">
-        <div className="mkt-container flex items-center justify-between py-4">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 font-jakarta text-sm font-bold text-white">
+      <header className="sticky top-0 z-40 border-b border-navy-900/[0.05] bg-white/90 backdrop-blur-xl">
+        <div className="mkt-container flex h-[58px] items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="relative flex h-7 w-7 items-center justify-center rounded-[8px] bg-gradient-to-br from-violet-500 to-violet-700 font-jakarta text-[11px] font-extrabold text-white shadow-[0_5px_12px_-5px_rgba(91,33,229,0.55)]">
               S
             </span>
-            <span className="font-jakarta text-lg font-bold tracking-tight text-navy-900">SME-OS</span>
+            <span className="font-jakarta text-[15px] font-bold tracking-tight text-navy-900">SME-OS</span>
           </Link>
-          <nav className="hidden items-center gap-7 text-sm font-medium text-navy-900/70 md:flex">
-            <Link href="#fonctionnalites" className="hover:text-navy-900">Fonctionnalités</Link>
-            <Link href="#comment-ca-marche" className="hover:text-navy-900">Comment ça marche</Link>
-            <Link href="#tarifs" className="hover:text-navy-900">Tarifs</Link>
-            <Link href="#faq" className="hover:text-navy-900">FAQ</Link>
+          <nav className="hidden items-center gap-8 text-[11px] font-semibold text-navy-900/75 lg:flex">
+            <Link href="#apercu-fonctionnalites" className="transition hover:text-violet-600">Fonctionnalités</Link>
+            <Link href="#tarifs" className="transition hover:text-violet-600">Tarifs</Link>
+            <Link href="#comment-ca-marche" className="transition hover:text-violet-600">Ressources</Link>
+            <Link href="#a-propos" className="transition hover:text-violet-600">À propos</Link>
           </nav>
           <div className="hidden items-center gap-5 md:flex">
-            <Link href="/login" className="text-sm font-medium text-navy-900/70 hover:text-navy-900">
+            <Link href="/login" className="text-[11px] font-semibold text-navy-900/75 transition hover:text-navy-900">
               Connexion
             </Link>
-            <Link href="/login" className="mkt-btn-primary !px-5 !py-2.5">
-              Commencer gratuitement
+            <Link href="/login" className="mkt-btn-primary !rounded-lg !px-4 !py-2 !text-[11px]">
+              Démarrer gratuitement
             </Link>
           </div>
           <MarketingMobileMenu />
         </div>
       </header>
 
-      {/* HERO */}
-      <section className="mkt-container py-16 md:py-24">
-        <div className="mx-auto max-w-3xl text-center">
-          <span className="mkt-badge-pill">
-            <IconPlus className="h-3.5 w-3.5" />
-            La plateforme tout-en-un pour votre entreprise
-          </span>
-          <h1 className="mt-5 font-jakarta text-3xl font-extrabold tracking-tight text-navy-900 md:text-5xl">
-            Gérez toute votre entreprise,
-            <br className="hidden sm:block" />
-            <span className="text-violet-600"> du catalogue à WhatsApp</span>, en un seul endroit.
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base text-navy-900/60 md:text-lg">
-            SME-OS connecte vos produits, vos ventes, vos clients et vos canaux de communication — pour que vous
-            passiez moins de temps à jongler entre vos outils, et plus de temps à vendre.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/login" className="mkt-btn-primary w-full sm:w-auto">
-              Essayer gratuitement
-            </Link>
-            <Link href="#comment-ca-marche" className="mkt-btn-secondary w-full sm:w-auto">
-              Voir comment ça marche
-            </Link>
+      {/* HERO — composition inspirée directement de la référence fournie */}
+      <section className="mkt-hero relative overflow-hidden">
+        <div className="mkt-hero-glow mkt-hero-glow-one" aria-hidden="true" />
+        <div className="mkt-hero-glow mkt-hero-glow-two" aria-hidden="true" />
+        <div className="mkt-container relative grid items-center gap-10 py-12 md:py-16 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8 lg:py-14">
+          <div className="relative z-10 mx-auto max-w-xl text-center lg:mx-0 lg:pl-10 lg:text-left">
+            <span className="mkt-badge-pill !border-violet-600/10 !bg-violet-50/90 !px-3 !py-1 !text-[10px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-violet-600" />
+              La plateforme tout-en-un pour votre entreprise
+            </span>
+            <h1 className="mt-4 font-jakarta text-[31px] font-extrabold leading-[1.08] tracking-[-0.035em] text-navy-900 sm:text-4xl lg:text-[42px]">
+              Gérez, développez et automatisez
+              <span className="block text-violet-600">votre entreprise en toute simplicité</span>
+            </h1>
+            <p className="mt-4 max-w-[520px] text-[13px] leading-6 text-navy-900/65 lg:text-sm">
+              SME-OS regroupe tous les outils dont vous avez besoin pour gérer vos ventes, vos clients, votre communication et votre marketing sur une seule plateforme.
+            </p>
+            <div className="mt-6 flex flex-col justify-center gap-2.5 sm:flex-row lg:justify-start">
+              <Link href="/login" className="mkt-btn-primary !rounded-lg !px-7 !py-3 !text-[11px]">
+                Essayer gratuitement
+              </Link>
+              <Link href="#comment-ca-marche" className="mkt-btn-secondary !rounded-lg !px-7 !py-3 !text-[11px]">
+                Voir la démo
+              </Link>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[9px] font-medium text-navy-900/55 lg:justify-start">
+              <span className="mkt-check !text-[9px]"><IconCheck className="h-3 w-3 text-violet-600" /> Aucune carte bancaire</span>
+              <span className="mkt-check !text-[9px]"><IconCheck className="h-3 w-3 text-violet-600" /> Configuration en 2 minutes</span>
+              <span className="mkt-check !text-[9px]"><IconCheck className="h-3 w-3 text-violet-600" /> Annulable à tout moment</span>
+            </div>
           </div>
-          <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs font-medium text-navy-900/50 sm:flex-row sm:gap-6">
-            <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Aucune carte bancaire</span>
-            <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Prêt en quelques minutes</span>
-            <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Annulable à tout moment</span>
+
+          <div className="relative z-10 lg:-mr-16 xl:-mr-24">
+            <HeroPreview />
+            <Image
+              src="/images/landing-mobile-reference.png"
+              alt="Aperçu mobile SME-OS"
+              width={135}
+              height={260}
+              className="absolute -bottom-7 -left-5 hidden w-[86px] rounded-xl border border-navy-900/10 shadow-[0_18px_35px_-16px_rgba(14,17,48,0.5)] sm:block lg:-left-7 lg:w-[94px]"
+            />
           </div>
         </div>
+      </section>
 
-        <div className="mt-14">
-          <HeroPreview />
+      {/* RÉSUMÉ DES CAPACITÉS — 4 cartes comme dans la référence */}
+      <section id="apercu-fonctionnalites" className="border-t border-navy-900/[0.05] bg-white py-12 md:py-14">
+        <div className="mkt-container">
+          <div className="text-center">
+            <h2 className="mkt-section-title !text-[22px] md:!text-[25px]">Tout ce dont vous avez besoin<br className="sm:hidden" /> pour faire grandir votre business</h2>
+            <p className="mx-auto mt-2 max-w-xl text-xs text-navy-900/55">Une suite complète d&apos;outils simples et puissants</p>
+          </div>
+          <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {REFERENCE_FEATURES.map((feature) => (
+              <div key={feature.title} className="mkt-card !rounded-xl !p-4">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-success-50 text-success-700">
+                  <feature.icon className="h-4 w-4" />
+                </span>
+                <h3 className="mt-3 font-jakarta text-[12px] font-bold text-navy-900">{feature.title}</h3>
+                <p className="mt-1.5 text-[10px] leading-4 text-navy-900/55">{feature.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -319,7 +344,7 @@ export async function MarketingLanding({
       </section>
 
       {/* SOLUTION */}
-      <section className="mkt-container py-16 text-center">
+      <section id="a-propos" className="mkt-container py-16 text-center">
         <p className="mkt-eyebrow">La solution</p>
         <h2 className="mkt-section-title mt-2">Un seul système qui connecte tout ce qui fait tourner votre entreprise</h2>
         <p className="mx-auto mt-4 max-w-2xl text-navy-900/60">
@@ -368,14 +393,14 @@ export async function MarketingLanding({
       {/* TARIFS */}
       <section id="tarifs" className="border-y border-navy-900/[0.06] bg-white py-16">
         <div className="mkt-container max-w-5xl">
-          <h2 className="mkt-section-title text-center">Des offres simples</h2>
+          <h2 className="mkt-section-title text-center">Des tarifs transparents</h2>
           <p className="mx-auto mt-3 max-w-xl text-center text-navy-900/60">
             Commencez gratuitement. Changez d&apos;offre à tout moment selon la croissance de votre activité.
           </p>
           {plans.length === 0 ? (
             <p className="mt-10 text-center text-sm text-slate-500">Nos offres seront bientôt disponibles ici.</p>
           ) : (
-            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
               {plans.map((plan) => {
                 const isPopular = plan.key === popularPlanKey;
                 return (
@@ -510,7 +535,7 @@ export async function MarketingLanding({
       {/* TÉMOIGNAGES */}
       <section className="mkt-container py-16">
         <h2 className="mkt-section-title text-center">Ils utilisent SME-OS</h2>
-        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {TESTIMONIALS.map((t) => (
             <div key={t.name} className="mkt-card">
               <p className="text-sm text-navy-900/70">&laquo; {t.quote} &raquo;</p>
@@ -565,19 +590,22 @@ export async function MarketingLanding({
       </section>
 
       {/* FOOTER */}
-      <footer className="border-t border-navy-900/[0.06] bg-white py-10">
-        <div className="mkt-container flex flex-col items-center gap-4 text-sm text-slate-500 md:flex-row md:justify-between">
-          <p className="font-jakarta font-semibold text-navy-900">SME-OS</p>
-          <nav className="flex flex-wrap items-center justify-center gap-5">
-            <Link href="#fonctionnalites" className="hover:text-navy-900">Fonctionnalités</Link>
-            <Link href="#tarifs" className="hover:text-navy-900">Tarifs</Link>
-            <Link href="/devenir-affilie" className="hover:text-navy-900">Devenir affilié</Link>
-            <Link href="/login" className="hover:text-navy-900">Connexion</Link>
-            <Link href="/cgu" className="hover:text-navy-900">CGU</Link>
-            <Link href="/confidentialite" className="hover:text-navy-900">Confidentialité</Link>
-            <Link href="/mentions-legales" className="hover:text-navy-900">Mentions légales</Link>
+      <footer className="border-t border-white/5 bg-navy-900 py-9 text-white">
+        <div className="mkt-container flex flex-col gap-6 text-xs text-white/55 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-[220px]">
+            <p className="font-jakarta text-base font-bold text-white">SME-OS</p>
+            <p className="mt-2 leading-5">La plateforme tout-en-un pour gérer, développer et automatiser votre entreprise.</p>
+          </div>
+          <nav className="grid grid-cols-2 gap-x-8 gap-y-2 md:flex md:flex-wrap md:justify-center md:gap-5">
+            <Link href="#fonctionnalites" className="transition hover:text-white">Fonctionnalités</Link>
+            <Link href="#tarifs" className="transition hover:text-white">Tarifs</Link>
+            <Link href="/devenir-affilie" className="transition hover:text-white">Devenir affilié</Link>
+            <Link href="/login" className="transition hover:text-white">Connexion</Link>
+            <Link href="/cgu" className="transition hover:text-white">CGU</Link>
+            <Link href="/confidentialite" className="transition hover:text-white">Confidentialité</Link>
+            <Link href="/mentions-legales" className="transition hover:text-white">Mentions légales</Link>
           </nav>
-          <p>&copy; {new Date().getFullYear()} SME-OS. Tous droits réservés.</p>
+          <p className="shrink-0">&copy; {new Date().getFullYear()} SME-OS. Tous droits réservés.</p>
         </div>
       </footer>
     </div>

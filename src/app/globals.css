@@ -87,6 +87,42 @@
     @apply flex items-center gap-2 text-xs font-medium text-navy-900/70;
   }
 
+  .mkt-hero {
+    background:
+      radial-gradient(circle at 19% 58%, rgba(125, 82, 232, 0.11), transparent 28%),
+      radial-gradient(circle at 57% 42%, rgba(214, 202, 250, 0.28), transparent 34%),
+      linear-gradient(180deg, #ffffff 0%, #fbfaff 100%);
+  }
+  .mkt-hero-glow {
+    @apply pointer-events-none absolute rounded-full blur-3xl;
+  }
+  .mkt-hero-glow-one {
+    width: 28rem;
+    height: 28rem;
+    left: -12rem;
+    top: 9rem;
+    background: rgba(91, 33, 229, 0.08);
+  }
+  .mkt-hero-glow-two {
+    width: 34rem;
+    height: 34rem;
+    right: 8rem;
+    top: 1rem;
+    background: rgba(181, 159, 240, 0.12);
+  }
+  .mkt-dashboard-frame {
+    transform: translateZ(0);
+  }
+  @media (min-width: 1024px) {
+    .mkt-dashboard-frame {
+      max-height: 650px;
+    }
+    .mkt-dashboard-frame img {
+      display: block;
+      width: 100%;
+    }
+  }
+
   /* --- Console Super Admin (/admin/*) + Dashboard marchand (/dashboard/*)
      + login/onboarding/invite/pages légales --- */
   .adm-shell {
