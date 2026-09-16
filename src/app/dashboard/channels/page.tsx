@@ -79,7 +79,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
   const [accounts, telegram, youtube] = await Promise.all([
     getZernioAccounts(organizationId).catch(() => []),
     getTelegramChannelStatus(organizationId).catch(() => ({ connected: false, botUsername: null })),
-    getYouTubeConnection(organizationId).catch(() => ({ connected: false, metadata: {}, credentialReference: null })),
+    getYouTubeConnection(organizationId).catch(() => ({ connected: false, metadata: {} as { channelId?: string; title?: string; username?: string }, credentialReference: null })),
   ]);
   const byPlatform = new Map(accounts.filter((a) => a.platform !== "youtube").map((a) => [a.platform, a]));
   const totalConnected = byPlatform.size + (youtube.connected ? 1 : 0) + (telegram.connected ? 1 : 0);
