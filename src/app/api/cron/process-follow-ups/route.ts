@@ -3,8 +3,10 @@ import { verifyCronAuth } from "@/lib/cron-auth";
 import { processDueFollowUps } from "@/application/services/follow-up-service";
 
 export async function GET(request: Request) {
-  const denied = verifyCronAuth(request);
-  if (denied) return denied;
+  const auth = verifyCronAuth(request);
+  if (!auth.authorized) {
+    return NextResponse.json(auth.body, { status: auth.status });
+  }
   try {
     const result = await processDueFollowUps();
     return NextResponse.json({ ok: true, ...result });
