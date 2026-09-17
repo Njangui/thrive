@@ -1,68 +1,77 @@
-import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tenant";
-import { buildWhatsAppLink } from "@/infrastructure/tenant/resolve-request-tenant";
+import Link from "next/link";
 import type { ServiceSummary } from "@/application/services/landing-config-service";
+import type { StorefrontSite } from "@/application/services/storefront-service";
+import { STOREFRONT_PATHS, servicePath } from "@/application/config/storefront-routes";
+import { sectionHeading, sectionSubheading } from "@/application/config/storefront-blueprint";
 import { formatPrice } from "@/lib/format";
-import { TrackedCtaLink } from "../tracked-cta-link";
+import { Section, SectionHeading } from "../storefront/storefront-ui";
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest}`;
+}
 
 /**
- * CTA de réservation : pointe vers l'ancre `#booking` (voir booking.tsx)
- * quand la section "booking" est activée pour ce tenant, sinon WhatsApp —
- * jamais un lien mort (mandat de vague, section "cherchez un
- * contournement réel").
+ * Carte prestation, partagée par la page d'accueil et /services. Chaque
+ * carte mène à sa propre fiche (`/services/<slug>`) : une prestation
+ * n'était jusqu'ici qu'une ligne de texte sans page, donc sans rien à
+ * partager sur WhatsApp ni à indexer.
  */
+export function ServiceCard({ service, ctaHref }: { service: ServiceSummary; ctaHref: string }) {
+  return (
+    <article className="sf-card flex h-full flex-col gap-2 rounded-brand border border-black/[0.08] bg-white p-5 transition-all hover:border-brand/40 hover:shadow-md">
+      {service.categoryName && (
+        <p className="text-[11px] font-medium uppercase tracking-wide text-black/45">{service.categoryName}</p>
+      )}
+      <h3 className="font-display text-base font-semibold leading-snug">
+        <Link href={servicePath(service.slug)} className="hover:text-brand">
+          {service.name}
+        </Link>
+      </h3>
+      {service.description && <p className="line-clamp-3 text-sm text-black/55">{service.description}</p>}
+      <div className="mt-auto flex flex-wrap items-baseline justify-between gap-2 pt-3">
+        <span className="font-display text-lg font-bold text-brand">{formatPrice(service.price)}</span>
+        {service.durationMinutes ? (
+          <span className="text-xs text-black/50">{formatDuration(service.durationMinutes)}</span>
+        ) : null}
+      </div>
+      <Link href={ctaHref} className="sf-btn-outline mt-3 inline-flex h-10 items-center justify-center text-sm">
+        Réserver
+      </Link>
+    </article>
+  );
+}
+
 export function ServicesSection({
-  tenant,
   services,
+  site,
   hasBookingSection,
 }: {
-  tenant: TenantContext;
   services: ServiceSummary[];
+  site: StorefrontSite;
   hasBookingSection: boolean;
 }) {
   if (services.length === 0) return null;
+  const { blueprint, whatsappHref } = site;
 
-  const whatsappHref = tenant.whatsappNumber
-    ? buildWhatsAppLink(tenant.whatsappNumber, `Bonjour ${tenant.name}, je souhaite réserver un service.`)
-    : null;
+  // Jamais de lien mort : ancre de réservation si la section existe sur
+  // cette page, sinon la page rendez-vous, sinon WhatsApp.
+  const ctaHref = hasBookingSection ? "#booking" : site.capabilities.hasServices ? STOREFRONT_PATHS.booking : whatsappHref ?? STOREFRONT_PATHS.contact;
 
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="font-display text-lg font-semibold">Nos services</h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {services.map((service) => (
-          <div key={service.id} className="flex flex-col gap-2 rounded-lg border border-ink/10 bg-white p-4">
-            {service.categoryName && (
-              <span className="text-xs uppercase tracking-wide text-muted">{service.categoryName}</span>
-            )}
-            <div className="receipt-row font-display text-base font-medium">
-              <span>{service.name}</span>
-              <span className="shrink-0 text-brand">{formatPrice(service.price)}</span>
-            </div>
-            {service.durationMinutes && (
-              <p className="text-xs text-muted">Durée estimée : {service.durationMinutes} min</p>
-            )}
-            {service.description && <p className="text-sm text-muted">{service.description}</p>}
-            {hasBookingSection ? (
-              <a href="#booking" className="mt-1 text-sm font-medium text-brand hover:underline">
-                Réserver →
-              </a>
-            ) : (
-              whatsappHref && (
-                <TrackedCtaLink
-                  href={whatsappHref}
-                  organizationId={tenant.organizationId}
-                  ctaId="whatsapp_service"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 text-sm font-medium text-leaf hover:underline"
-                >
-                  Réserver sur WhatsApp →
-                </TrackedCtaLink>
-              )
-            )}
-          </div>
+    <Section>
+      <SectionHeading
+        title={sectionHeading(blueprint, "services", "Nos services")}
+        subtitle={sectionSubheading(blueprint, "services")}
+        action={services.length > 6 ? { label: "Toutes nos prestations", href: STOREFRONT_PATHS.services } : undefined}
+      />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {services.slice(0, 6).map((service) => (
+          <ServiceCard key={service.id} service={service} ctaHref={ctaHref} />
         ))}
       </div>
-    </section>
+    </Section>
   );
 }

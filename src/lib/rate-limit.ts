@@ -62,6 +62,21 @@ const waitlistLimiter = redis
   : null;
 
 /**
+ * 5 demandes / 60s par IP — formulaire public de prise de rendez-vous de
+ * la vitrine tenant (`requestAppointmentAction`, chantier vitrine V2).
+ * Même situation que `waitlistLimiter` : aucune session, donc l'IP est le
+ * seul signal disponible. Repose sur la MÊME clé Redis (préfixe
+ * `ratelimit:booking`) quel que soit le tenant visé — délibéré : une IP
+ * qui flood les formulaires de rendez-vous de plusieurs boutiques à la
+ * suite est un abus au niveau de la plateforme, pas un problème propre à
+ * un tenant, et chaque demande déclenche déjà une notification au
+ * commerçant (`notifyOrgAdmins`) qu'il ne faut pas laisser spammer.
+ */
+const bookingLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(5, "60 s"), prefix: "ratelimit:booking" })
+  : null;
+
+/**
  * 30 requêtes / 60s par IP — route publique /r/[code] (programme
  * d'affiliation, 0044). Plus généreux que `waitlist` : un lien
  * d'affiliation peut être partagé sur un post viral et recevoir un vrai
@@ -74,7 +89,7 @@ const affiliateClickLimiter = redis
   ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(30, "60 s"), prefix: "ratelimit:affiliate_click" })
   : null;
 
-export type RateLimitKind = "webhook" | "auth" | "waitlist" | "affiliate_click";
+export type RateLimitKind = "webhook" | "auth" | "waitlist" | "affiliate_click" | "booking";
 
 /**
  * Retourne `null` quand la requête est autorisée à continuer (soit
@@ -90,7 +105,9 @@ export async function checkRateLimit(kind: RateLimitKind, identifier: string): P
         ? waitlistLimiter
         : kind === "affiliate_click"
           ? affiliateClickLimiter
-          : authLimiter;
+          : kind === "booking"
+            ? bookingLimiter
+            : authLimiter;
   if (!limiter) {
     warnNotConfigured();
     return null;

@@ -6,7 +6,7 @@ import { seedDefaultExpenseCategories } from "./finance-service";
 import { createTrialSubscription } from "./plans-repository";
 import { initializeCreditBalance } from "./ai-credits-service";
 import { validateCountryForSignup } from "./country-service";
-import { attributeReferral } from "./affiliate-service";
+import { attributeReferral, attributeReferralByPromoCode, validatePromoCode } from "./affiliate-service";
 import { seedDefaultCategories } from "./catalog-service";
 
 export interface CreateOrganizationInput {
@@ -45,6 +45,7 @@ export interface CreateOrganizationInput {
 export async function createOrganization(
   input: CreateOrganizationInput,
   referralCookieValue?: string | null,
+  promoCode?: string | null,
 ): Promise<{ organizationId: string }> {
   if (!input.name.trim()) {
     throw new ValidationError("Le nom de l'entreprise est requis");
@@ -63,6 +64,19 @@ export async function createOrganization(
 
   if (!user) {
     throw new AuthenticationError("Connectez-vous avant de créer votre entreprise");
+  }
+
+  // Code promo (0052) : validé AVANT toute écriture — contrairement au
+  // cookie d'affiliation (silencieux, best-effort), un code TAPÉ par
+  // l'utilisateur doit produire une erreur claire s'il est invalide,
+  // et on ne veut jamais avoir à annuler une organisation déjà créée
+  // pour ça. Prioritaire sur le cookie s'il est fourni ("plutôt" —
+  // décision produit : un utilisateur qui tape un code exprime un choix
+  // explicite, qui l'emporte sur un clic de lien antérieur éventuel).
+  const trimmedPromoCode = promoCode?.trim();
+  const validatedPromoCode = trimmedPromoCode ? await validatePromoCode(trimmedPromoCode, user.id) : null;
+  if (trimmedPromoCode && !validatedPromoCode) {
+    throw new ValidationError("Code promo invalide.");
   }
 
   const supabase = getSupabaseServiceClient();
@@ -142,11 +156,17 @@ export async function createOrganization(
   // comptabilité, table différente). Voir catalog-service.ts::seedDefaultCategories.
   await seedDefaultCategories(org.id, input.industry ?? null);
 
-  // Programme d'affiliation (0044) — best-effort par contrat de fonction
-  // (voir affiliate-service.ts) : jamais lu via next/headers ici (voir
-  // JSDoc de la fonction) — un échec ne doit JAMAIS faire échouer la
-  // création d'organisation elle-même.
-  await attributeReferral(org.id, user.id, referralCookieValue);
+  // Programme d'affiliation (0044 + 0052) — best-effort par contrat de
+  // fonction (voir affiliate-service.ts) : jamais lu via next/headers ici
+  // (voir JSDoc de la fonction) — un échec ne doit JAMAIS faire échouer
+  // la création d'organisation elle-même. Code promo prioritaire sur le
+  // cookie (voir validation plus haut) ; à défaut, retombe sur
+  // l'attribution par lien cliqué, inchangée.
+  if (validatedPromoCode) {
+    await attributeReferralByPromoCode(org.id, validatedPromoCode, user.id);
+  } else {
+    await attributeReferral(org.id, user.id, referralCookieValue);
+  }
 
   return { organizationId: org.id };
 }

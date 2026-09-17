@@ -16,15 +16,19 @@ const INPUT_CLASS = "rounded-brand border border-ink/15 px-4 py-3 text-sm outlin
 export function BookingForm({
   organizationId,
   services,
+  returnTo = "/",
 }: {
   organizationId: string;
   services: ServiceSummary[];
+  /** Page à réafficher après envoi, pour que la confirmation s'affiche là où le visiteur se trouvait. Validé côté serveur contre une liste blanche. */
+  returnTo?: string;
 }) {
   const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
     <form action={requestAppointmentAction} className="flex flex-col gap-3">
       <input type="hidden" name="organizationId" value={organizationId} />
+      <input type="hidden" name="returnTo" value={returnTo} />
 
       <label className="flex flex-col gap-1 text-sm">
         Votre nom

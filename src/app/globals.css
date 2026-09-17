@@ -87,6 +87,23 @@
     @apply flex items-center gap-2 text-xs font-medium text-navy-900/70;
   }
 
+  /* Cadre de l'aperçu tableau de bord du hero (capture réelle, portrait) —
+     ramené de l'ancien dépôt avec le visuel (sept. 2026) : au-delà de
+     1024px on plafonne la hauteur et on masque le débordement plutôt que
+     de laisser un aperçu portrait devenir immense sur grand écran. */
+  .mkt-dashboard-frame {
+    transform: translateZ(0);
+  }
+  @media (min-width: 1024px) {
+    .mkt-dashboard-frame {
+      max-height: 650px;
+    }
+    .mkt-dashboard-frame img {
+      display: block;
+      width: 100%;
+    }
+  }
+
   /* --- Console Super Admin (/admin/*) + Dashboard marchand (/dashboard/*)
      + login/onboarding/invite/pages légales --- */
   .adm-shell {
@@ -418,18 +435,107 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .adm-shell main table { min-width: 560px; }
 }
 
+/*
+ * ===========================================================================
+ * VITRINE PUBLIQUE TENANT (sf-*)
+ * ===========================================================================
+ * Remplace l'ancien bloc `.tenant-*`, qui ne couvrait qu'un en-tête et trois
+ * variantes de fond : la vitrine est passée d'une page unique à un site
+ * multi-pages (accueil, catalogue, fiches, catégories, prestations, à propos,
+ * contact, rendez-vous, FAQ, galerie), ce qui demande un vrai jeu de
+ * composants partagés plutôt que des styles ponctuels.
+ *
+ * Trois règles tenues ici :
+ *
+ *  1. TOUT passe par les variables de marque `--brand-*` posées par
+ *     `getTenantBrandingStyle` sur le conteneur racine. Aucune couleur
+ *     d'accent n'est écrite en dur dans ce bloc : deux tenants de secteurs
+ *     différents obtiennent deux vitrines différentes sans une ligne de CSS
+ *     supplémentaire.
+ *
+ *  2. Chaque `var()` a un repli explicite. `--brand-soft` et consorts sont
+ *     calculés avec `color-mix()` ; sur un navigateur qui ne le supporte pas,
+ *     la variable reste indéfinie et le repli prend le relais — jamais un
+ *     fond transparent ni un texte invisible.
+ *
+ *  3. Le namespace `sf-` ne croise ni `mkt-`/`adm-` (SME-OS lui-même) ni
+ *     `receipt-row`/`ink`/`paper` : les trois systèmes cohabitent dans le
+ *     même bundle sans jamais se toucher.
+ */
 @layer components {
-  .tenant-site { color: #0e1130; }
-  .tenant-site > section { min-width: 0; }
-  .tenant-hero { position: relative; overflow: hidden; border: 1px solid rgba(14,17,48,.07); border-radius: 32px; padding: 1.25rem; box-shadow: 0 28px 70px -48px rgba(14,17,48,.45); }
-  .tenant-hero-soft { background: radial-gradient(circle at 85% 0%, rgba(124,58,237,.12), transparent 20rem), linear-gradient(135deg,#fff,#fbfaff); }
-  .tenant-hero-clean { background: #fff; }
-  .tenant-hero-bold { background: linear-gradient(135deg,var(--brand-primary,#0f172a),#111827); color: #fff; }
-  .tenant-hero-bold p { color: rgba(255,255,255,.7); }
-  .tenant-site img { border-radius: 20px; }
-  .tenant-site a { transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease; }
-  .tenant-site a:hover { transform: translateY(-1px); }
-  @media (min-width: 640px) { .tenant-hero { padding: 2rem; } }
+  .sf-site { color: #14161f; }
+  .sf-site ::selection { background: var(--brand-soft-strong, rgba(0,0,0,.12)); }
+
+  /* --- Boutons --------------------------------------------------------- */
+  .sf-btn-primary {
+    @apply justify-center rounded-brand font-semibold text-white transition-opacity;
+    background: var(--brand-primary, #0f172a);
+  }
+  .sf-btn-primary:hover { opacity: .92; }
+  .sf-btn-outline {
+    @apply justify-center rounded-brand font-semibold transition-colors;
+    border: 1px solid var(--brand-border, rgba(0,0,0,.14));
+    color: var(--brand-primary, #0f172a);
+    background: #fff;
+  }
+  .sf-btn-outline:hover { background: var(--brand-soft, rgba(0,0,0,.03)); }
+
+  /* --- Rythme des sections --------------------------------------------- */
+  .sf-section-muted { background: var(--brand-soft, #fafafa); }
+  .sf-section-brand { background: var(--brand-primary, #0f172a); color: #fff; }
+
+  .sf-icon-box { background: var(--brand-soft-strong, rgba(0,0,0,.06)); }
+  .sf-card { min-width: 0; }
+
+  /* Focus visible homogène sur toute la vitrine : l'accessibilité au
+     clavier ne doit pas dépendre du style par défaut du navigateur, qui
+     disparaît sur fond coloré. */
+  .sf-site a:focus-visible,
+  .sf-site button:focus-visible,
+  .sf-site input:focus-visible,
+  .sf-site select:focus-visible,
+  .sf-site textarea:focus-visible,
+  .sf-site summary:focus-visible {
+    outline: 2px solid var(--brand-primary, #0f172a);
+    outline-offset: 2px;
+  }
+
+  /* --- Ambiance visuelle ----------------------------------------------- */
+  /* Le choix « douce / épurée / impactante » de /dashboard/site ne pilotait
+     jusqu'ici que le fond du hero. Il pilote maintenant l'ambiance de tout
+     le site, via `data-visual-style` posé sur le conteneur racine. */
+  .sf-site[data-visual-style="soft"] .sf-hero {
+    background:
+      radial-gradient(circle at 85% 0%, var(--brand-soft-strong, rgba(0,0,0,.05)), transparent 22rem),
+      linear-gradient(180deg, var(--brand-soft, #fafafa), #fff);
+  }
+  .sf-site[data-visual-style="clean"] .sf-hero { background: #fff; }
+  .sf-site[data-visual-style="bold"] .sf-hero {
+    background: linear-gradient(135deg, var(--brand-primary, #0f172a), var(--brand-dark, #111827));
+    color: #fff;
+  }
+  .sf-site[data-visual-style="bold"] .sf-hero p,
+  .sf-site[data-visual-style="bold"] .sf-hero .text-black\/60 { color: rgba(255,255,255,.72); }
+  .sf-site[data-visual-style="bold"] .sf-hero .text-brand { color: #fff; }
+  .sf-site[data-visual-style="bold"] .sf-hero .sf-btn-primary { background: #fff; color: var(--brand-primary, #0f172a); }
+  .sf-site[data-visual-style="bold"] .sf-hero .sf-btn-outline { background: transparent; color: #fff; border-color: rgba(255,255,255,.4); }
+
+  .sf-cta { background: var(--brand-primary, #0f172a); }
+  .sf-announcement { background: var(--brand-primary, #0f172a); }
+  .sf-fab { background: var(--brand-secondary, #178A4C); }
+
+  /* Le menu mobile est en `position: fixed` sous un en-tête `sticky` :
+     sans cette règle, un `overflow` posé par une section parente
+     rognerait le panneau. */
+  .sf-header { isolation: isolate; }
+}
+
+/* Impression : une fiche produit ou une page contact imprimée doit rester
+   lisible. On retire le chrome interactif, qui n'a aucun sens sur papier
+   et gaspille de l'encre. */
+@media print {
+  .sf-header, .sf-fab, .sf-announcement, .sf-cta { display: none !important; }
+  .sf-site { color: #000; }
 }
 
 @layer components {

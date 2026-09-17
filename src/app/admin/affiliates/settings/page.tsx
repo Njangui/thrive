@@ -17,6 +17,8 @@ async function updateSettingsAction(formData: FormData) {
         cookieWindowDays: Number(formData.get("cookieWindowDays")),
         holdPeriodDays: Number(formData.get("holdPeriodDays")),
         minPayoutFcfa: Number(formData.get("minPayoutFcfa")),
+        promoCodeCommissionRateBps: Number(formData.get("promoCodeCommissionRateBps")),
+        promoCodeDiscountBps: Number(formData.get("promoCodeDiscountBps")),
       },
       admin.userId,
     );
@@ -109,6 +111,41 @@ export default async function AdminAffiliateSettingsPage({
               type="number"
               min={0}
               defaultValue={settings.minPayoutFcfa}
+              className="adm-input mt-1"
+            />
+          </div>
+          <div className="border-t border-navy-900/[0.06] pt-4">
+            <p className="text-sm font-semibold text-navy-900">Code promo (alternative au lien cliqué)</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Un client qui s&apos;inscrit avec le code d&apos;un affilié (au lieu de cliquer son lien) obtient une
+              réduction sur son 1er paiement — l&apos;affilié touche en échange une commission réduite.
+            </p>
+          </div>
+          <div>
+            <label className="adm-label" htmlFor="promoCodeCommissionRateBps">
+              Taux de commission avec code promo (points de base — 1000 = 10%)
+            </label>
+            <input
+              id="promoCodeCommissionRateBps"
+              name="promoCodeCommissionRateBps"
+              type="number"
+              min={0}
+              max={10000}
+              defaultValue={settings.promoCodeCommissionRateBps}
+              className="adm-input mt-1"
+            />
+          </div>
+          <div>
+            <label className="adm-label" htmlFor="promoCodeDiscountBps">
+              Réduction client sur le 1er paiement (points de base — 1000 = 10%)
+            </label>
+            <input
+              id="promoCodeDiscountBps"
+              name="promoCodeDiscountBps"
+              type="number"
+              min={0}
+              max={10000}
+              defaultValue={settings.promoCodeDiscountBps}
               className="adm-input mt-1"
             />
           </div>

@@ -12,7 +12,7 @@
  */
 
 export type AffiliateStatus = "pending" | "active" | "suspended" | "rejected";
-export type ReferralAttributionMethod = "cookie" | "manual";
+export type ReferralAttributionMethod = "cookie" | "manual" | "promo_code";
 export type ReferralStatus = "pending" | "converted" | "reversed";
 export type ConversionStatus = "pending_hold" | "approved" | "reversed" | "paid";
 export type PayoutStatus = "requested" | "approved" | "rejected" | "paid";
@@ -44,6 +44,25 @@ export function computeCommissionAmountFcfa(amountFcfa: number, commissionRateBp
     throw new Error("commissionRateBps doit être compris entre 0 et 10000.");
   }
   return Math.round((amountFcfa * commissionRateBps) / 10000);
+}
+
+/**
+ * Calcule le montant restant à payer par le CLIENT après une remise
+ * "code promo" sur son 1er paiement d'abonnement (voir
+ * platform_settings.affiliate_promo_code_discount_bps). Symétrique de
+ * `computeCommissionAmountFcfa` (même arrondi neutre `Math.round`,
+ * jamais systématiquement favorable à une partie) mais renvoie le
+ * montant NET (prix - remise), pas la remise elle-même — c'est ce
+ * montant net qui est à la fois facturé au client ET, plus tard, la base
+ * du calcul de la commission affilié sur ce même paiement (la commission
+ * "code promo" s'applique au prix déjà remisé, pas au prix plein).
+ */
+export function computeDiscountedAmountFcfa(amountFcfa: number, discountBps: number): number {
+  if (amountFcfa < 0) throw new Error("amountFcfa ne peut pas être négatif.");
+  if (discountBps < 0 || discountBps > 10000) {
+    throw new Error("discountBps doit être compris entre 0 et 10000.");
+  }
+  return amountFcfa - Math.round((amountFcfa * discountBps) / 10000);
 }
 
 /**

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { trackEvent } from "@/application/services/analytics-service";
 import { resolveOrganizationSeo, buildOrganizationJsonLd } from "@/lib/seo";
+import { getStorefrontSite } from "@/application/services/storefront-service";
+import { StorefrontShell } from "./_components/storefront/storefront-shell";
 import { TenantLanding } from "./_components/tenant-landing";
 import { MarketingLanding } from "./_components/marketing-landing";
 
@@ -115,10 +117,17 @@ export default async function RootPage({
     openingHours: tenant.openingHours,
   });
 
+  // Modèle de site complet (secteur, capacités réelles, navigation,
+  // promesses, chiffres) — partagé avec l'enveloppe et toutes les autres
+  // pages de la vitrine, et mémoïsé par requête.
+  const site = await getStorefrontSite(tenant);
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <TenantLanding tenant={tenant} bookingFeedback={{ success: bookingSuccess, error: bookingError }} />
+      <StorefrontShell site={site}>
+        <TenantLanding site={site} bookingFeedback={{ success: bookingSuccess, error: bookingError }} />
+      </StorefrontShell>
     </>
   );
 }

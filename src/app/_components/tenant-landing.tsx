@@ -1,9 +1,8 @@
-import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tenant";
-import { getLandingConfig, getLandingSectionData, type LandingSectionData } from "@/application/services/landing-config-service";
+import type { StorefrontSite } from "@/application/services/storefront-service";
+import { getLandingSectionData, type LandingSectionData } from "@/application/services/landing-config-service";
 import type { LandingSectionType } from "@/domain/entities/landing";
-import { getTenantBrandingStyle, resolveTenantFontClassName } from "@/lib/tenant-branding";
 
-import { HeroSection } from "./landing-sections/hero";
+import { HeroSection, StatsBand } from "./landing-sections/hero";
 import { AboutSection } from "./landing-sections/about";
 import { ProductsSection } from "./landing-sections/products";
 import { ServicesSection } from "./landing-sections/services";
@@ -14,13 +13,24 @@ import { TestimonialsSection } from "./landing-sections/testimonials";
 import { TeamSection } from "./landing-sections/team";
 import { FaqSection } from "./landing-sections/faq";
 import { BookingSection } from "./landing-sections/booking";
-import { ContactSection } from "./landing-sections/contact";
-import { LocationSection } from "./landing-sections/location";
-import { SocialLinksSection } from "./landing-sections/social-links";
+import { ContactSection, LocationSection, SocialLinksSection } from "./landing-sections/contact";
 import { CtaSection } from "./landing-sections/cta";
-import { FooterSection } from "./landing-sections/footer";
 
-/** Types de section qui nécessitent une lecture DB dédiée via getLandingSectionData — les autres lisent directement `tenant` (déjà résolu par la page appelante), voir landing-config-service.ts. */
+/**
+ * Composition de la PAGE D'ACCUEIL de la vitrine.
+ *
+ * Ce composant ne gère plus ni l'en-tête, ni le pied de page, ni les
+ * couleurs, ni la police : tout ça appartient désormais à
+ * `StorefrontShell`, qui enveloppe TOUTES les pages du site. Ici on ne
+ * fait qu'assembler les sections choisies par le commerçant, dans son
+ * ordre — c'est-à-dire le seul travail que ce fichier aurait toujours dû
+ * faire.
+ *
+ * La bande de chiffres (`StatsBand`) est insérée juste après l'en-tête
+ * plutôt que d'être une section activable de plus : elle n'a de sens
+ * qu'à cet endroit, et son affichage est déjà conditionné à l'existence
+ * de chiffres réels (voir getStorefrontStats).
+ */
 const DB_BACKED_SECTION_TYPES = new Set<LandingSectionType>([
   "products",
   "services",
@@ -34,108 +44,101 @@ const DB_BACKED_SECTION_TYPES = new Set<LandingSectionType>([
 ]);
 
 export async function TenantLanding({
-  tenant,
+  site,
   bookingFeedback,
 }: {
-  tenant: TenantContext;
+  site: StorefrontSite;
   bookingFeedback?: { success?: string; error?: string };
 }) {
-  // `tenant.industry` déjà résolu par resolveRequestTenant() — évite une
-  // requête `organizations` redondante dans getLandingConfig (voir son
-  // commentaire sur `knownIndustry`).
-  const config = await getLandingConfig(tenant.organizationId, tenant.industry);
+  const { tenant, enabledSections } = site;
 
-  const enabledSections = config.sections.filter((section) => section.enabled).sort((a, b) => a.order - b.order);
-
-  const dbBackedSections = enabledSections.filter((section) => DB_BACKED_SECTION_TYPES.has(section.type));
+  // Chargements en parallèle : une section lente ne retarde pas les
+  // autres. Les sections purement basées sur le `TenantContext` déjà
+  // résolu (hero, about, contact, location, social_links, cta) ne
+  // déclenchent aucune requête supplémentaire.
+  const dbBackedSections = enabledSections.filter((type) => DB_BACKED_SECTION_TYPES.has(type));
   const dataEntries = await Promise.all(
     dbBackedSections.map(
-      async (section) => [section.type, await getLandingSectionData(tenant.organizationId, section.type)] as const,
+      async (type) => [type, await getLandingSectionData(tenant.organizationId, type)] as const,
     ),
   );
   const dataByType = new Map<LandingSectionType, LandingSectionData | null>(dataEntries);
 
-  const hasBookingSection = enabledSections.some((section) => section.type === "booking");
-
-  const brandingStyle = getTenantBrandingStyle(config);
-  const fontClassName = resolveTenantFontClassName(config.fontChoice);
+  const hasBookingSection = enabledSections.includes("booking");
 
   return (
-    <div className={fontClassName} style={brandingStyle}>
-      <main className="tenant-site mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-6 sm:gap-10 sm:px-6 sm:py-12">
-        {enabledSections.map((section) => {
-          switch (section.type) {
-            case "hero":
-              return <HeroSection key="hero" tenant={tenant} config={config} />;
-            case "about":
-              return <AboutSection key="about" tenant={tenant} />;
-            case "contact":
-              return <ContactSection key="contact" tenant={tenant} />;
-            case "location":
-              return <LocationSection key="location" tenant={tenant} />;
-            case "social_links":
-              return <SocialLinksSection key="social_links" tenant={tenant} />;
-            case "cta":
-              return <CtaSection key="cta" tenant={tenant} />;
-            case "products": {
-              const data = dataByType.get("products");
-              return data?.type === "products" ? (
-                <ProductsSection key="products" products={data.products} organizationId={tenant.organizationId} />
-              ) : null;
-            }
-            case "services": {
-              const data = dataByType.get("services");
-              return data?.type === "services" ? (
-                <ServicesSection
-                  key="services"
-                  tenant={tenant}
-                  services={data.services}
-                  hasBookingSection={hasBookingSection}
-                />
-              ) : null;
-            }
-            case "categories": {
-              const data = dataByType.get("categories");
-              return data?.type === "categories" ? (
-                <CategoriesSection key="categories" categories={data.categories} />
-              ) : null;
-            }
-            case "promotions": {
-              const data = dataByType.get("promotions");
-              return data?.type === "promotions" ? (
-                <PromotionsSection key="promotions" products={data.products} />
-              ) : null;
-            }
-            case "gallery": {
-              const data = dataByType.get("gallery");
-              return data?.type === "gallery" ? <GallerySection key="gallery" images={data.images} /> : null;
-            }
-            case "testimonials": {
-              const data = dataByType.get("testimonials");
-              return data?.type === "testimonials" ? (
-                <TestimonialsSection key="testimonials" testimonials={data.testimonials} />
-              ) : null;
-            }
-            case "team": {
-              const data = dataByType.get("team");
-              return data?.type === "team" ? <TeamSection key="team" members={data.members} /> : null;
-            }
-            case "faq": {
-              const data = dataByType.get("faq");
-              return data?.type === "faq" ? <FaqSection key="faq" faqs={data.faqs} /> : null;
-            }
-            case "booking": {
-              const data = dataByType.get("booking");
-              return data?.type === "booking" ? (
-                <BookingSection key="booking" tenant={tenant} services={data.services} feedback={bookingFeedback} />
-              ) : null;
-            }
-            default:
-              return null;
+    <>
+      {enabledSections.map((type) => {
+        switch (type) {
+          case "hero":
+            return (
+              <div key="hero">
+                <HeroSection site={site} />
+                <StatsBand site={site} />
+              </div>
+            );
+          case "about":
+            return <AboutSection key="about" site={site} compact />;
+          case "contact":
+            return <ContactSection key="contact" site={site} />;
+          case "location":
+            return <LocationSection key="location" site={site} />;
+          case "social_links":
+            return <SocialLinksSection key="social_links" site={site} />;
+          case "cta":
+            return <CtaSection key="cta" site={site} />;
+          case "products": {
+            const data = dataByType.get("products");
+            return data?.type === "products" ? (
+              <ProductsSection key="products" products={data.products} site={site} />
+            ) : null;
           }
-        })}
-      </main>
-      <FooterSection tenant={tenant} />
-    </div>
+          case "services": {
+            const data = dataByType.get("services");
+            return data?.type === "services" ? (
+              <ServicesSection key="services" services={data.services} site={site} hasBookingSection={hasBookingSection} />
+            ) : null;
+          }
+          case "categories": {
+            const data = dataByType.get("categories");
+            return data?.type === "categories" ? (
+              <CategoriesSection key="categories" categories={data.categories} site={site} />
+            ) : null;
+          }
+          case "promotions": {
+            const data = dataByType.get("promotions");
+            return data?.type === "promotions" ? (
+              <PromotionsSection key="promotions" products={data.products} site={site} />
+            ) : null;
+          }
+          case "gallery": {
+            const data = dataByType.get("gallery");
+            return data?.type === "gallery" ? <GallerySection key="gallery" images={data.images} site={site} /> : null;
+          }
+          case "testimonials": {
+            const data = dataByType.get("testimonials");
+            return data?.type === "testimonials" ? (
+              <TestimonialsSection key="testimonials" testimonials={data.testimonials} site={site} />
+            ) : null;
+          }
+          case "team": {
+            const data = dataByType.get("team");
+            return data?.type === "team" ? <TeamSection key="team" members={data.members} site={site} /> : null;
+          }
+          case "faq": {
+            const data = dataByType.get("faq");
+            return data?.type === "faq" ? <FaqSection key="faq" faqs={data.faqs} site={site} /> : null;
+          }
+          case "booking": {
+            const data = dataByType.get("booking");
+            return data?.type === "booking" ? (
+              <BookingSection key="booking" site={site} services={data.services} feedback={bookingFeedback} />
+            ) : null;
+          }
+          default:
+            return null;
+        }
+      })}
+    </>
   );
 }

@@ -2,9 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "./_components/service-worker-register";
-
-const displayFont = { variable: "--font-display" };
-const bodyFont = { variable: "--font-body" };
+import { PLATFORM_FONT_VARIABLES } from "./fonts";
 
 /**
  * Paire de polices pour la landing marketing SME-OS et la console Super
@@ -65,7 +63,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${displayFont.variable} ${bodyFont.variable}`}>
+    <html lang="fr" className={`${PLATFORM_FONT_VARIABLES} ${jakarta.variable} ${inter.variable}`}>
       <body className="bg-paper font-body text-ink antialiased">
         {children}
         <ServiceWorkerRegister />

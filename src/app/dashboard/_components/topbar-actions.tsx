@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useVisibleNavGroups } from "./dashboard-nav";
@@ -59,6 +60,19 @@ export function TopbarSearch({ enabledModules, industry }: { enabledModules: Mod
     router.push(href);
   }
 
+  // Même bug/correctif que `DashboardMobileNav` (voir sa note) : ce
+  // composant est rendu dans le `<header backdrop-blur>` de
+  // `DashboardTopbar`, donc sa modale `fixed inset-0` s'y retrouvait
+  // confinée au lieu de couvrir l'écran — portail vers `document.body`.
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   return (
     <div className="relative min-w-0 flex-1 max-w-sm">
       <button
@@ -76,43 +90,46 @@ export function TopbarSearch({ enabledModules, industry }: { enabledModules: Mod
         </span>
       </button>
 
-      {open ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-navy-900/40 px-4 pt-24" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 border-b border-navy-900/[0.06] px-3 py-2.5">
-              <IconSearch className="h-4 w-4 shrink-0 text-navy-900/40" />
-              <input
-                ref={inputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Rechercher une section..."
-                className="w-full text-sm outline-none placeholder:text-navy-900/40"
-              />
-            </div>
-            <ul className="max-h-72 overflow-y-auto p-1">
-              {results.length === 0 ? (
-                <li className="px-3 py-6 text-center text-sm adm-muted">Aucune section correspondante.</li>
-              ) : (
-                results.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.href}>
-                      <button
-                        type="button"
-                        onClick={() => go(item.href)}
-                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-navy-900 transition hover:bg-violet-50"
-                      >
-                        <Icon className="h-4 w-4 shrink-0 text-navy-900/50" />
-                        {item.label}
-                      </button>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-          </div>
-        </div>
-      ) : null}
+      {open
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-navy-900/40 px-4 pt-24" onClick={() => setOpen(false)}>
+              <div className="w-full max-w-md rounded-2xl bg-white p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2 border-b border-navy-900/[0.06] px-3 py-2.5">
+                  <IconSearch className="h-4 w-4 shrink-0 text-navy-900/40" />
+                  <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Rechercher une section..."
+                    className="w-full text-sm outline-none placeholder:text-navy-900/40"
+                  />
+                </div>
+                <ul className="max-h-72 overflow-y-auto p-1">
+                  {results.length === 0 ? (
+                    <li className="px-3 py-6 text-center text-sm adm-muted">Aucune section correspondante.</li>
+                  ) : (
+                    results.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <li key={item.href}>
+                          <button
+                            type="button"
+                            onClick={() => go(item.href)}
+                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-navy-900 transition hover:bg-violet-50"
+                          >
+                            <Icon className="h-4 w-4 shrink-0 text-navy-900/50" />
+                            {item.label}
+                          </button>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -141,7 +158,14 @@ export function TopbarCreateMenu({ enabledModules }: { enabledModules: ModuleKey
       </button>
       {open ? (
         <>
-          <button type="button" aria-label="Fermer" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+          {/* Même bug/correctif de containing block que TopbarSearch : ce
+              gobe-clic doit couvrir tout l'écran pour fermer le menu au
+              clic extérieur, donc il doit lui aussi être sorti du
+              `<header backdrop-blur>` via un portail. */}
+          {createPortal(
+            <button type="button" aria-label="Fermer" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />,
+            document.body,
+          )}
           <ul className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-navy-900/[0.06] bg-white p-1.5 shadow-lg">
             {links.map((item) => {
               const Icon = item.icon;

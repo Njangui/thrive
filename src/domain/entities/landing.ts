@@ -54,6 +54,70 @@ export type FontChoice = (typeof FONT_CHOICES)[number];
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 export const HexColorSchema = z.string().regex(HEX_COLOR_REGEX, "Couleur invalide (format attendu : #rrggbb)");
 
+/**
+ * ============================================================
+ * Vitrine V2 (sept. 2026)
+ * ============================================================
+ */
+
+/** Icônes disponibles pour la bande de confiance — miroir de `StorefrontIconKey` (storefront-blueprint.ts), validé ici parce que ces valeurs arrivent d'un formulaire et finissent en base. */
+export const HIGHLIGHT_ICON_KEYS = [
+  "truck",
+  "wallet",
+  "shield",
+  "headset",
+  "clock",
+  "pin",
+  "sparkles",
+  "star",
+  "chef",
+  "leaf",
+  "scissors",
+  "calendar",
+  "briefcase",
+  "handshake",
+  "key",
+  "ruler",
+  "whatsapp",
+  "bag",
+] as const;
+export const HighlightIconSchema = z.enum(HIGHLIGHT_ICON_KEYS);
+export type HighlightIconKey = (typeof HIGHLIGHT_ICON_KEYS)[number];
+
+export const LandingHighlightSchema = z.object({
+  icon: HighlightIconSchema,
+  title: z.string().min(1).max(60),
+  subtitle: z.string().max(90),
+});
+export type LandingHighlight = z.infer<typeof LandingHighlightSchema>;
+
+/** Au plus 4 : au-delà, la bande passe sur deux lignes et perd sa fonction de repère rapide. */
+export const LandingHighlightsSchema = z.array(LandingHighlightSchema).max(4);
+
+export const PAYMENT_METHOD_KEYS = ["mtn", "orange", "cash", "visa", "mastercard", "bank"] as const;
+export const PaymentMethodSchema = z.enum(PAYMENT_METHOD_KEYS);
+export type PaymentMethodKey = (typeof PAYMENT_METHOD_KEYS)[number];
+export const PaymentMethodsSchema = z.array(PaymentMethodSchema);
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethodKey, string> = {
+  mtn: "MTN Mobile Money",
+  orange: "Orange Money",
+  cash: "Espèces à la livraison",
+  visa: "Visa",
+  mastercard: "Mastercard",
+  bank: "Virement bancaire",
+};
+
+export const HERO_LAYOUTS = ["split", "centered", "banner"] as const;
+export const HeroLayoutSchema = z.enum(HERO_LAYOUTS);
+export type HeroLayout = (typeof HERO_LAYOUTS)[number];
+
+export const HERO_LAYOUT_LABELS: Record<HeroLayout, string> = {
+  split: "Texte + visuel côte à côte",
+  centered: "Texte centré, sans visuel",
+  banner: "Bannière pleine largeur",
+};
+
 export const TestimonialSchema = z.object({
   id: z.string().uuid(),
   organizationId: z.string().uuid(),

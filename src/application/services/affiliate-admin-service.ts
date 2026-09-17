@@ -273,17 +273,37 @@ export interface AffiliateProgramSettings {
   cookieWindowDays: number;
   holdPeriodDays: number;
   minPayoutFcfa: number;
+  promoCodeCommissionRateBps: number;
+  promoCodeDiscountBps: number;
 }
 
 export async function getAffiliateProgramSettings(): Promise<AffiliateProgramSettings> {
-  const [commissionRateBps, recurringMonths, cookieWindowDays, holdPeriodDays, minPayoutFcfa] = await Promise.all([
+  const [
+    commissionRateBps,
+    recurringMonths,
+    cookieWindowDays,
+    holdPeriodDays,
+    minPayoutFcfa,
+    promoCodeCommissionRateBps,
+    promoCodeDiscountBps,
+  ] = await Promise.all([
     getPlatformSettingNumber("affiliate_commission_rate_bps", 2000),
     getPlatformSettingNumber("affiliate_recurring_months", 0),
     getPlatformSettingNumber("affiliate_cookie_window_days", 30),
     getPlatformSettingNumber("affiliate_hold_period_days", 14),
     getPlatformSettingNumber("affiliate_min_payout_fcfa", 10000),
+    getPlatformSettingNumber("affiliate_promo_code_commission_rate_bps", 1000),
+    getPlatformSettingNumber("affiliate_promo_code_discount_bps", 1000),
   ]);
-  return { commissionRateBps, recurringMonths, cookieWindowDays, holdPeriodDays, minPayoutFcfa };
+  return {
+    commissionRateBps,
+    recurringMonths,
+    cookieWindowDays,
+    holdPeriodDays,
+    minPayoutFcfa,
+    promoCodeCommissionRateBps,
+    promoCodeDiscountBps,
+  };
 }
 
 /**
@@ -333,6 +353,26 @@ export async function updateAffiliateProgramSettings(
       throw new ValidationError("Le seuil minimum de paiement doit être un entier positif.");
     }
     entries.push(["affiliate_min_payout_fcfa", input.minPayoutFcfa]);
+  }
+  if (input.promoCodeCommissionRateBps !== undefined) {
+    if (
+      !Number.isInteger(input.promoCodeCommissionRateBps) ||
+      input.promoCodeCommissionRateBps < 0 ||
+      input.promoCodeCommissionRateBps > 10000
+    ) {
+      throw new ValidationError("Le taux de commission (code promo) doit être un entier entre 0 et 10000 points de base.");
+    }
+    entries.push(["affiliate_promo_code_commission_rate_bps", input.promoCodeCommissionRateBps]);
+  }
+  if (input.promoCodeDiscountBps !== undefined) {
+    if (
+      !Number.isInteger(input.promoCodeDiscountBps) ||
+      input.promoCodeDiscountBps < 0 ||
+      input.promoCodeDiscountBps > 10000
+    ) {
+      throw new ValidationError("La remise client (code promo) doit être un entier entre 0 et 10000 points de base.");
+    }
+    entries.push(["affiliate_promo_code_discount_bps", input.promoCodeDiscountBps]);
   }
 
   for (const [key, value] of entries) {

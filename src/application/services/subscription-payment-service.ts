@@ -8,7 +8,8 @@ import { DEFAULT_COUNTRY_CODE } from "./country-service";
 import { validateMoney } from "./currency-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { confirmAddonPurchase } from "./addons-service";
-import { recordAffiliateConversion } from "./affiliate-service";
+import { recordAffiliateConversion, getPromoCodeDiscountBpsForNextPayment } from "./affiliate-service";
+import { computeDiscountedAmountFcfa } from "@/domain/entities/affiliate";
 
 /**
  * Lot G, Partie 1 — Paiement d'abonnement. Flow : initiatePayment() crée
@@ -165,12 +166,22 @@ export async function initiatePayment(
   }
 
   const countryCode = await getOrganizationCountryCode(organizationId);
-  const { amount, currencyCode } = await resolvePlanPriceForCountry(plan, countryCode);
-  // Le prix résolu (country-specific ou repli) doit rester un entier
-  // valide dans la plus petite unité de sa devise avant toute écriture
-  // financière (section 16/62) — une configuration Super Admin
-  // corrompue (ex: prix négatif saisi par erreur) ne doit jamais
-  // atteindre NotchPay.
+  const { amount: listedAmount, currencyCode } = await resolvePlanPriceForCountry(plan, countryCode);
+
+  // Code promo (0052) : remise sur le tout PREMIER paiement d'une
+  // organisation référée par un code promo (jamais les suivants — voir
+  // affiliate-service.ts::getPromoCodeDiscountBpsForNextPayment, qui
+  // renvoie 0 dès que conversions_count > 0). N'affecte jamais les
+  // organisations référées par un lien cliqué (0% de remise dans ce cas)
+  // ni celles non référées du tout (aucune ligne affiliate_referrals).
+  const promoDiscountBps = await getPromoCodeDiscountBpsForNextPayment(organizationId);
+  const amount = promoDiscountBps > 0 ? computeDiscountedAmountFcfa(listedAmount, promoDiscountBps) : listedAmount;
+
+  // Le prix résolu (country-specific ou repli, remise code promo
+  // éventuellement déduite) doit rester un entier valide dans la plus
+  // petite unité de sa devise avant toute écriture financière (section
+  // 16/62) — une configuration Super Admin corrompue (ex: prix négatif
+  // saisi par erreur) ne doit jamais atteindre NotchPay.
   validateMoney(amount, currencyCode);
 
   const supabase = getSupabaseServiceClient();
@@ -213,7 +224,7 @@ export async function initiatePayment(
   }
 
   console.info(
-    `[audit] actor=${actorUserId} org=${organizationId} action=SUBSCRIPTION_PAYMENT_INITIATED plan=${planKey} country=${countryCode} currency=${currencyCode}`,
+    `[audit] actor=${actorUserId} org=${organizationId} action=SUBSCRIPTION_PAYMENT_INITIATED plan=${planKey} country=${countryCode} currency=${currencyCode} promoDiscountBps=${promoDiscountBps}`,
   );
 
   return { paymentId, paymentUrl: result.paymentUrl ?? "" };

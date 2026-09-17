@@ -1,53 +1,157 @@
-import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tenant";
-import { buildWhatsAppLink } from "@/infrastructure/tenant/resolve-request-tenant";
+import Link from "next/link";
+import type { StorefrontSite } from "@/application/services/storefront-service";
+import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
+import { toSafeHref } from "@/lib/safe-url";
 import { TrackedCtaLink } from "../tracked-cta-link";
-import type { LandingConfig } from "@/application/services/landing-config-service";
+import { StorefrontImage } from "../storefront/storefront-image";
+import { HighlightIcon } from "../storefront/storefront-icons";
+import { Container } from "../storefront/storefront-ui";
 
 /**
- * Reprend le contenu de l'ancien en-tête fixe de `tenant-landing.tsx`
- * (avant Lot K) — la seule différence est que c'est maintenant une
- * section parmi d'autres, activable/désactivable/réordonnable. Ne montre
- * volontairement PAS `tenant.description` en entier ici (garder le hero
- * percutant) : le texte long relève de la section "about" dédiée.
+ * En-tête de la page d'accueil : sur-titre secteur, titre, sous-titre,
+ * deux appels à l'action, visuel, puis la bande de confiance.
+ *
+ * Ce que ça remplace : un bloc qui affichait `tenant.industry` BRUT au
+ * visiteur (« retail », « professional_services »), le nom de
+ * l'entreprise en guise de titre, et un unique bouton WhatsApp. Les
+ * libellés viennent maintenant du blueprint de secteur, et les cibles des
+ * boutons sont résolues vers des pages qui existent réellement pour ce
+ * tenant.
  */
-export function HeroSection({ tenant, config }: { tenant: TenantContext; config: Pick<LandingConfig, "heroTitle" | "heroSubtitle" | "ctaLabel" | "ctaUrl" | "visualStyle"> }) {
-  const whatsappHref = tenant.whatsappNumber
-    ? buildWhatsAppLink(tenant.whatsappNumber, `Bonjour ${tenant.name}, je viens de votre site.`)
-    : null;
-  const ctaHref = config.ctaUrl || whatsappHref;
-  const styleClass = config.visualStyle === "bold" ? "tenant-hero-bold" : config.visualStyle === "clean" ? "tenant-hero-clean" : "tenant-hero-soft";
+function resolveCtaTarget(
+  target: "catalog" | "booking" | "contact" | "promotions" | "services" | "gallery",
+  site: StorefrontSite,
+): string | null {
+  const { capabilities } = site;
+  switch (target) {
+    case "catalog":
+      return capabilities.hasProducts ? STOREFRONT_PATHS.catalog : null;
+    case "booking":
+      return capabilities.hasServices || capabilities.hasWhatsApp ? STOREFRONT_PATHS.booking : null;
+    case "promotions":
+      return capabilities.hasPromotions ? STOREFRONT_PATHS.promotions : null;
+    case "services":
+      return capabilities.hasServices ? STOREFRONT_PATHS.services : null;
+    case "gallery":
+      return capabilities.hasGallery ? STOREFRONT_PATHS.gallery : null;
+    case "contact":
+      return capabilities.hasContactDetails || capabilities.hasOpeningHours ? STOREFRONT_PATHS.contact : null;
+    default:
+      return null;
+  }
+}
+
+export function HeroSection({ site }: { site: StorefrontSite }) {
+  const { tenant, config, blueprint, heroLayout, heroMediaUrl, whatsappHref, highlights } = site;
+
+  const title = config.heroTitle?.trim() || blueprint.heroTitle(tenant.name);
+  const subtitle = config.heroSubtitle?.trim() || tenant.description || blueprint.heroSubtitle(tenant.name);
+
+  // Ordre de repli du CTA principal : lien saisi par le commerçant ->
+  // page recommandée par son secteur -> WhatsApp -> page contact. On ne
+  // rend jamais un bouton dont la destination n'existe pas.
+  const primaryHref =
+    toSafeHref(config.ctaUrl) ?? resolveCtaTarget(blueprint.primaryCtaTarget, site) ?? whatsappHref ?? null;
+  const primaryLabel = config.ctaLabel?.trim() || blueprint.primaryCtaLabel;
+  const primaryIsExternal = Boolean(primaryHref?.startsWith("http"));
+
+  const secondaryHref =
+    toSafeHref(config.secondaryCtaUrl) ?? resolveCtaTarget(blueprint.secondaryCtaTarget, site) ?? null;
+  const secondaryLabel = config.secondaryCtaLabel?.trim() || blueprint.secondaryCtaLabel;
+
+  const showMedia = heroLayout !== "centered" && Boolean(heroMediaUrl);
+
+  const copy = (
+    <div className={`flex flex-col gap-5 ${heroLayout === "centered" ? "mx-auto max-w-3xl text-center items-center" : ""}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">{blueprint.eyebrow}</p>
+      <h1 className="font-display text-3xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">{title}</h1>
+      <p className="max-w-xl text-sm leading-7 text-black/60 sm:text-base">{subtitle}</p>
+
+      {(primaryHref || secondaryHref) && (
+        <div className={`flex flex-wrap gap-3 ${heroLayout === "centered" ? "justify-center" : ""}`}>
+          {primaryHref &&
+            (primaryIsExternal ? (
+              <TrackedCtaLink
+                href={primaryHref}
+                organizationId={tenant.organizationId}
+                ctaId="hero_primary"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="sf-btn-primary inline-flex h-12 items-center px-6 text-sm"
+              >
+                {primaryLabel}
+              </TrackedCtaLink>
+            ) : (
+              <Link href={primaryHref} className="sf-btn-primary inline-flex h-12 items-center px-6 text-sm">
+                {primaryLabel}
+              </Link>
+            ))}
+          {secondaryHref && secondaryHref !== primaryHref && (
+            <Link href={secondaryHref} className="sf-btn-outline inline-flex h-12 items-center px-6 text-sm">
+              {secondaryLabel}
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <section className={`tenant-hero ${styleClass} flex flex-col gap-5`}>
-      {tenant.bannerUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={tenant.bannerUrl}
-          alt=""
-          className="-mx-5 aspect-[3/1] w-[calc(100%+2.5rem)] rounded-lg object-cover sm:-mx-0 sm:w-full"
-        />
+    <section className="sf-hero border-b border-black/[0.06]">
+      <Container className="py-10 sm:py-16">
+        {showMedia ? (
+          <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
+            {copy}
+            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-brand bg-black/[0.03] lg:aspect-[5/4]">
+              <StorefrontImage
+                src={heroMediaUrl}
+                alt=""
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                priority
+                fallbackLabel=""
+              />
+            </div>
+          </div>
+        ) : (
+          copy
+        )}
+      </Container>
+
+      {highlights.length > 0 && (
+        <div className="border-t border-black/[0.06] bg-[var(--brand-soft,rgba(0,0,0,.02))]">
+          <Container className="grid gap-4 py-6 sm:grid-cols-2 lg:grid-cols-4">
+            {highlights.map((highlight) => (
+              <div key={highlight.title} className="flex items-start gap-3">
+                <span className="sf-icon-box grid h-10 w-10 shrink-0 place-items-center rounded-brand text-brand">
+                  <HighlightIcon name={highlight.icon} className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold">{highlight.title}</span>
+                  {highlight.subtitle && <span className="block text-xs text-black/55">{highlight.subtitle}</span>}
+                </span>
+              </div>
+            ))}
+          </Container>
+        </div>
       )}
-      {tenant.logoUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={tenant.logoUrl} alt={tenant.name} className="h-12 w-auto object-contain" />
-      )}
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-brand">{tenant.industry ?? "Entreprise"}</p>
-        <h1 className="mt-2 max-w-3xl font-display text-4xl font-extrabold tracking-tight sm:text-6xl">{config.heroTitle || tenant.name}</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">{config.heroSubtitle || tenant.description || `Découvrez les produits et services de ${tenant.name}.`}</p>
-      </div>
-      {ctaHref && (
-        <TrackedCtaLink
-          href={ctaHref}
-          organizationId={tenant.organizationId}
-          ctaId="whatsapp_landing"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-fit items-center gap-2 rounded-brand bg-leaf px-5 py-3 font-medium text-white transition-opacity hover:opacity-90"
-        >
-          {config.ctaLabel || "Nous contacter"}
-        </TrackedCtaLink>
-      )}
+    </section>
+  );
+}
+
+/** Bande de chiffres RÉELS (voir getStorefrontStats) — rendue seulement si le service en a produit au moins trois. */
+export function StatsBand({ site }: { site: StorefrontSite }) {
+  if (site.stats.length === 0) return null;
+
+  return (
+    <section className="border-y border-black/[0.06] bg-white">
+      <Container className="grid grid-cols-2 gap-6 py-8 lg:grid-cols-4">
+        {site.stats.map((stat) => (
+          <div key={stat.key} className="text-center">
+            <p className="font-display text-2xl font-extrabold text-brand sm:text-3xl">{stat.value}</p>
+            <p className="mt-1 text-xs text-black/55 sm:text-sm">{stat.label}</p>
+          </div>
+        ))}
+      </Container>
     </section>
   );
 }

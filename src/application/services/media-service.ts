@@ -7,8 +7,14 @@ import { ValidationError } from "@/lib/errors";
  * prompt) + Lot H (`seo_og`, section 18 — image Open Graph par défaut de
  * l'organisation, 0022_seo_fields.sql). Sert de sous-dossier dans le
  * bucket — voir buildTenantObjectPath.
+ *
+ * "hero" (vitrine V2) : visuel de l'en-tête de la page d'accueil, distinct
+ * de "banner". La bannière est une image large (ratio 3/1) héritée du
+ * Lot E, alors que la composition « texte + visuel » attend un format
+ * portrait/carré ; les ranger sous le même type rendrait impossible de
+ * remplacer l'un sans écraser l'autre.
  */
-export type MediaType = "logo" | "banner" | "favicon" | "product" | "seo_og";
+export type MediaType = "logo" | "banner" | "favicon" | "product" | "seo_og" | "hero";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 Mo — large mais borné (section 54 : échouer fort plutôt que silencieusement)
 

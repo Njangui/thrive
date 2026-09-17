@@ -1,48 +1,32 @@
-import Image from "next/image";
-import Link from "next/link";
-import type { PromotedProduct } from "@/application/services/landing-config-service";
-import { formatPrice } from "@/lib/format";
-import { isOptimizableImageUrl } from "@/lib/optimizable-image";
+import type { StorefrontProduct } from "@/application/services/catalog-service";
+import type { StorefrontSite } from "@/application/services/storefront-service";
+import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
+import { sectionHeading, sectionSubheading } from "@/application/config/storefront-blueprint";
+import { ProductGrid } from "../storefront/product-card";
+import { Section, SectionHeading } from "../storefront/storefront-ui";
 
-export function PromotionsSection({ products }: { products: PromotedProduct[] }) {
+/**
+ * Section promotions. La maquette de référence place ici un compte à
+ * rebours (« 02 j 14 h 37 min »). Il n'est PAS reproduit : le modèle de
+ * données n'a aucune date de fin de promotion (`products.compare_at_price`
+ * est un prix, pas une campagne datée). Un compte à rebours branché sur
+ * une échéance inventée se réinitialiserait à chaque rechargement et
+ * mentirait au client du commerçant — exactement le genre de faux signal
+ * d'urgence que ce projet s'interdit. La fonctionnalité demande une table
+ * de campagnes datées ; elle est listée comme telle dans le rapport.
+ */
+export function PromotionsSection({ products, site }: { products: StorefrontProduct[]; site: StorefrontSite }) {
   if (products.length === 0) return null;
+  const { blueprint, tenant } = site;
 
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="font-display text-lg font-semibold">Promotions en cours</h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {products.map((product) => (
-          <Link
-            key={product.id}
-            href={product.slug ? `/produits/${product.slug}` : "/produits"}
-            className="flex gap-3 rounded-lg border border-brand/30 bg-white p-3 transition-colors hover:border-brand"
-          >
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-ink/5">
-              {product.imageUrl &&
-                (isOptimizableImageUrl(product.imageUrl) ? (
-                  <Image src={product.imageUrl} alt={product.name} fill sizes="80px" className="object-cover" />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element -- photo hébergée hors de notre contrôle (mode "Lien existant"), voir isOptimizableImageUrl
-                  <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
-                ))}
-            </div>
-            <div className="flex flex-1 flex-col justify-center gap-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-display text-base font-medium">{product.name}</span>
-                <span className="shrink-0 rounded-full bg-clay/10 px-2 py-0.5 text-xs font-medium text-clay">
-                  Promo
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="font-display text-base font-semibold text-brand">
-                  {formatPrice(product.unitPrice)}
-                </span>
-                <span className="text-sm text-muted line-through">{formatPrice(product.compareAtPrice)}</span>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </section>
+    <Section>
+      <SectionHeading
+        title={sectionHeading(blueprint, "promotions", "Promotions en cours")}
+        subtitle={sectionSubheading(blueprint, "promotions")}
+        action={{ label: "Toutes les promotions", href: STOREFRONT_PATHS.promotions }}
+      />
+      <ProductGrid products={products} organizationId={tenant.organizationId} newBadgeLabel={blueprint.newBadgeLabel} />
+    </Section>
   );
 }

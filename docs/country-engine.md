@@ -20,10 +20,13 @@ techniquement possible ; le Super Admin décide ce qui est réellement
 vendu, depuis `/admin/countries`.
 
 ```
-NotchPay API
-    │  (notchpay-resources-service.ts::syncCountries/syncChannels)
+Pays/canaux ajoutés en SQL (ou via NotchPay tant que ça marchait —
+voir docs/notchpay-resources.md : synchronisation automatique
+retirée le 16/09/2026, l'endpoint utilisé n'existe pas réellement
+côté NotchPay)
     ▼
-countries / payment_channels (DB — dernier état connu, jamais perdu)
+countries / payment_channels (DB — SEULE source de vérité, gérée à
+la main : notchpay_supported, canaux, etc.)
     │  (country-service.ts — SEUL point d'entrée pour les règles pays)
     ▼
 Super Admin (admin-countries-service.ts) décide launch_status
@@ -60,9 +63,9 @@ d'abonnement, jamais `organizations.plan` en parallèle).
 | Fichier | Rôle |
 |---|---|
 | `currency-service.ts` | `normalizeMoney`/`formatMoney`/`validateMoney` — jamais de calcul flottant sur un montant |
-| `notchpay-resources-service.ts` | Lecture DB (`getCountries`/`getCountry`/`getChannels`) + synchronisation (`syncCountries`/`syncChannels`/`syncAllResources`) |
+| `notchpay-resources-service.ts` | Lecture DB uniquement (`getCountries`/`getCountry`/`getChannels`) — plus de synchronisation depuis le 16/09/2026, voir docs/notchpay-resources.md |
 | `country-service.ts` | **Seul point d'entrée** pour toute règle pays (`isCountryActive`, `listPublicCountries`, `validateCountryForSignup`, `joinCountryWaitlist`...) — interdiction du cahier respectée : aucun `if (country === "CM")` dispersé ailleurs |
-| `admin-countries-service.ts` | Actions Super Admin (activation, pricing, sync manuelle) — RBAC vérifié par l'appelant (`requirePlatformAdmin()`), jamais par ce service lui-même |
+| `admin-countries-service.ts` | Actions Super Admin (activation, pricing) — RBAC vérifié par l'appelant (`requirePlatformAdmin()`), jamais par ce service lui-même |
 | `plans-repository.ts::resolvePlanPriceForCountry` | Résout le prix effectif ; repli garanti sur `plans.price_fcfa` + devise du pays si aucune ligne `plan_prices` n'existe |
 
 ## Checklist d'activation (Super Admin, `/admin/countries/[code]`)
@@ -70,7 +73,9 @@ d'abonnement, jamais `organizations.plan` en parallèle).
 `setCountryLaunchStatus(code, "active", ...)` **bloque** la transition
 si, au moment de l'activation :
 
-- `notchpay_supported = false` (jamais synchronisé/pas supporté) ;
+- `notchpay_supported = false` (pas encore marqué supporté — colonne
+  gérée manuellement en base depuis le 16/09/2026, voir
+  docs/notchpay-resources.md) ;
 - aucun canal de paiement disponible ;
 - au moins un des 3 plans (`starter`/`business`/`pro`) n'a pas de ligne
   `plan_prices` active pour ce pays (repose sur le prix par défaut).

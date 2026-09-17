@@ -5,7 +5,6 @@ import {
   getCountryDetailForAdmin,
   setCountryLaunchStatus,
   upsertCountryPrice,
-  triggerCountryChannelsSync,
   type CountryLaunchStatus,
 } from "@/application/services/admin-countries-service";
 import { getCurrencyMeta } from "@/application/services/currency-service";
@@ -59,22 +58,6 @@ async function upsertPriceAction(formData: FormData) {
     redirectWithMessage(isoCode, "error", error instanceof AppError ? error.message : "Erreur lors de la mise à jour du prix.");
   }
   redirectWithMessage(isoCode, "success", `Prix ${planKey} mis à jour.`);
-}
-
-async function syncChannelsAction(formData: FormData) {
-  "use server";
-  const admin = await requirePlatformAdmin();
-  const isoCode = String(formData.get("isoCode") ?? "");
-
-  try {
-    const result = await triggerCountryChannelsSync(isoCode, admin.userId);
-    if (result.status === "failed") {
-      redirectWithMessage(isoCode, "error", `Échec de synchronisation : ${result.errorMessage ?? "erreur inconnue"} — dernier état conservé.`);
-    }
-    redirectWithMessage(isoCode, "success", `${result.itemsSynced} canal/canaux synchronisés.`);
-  } catch (error) {
-    redirectWithMessage(isoCode, "error", error instanceof AppError ? error.message : "Erreur lors de la synchronisation.");
-  }
 }
 
 export default async function AdminCountryDetailPage({
@@ -147,8 +130,8 @@ export default async function AdminCountryDetailPage({
               <dd>{country.notchpaySupported ? "Oui" : "Non"}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-slate-500">Dernière synchronisation</dt>
-              <dd>{country.lastSyncedAt ? new Date(country.lastSyncedAt).toLocaleString("fr-FR") : "Jamais"}</dd>
+              <dt className="text-slate-500">Dernière modification manuelle</dt>
+              <dd>{country.lastSyncedAt ? new Date(country.lastSyncedAt).toLocaleString("fr-FR") : "—"}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Canaux disponibles</dt>
@@ -167,12 +150,9 @@ export default async function AdminCountryDetailPage({
               ))}
             </ul>
           )}
-          <form action={syncChannelsAction} className="mt-3">
-            <input type="hidden" name="isoCode" value={country.isoCode} />
-            <button type="submit" className="rounded-xl border border-navy-900/[0.09] px-3 py-1.5 text-xs font-medium">
-              Synchroniser les canaux de ce pays
-            </button>
-          </form>
+          <p className="mt-3 text-xs text-slate-500">
+            Pays et canaux sont gérés directement en base (SQL) — plus de synchronisation automatique depuis NotchPay.
+          </p>
         </div>
       </section>
 

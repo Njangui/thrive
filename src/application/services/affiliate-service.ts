@@ -7,6 +7,7 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { env } from "@/lib/env";
 import {
   computeCommissionAmountFcfa,
+  computeDiscountedAmountFcfa,
   computeHoldReleaseAt,
   exceedsClickVelocity,
   isConversionEligible,
@@ -483,6 +484,153 @@ export async function attributeReferral(
 }
 
 // ------------------------------------------------------------
+// Code promo (alternative au lien cliqué) — réutilise affiliate_links.code
+// tel quel, mais économie différente (voir 0052_affiliate_promo_codes.sql) :
+// commission réduite pour l'affilié, en échange d'une remise pour le
+// client sur son 1er paiement. Contrairement à attributeReferral()
+// (cookie, silencieux par design — l'immense majorité des signups n'a
+// jamais cliqué de lien), un code TAPÉ par l'utilisateur doit produire
+// une erreur explicite s'il est invalide : quelqu'un qui prend la peine
+// de saisir un code s'attend à un retour, pas à un échec silencieux.
+//
+// Séparé en 2 étapes (validate puis attribute) pour que
+// onboarding-service.ts::createOrganization puisse valider AVANT de
+// créer l'organisation (rejet propre, aucune organisation à moitié
+// créée à nettoyer si le code est invalide).
+// ------------------------------------------------------------
+
+export interface ValidatedPromoCode {
+  affiliateId: string;
+  linkId: string;
+}
+
+/**
+ * Vérifie un code promo SANS écrire en base : existe-t-il, l'affilié
+ * propriétaire est-il actif, et l'utilisateur qui s'inscrit n'est-il pas
+ * l'affilié lui-même (même règle anti-fraude que isSelfReferral, vérifiée
+ * ici aussi car ce chemin ne passe jamais par attributeReferral()).
+ * Retourne `null` si invalide pour QUELQUE raison que ce soit — l'appelant
+ * ne doit jamais distinguer "code inexistant" de "affilié suspendu" côté
+ * utilisateur final (même principe que les messages d'auth : ne jamais
+ * révéler pourquoi, juste que ça ne marche pas).
+ */
+export async function validatePromoCode(
+  promoCode: string,
+  newOrganizationOwnerUserId: string,
+): Promise<ValidatedPromoCode | null> {
+  if (!isValidReferralCode(promoCode)) return null;
+
+  const supabase = getSupabaseServiceClient();
+  const { data: link, error: linkError } = await supabase
+    .from("affiliate_links")
+    .select("id, affiliate_id, is_active")
+    .eq("code", promoCode)
+    .maybeSingle();
+
+  if (linkError || !link || !link.is_active) return null;
+
+  const { data: affiliate, error: affiliateError } = await supabase
+    .from("affiliates")
+    .select("id, user_id, status")
+    .eq("id", link.affiliate_id)
+    .maybeSingle();
+
+  if (affiliateError || !affiliate || affiliate.status !== "active") return null;
+  if (isSelfReferral(affiliate.user_id, newOrganizationOwnerUserId)) return null;
+
+  return { affiliateId: affiliate.id, linkId: link.id };
+}
+
+/**
+ * Crée la ligne affiliate_referrals pour un code promo déjà validé
+ * (voir validatePromoCode) — appelée APRÈS la création de l'organisation,
+ * jamais avant (organization_id doit déjà exister, contrainte FK).
+ * Best-effort comme attributeReferral() : un échec ici ne doit jamais
+ * faire échouer l'onboarding pour l'utilisateur, la validation ayant déjà
+ * eu lieu avant la création de l'organisation.
+ */
+export async function attributeReferralByPromoCode(
+  organizationId: string,
+  validated: ValidatedPromoCode,
+  newOrganizationOwnerUserId: string,
+): Promise<void> {
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { data: referral, error } = await supabase
+      .from("affiliate_referrals")
+      .insert({
+        organization_id: organizationId,
+        affiliate_id: validated.affiliateId,
+        link_id: validated.linkId,
+        click_id: null,
+        attribution_method: "promo_code",
+      })
+      .select("id")
+      .single();
+
+    if (error || !referral) {
+      console.warn(`attributeReferralByPromoCode: échec insertion (org ${organizationId}):`, error?.message);
+      return;
+    }
+
+    // Même heuristique (non bloquante) que attributeReferral() — voir
+    // son commentaire pour le détail, dupliquée ici plutôt que
+    // factorisée pour garder chaque fonction lisible indépendamment
+    // (deux appelants différents, deux moments différents du flow).
+    const { data: ownerMemberships } = await supabase
+      .from("memberships")
+      .select("organization_id")
+      .eq("user_id", newOrganizationOwnerUserId)
+      .eq("role", "owner");
+
+    const otherOwnedOrgIds = (ownerMemberships ?? [])
+      .map((m) => m.organization_id)
+      .filter((id) => id !== organizationId);
+
+    if (otherOwnedOrgIds.length > 0) {
+      const { count: otherReferralsCount } = await supabase
+        .from("affiliate_referrals")
+        .select("id", { count: "exact", head: true })
+        .in("organization_id", otherOwnedOrgIds);
+
+      if ((otherReferralsCount ?? 0) > 0) {
+        await supabase.from("affiliate_fraud_flags").insert({
+          affiliate_id: validated.affiliateId,
+          referral_id: referral.id,
+          flag_type: "duplicate_organization_owner",
+          severity: "low",
+          details: { organizationId, ownerUserId: newOrganizationOwnerUserId },
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(`attributeReferralByPromoCode: erreur inattendue (org ${organizationId}):`, err);
+  }
+}
+
+/**
+ * Remise applicable sur le PROCHAIN paiement d'abonnement d'une
+ * organisation, en points de base — non nulle uniquement si elle a été
+ * référée par un code promo ET n'a encore jamais payé
+ * (`conversions_count === 0`, même donnée que sequence_number ailleurs,
+ * aucune colonne dédiée nécessaire). Appelée par
+ * subscription-payment-service.ts::initiatePayment.
+ */
+export async function getPromoCodeDiscountBpsForNextPayment(organizationId: string): Promise<number> {
+  const supabase = getSupabaseServiceClient();
+  const { data: referral } = await supabase
+    .from("affiliate_referrals")
+    .select("attribution_method, conversions_count")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (!referral || referral.attribution_method !== "promo_code" || referral.conversions_count > 0) {
+    return 0;
+  }
+  return getPlatformSettingNumber("affiliate_promo_code_discount_bps", 1000);
+}
+
+// ------------------------------------------------------------
 // Conversions (appelée depuis subscription-payment-service.ts::markPaymentCompleted)
 // ------------------------------------------------------------
 
@@ -505,7 +653,7 @@ export async function recordAffiliateConversion(payment: CompletedSubscriptionPa
 
     const { data: referral, error: referralError } = await supabase
       .from("affiliate_referrals")
-      .select("id, affiliate_id, link_id, conversions_count, status")
+      .select("id, affiliate_id, link_id, conversions_count, status, attribution_method")
       .eq("organization_id", payment.organizationId)
       .maybeSingle();
 
@@ -516,7 +664,15 @@ export async function recordAffiliateConversion(payment: CompletedSubscriptionPa
     const recurringMonths = await getPlatformSettingNumber("affiliate_recurring_months", 0);
     if (!isConversionEligible(sequenceNumber, recurringMonths)) return; // hors fenêtre de récurrence configurée.
 
-    const commissionRateBps = await getPlatformSettingNumber("affiliate_commission_rate_bps", 0);
+    // Code promo (0052) : commission réduite, en contrepartie de la remise
+    // déjà appliquée au client sur ce même paiement (voir
+    // getPromoCodeDiscountBpsForNextPayment, subscription-payment-service.ts
+    // ::initiatePayment) — payment.amountFcfa est déjà le montant NET,
+    // donc ce taux s'applique de fait au prix déjà remisé, jamais au prix plein.
+    const commissionRateBps =
+      referral.attribution_method === "promo_code"
+        ? await getPlatformSettingNumber("affiliate_promo_code_commission_rate_bps", 1000)
+        : await getPlatformSettingNumber("affiliate_commission_rate_bps", 0);
     const commissionAmountFcfa = computeCommissionAmountFcfa(payment.amountFcfa, commissionRateBps);
     const holdPeriodDays = await getPlatformSettingNumber("affiliate_hold_period_days", 14);
     const now = new Date();

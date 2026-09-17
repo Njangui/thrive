@@ -4,7 +4,6 @@ import { requirePlatformAdmin } from "@/application/services/platform-admin-serv
 import {
   getCountriesOverviewForAdmin,
   setCountryLaunchStatus,
-  triggerManualSync,
 } from "@/application/services/admin-countries-service";
 import { getCurrencyMeta } from "@/application/services/currency-service";
 import { AppError } from "@/lib/errors";
@@ -38,23 +37,6 @@ async function setStatusAction(formData: FormData) {
     redirect(`/admin/countries?error=${encodeURIComponent(message)}`);
   }
   redirect(`/admin/countries?success=${encodeURIComponent(`${isoCode} : statut mis à jour.`)}`);
-}
-
-async function syncNotchPayAction() {
-  "use server";
-  const admin = await requirePlatformAdmin();
-
-  try {
-    const result = await triggerManualSync(admin.userId);
-    const summary =
-      result.countries.status === "success"
-        ? `Synchronisation réussie (${result.countries.itemsSynced} pays, ${result.channels.length} pays synchronisés pour les canaux).`
-        : `Échec de synchronisation : ${result.countries.errorMessage ?? "erreur inconnue"} — dernier état connu conservé.`;
-    redirect(`/admin/countries?${result.countries.status === "success" ? "success" : "error"}=${encodeURIComponent(summary)}`);
-  } catch (error) {
-    const message = error instanceof AppError ? error.message : "Erreur lors de la synchronisation NotchPay.";
-    redirect(`/admin/countries?error=${encodeURIComponent(message)}`);
-  }
 }
 
 export default async function AdminCountriesPage({
@@ -98,27 +80,6 @@ export default async function AdminCountriesPage({
           <p className="text-xs uppercase tracking-wide text-slate-500">Liste d&apos;attente</p>
           <p className="mt-1 font-jakarta text-2xl font-bold">{overview.kpis.waitlistCount}</p>
         </div>
-      </section>
-
-      <section className="flex flex-col gap-3 rounded-xl border border-navy-900/10 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm">
-          <p className="font-medium">
-            {overview.syncStatus.isHealthy ? "✓ Synchronisé" : "⚠ Dernière tentative en échec"}
-          </p>
-          <p className="text-slate-500">
-            {overview.syncStatus.lastSuccessfulSyncAt
-              ? `Dernière synchronisation réussie : ${new Date(overview.syncStatus.lastSuccessfulSyncAt).toLocaleString("fr-FR")}`
-              : "Aucune synchronisation réussie pour le moment."}
-          </p>
-          {!overview.syncStatus.isHealthy && overview.syncStatus.lastError && (
-            <p className="text-danger-700">Erreur : {overview.syncStatus.lastError}</p>
-          )}
-        </div>
-        <form action={syncNotchPayAction}>
-          <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white">
-            Synchroniser NotchPay
-          </button>
-        </form>
       </section>
 
       <section className="overflow-x-auto rounded-xl border border-navy-900/10 bg-white">

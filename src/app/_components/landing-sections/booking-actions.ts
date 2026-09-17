@@ -1,8 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createAppointment } from "@/application/services/appointment-service";
 import { notifyOrgAdmins } from "@/application/services/notification-service";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { AppError, ValidationError } from "@/lib/errors";
 
 const DURATION_OPTIONS_MINUTES = [30, 60, 90, 120];
@@ -31,15 +33,56 @@ function toUtcIso(date: string, time: string): string {
  * non encore validée par le commerçant, qui peut ensuite confirmer/
  * annuler depuis /dashboard/appointments comme pour tout rendez-vous.
  *
- * Redirige avec `?bookingSuccess=`/`?bookingError=` vers `/` — même
- * pattern success/error par redirect que le reste du projet
+ * Redirige avec `?bookingSuccess=`/`?bookingError=` — même pattern
+ * success/error par redirect que le reste du projet
  * (dashboard/appointments, dashboard/site), appliqué ici à une page
  * publique plutôt qu'authentifiée.
+ *
+ * VITRINE V2 : le formulaire existe désormais à DEUX endroits (la
+ * section « rendez-vous » de la page d'accueil et la page dédiée
+ * /rendez-vous). La redirection en dur vers `/` renvoyait donc le
+ * visiteur de /rendez-vous sur l'accueil après envoi, où le message de
+ * confirmation ne s'affichait que si la section booking y était activée —
+ * autrement dit, une demande envoyée sans aucun accusé de réception.
+ * `returnTo` corrige ça, en n'acceptant QUE des chemins internes connus
+ * (voir buildBookingRedirect) : un champ de formulaire est fourni par le
+ * client, il ne peut pas servir à fabriquer une redirection ouverte.
  */
+const ALLOWED_RETURN_PATHS = ["/", "/rendez-vous"] as const;
+
+function buildBookingRedirect(
+  returnTo: string,
+  feedback: { bookingSuccess?: string; bookingError?: string },
+): string {
+  const path = (ALLOWED_RETURN_PATHS as readonly string[]).includes(returnTo) ? returnTo : "/";
+  const params = new URLSearchParams();
+  if (feedback.bookingSuccess) params.set("bookingSuccess", feedback.bookingSuccess);
+  if (feedback.bookingError) params.set("bookingError", feedback.bookingError);
+  // L'ancre ne sert que sur l'accueil, où le formulaire est une section
+  // parmi d'autres ; sur /rendez-vous il occupe déjà le haut de page.
+  const hash = path === "/" ? "#booking" : "";
+  return `${path}?${params.toString()}${hash}`;
+}
+
 export async function requestAppointmentAction(formData: FormData): Promise<void> {
   const organizationId = String(formData.get("organizationId") ?? "");
+  const returnTo = String(formData.get("returnTo") ?? "/");
   if (!organizationId) {
-    redirect(`/?bookingError=${encodeURIComponent("Requête invalide.")}`);
+    redirect(buildBookingRedirect(returnTo, { bookingError: "Requête invalide." }));
+  }
+
+  // Même garde-fou que joinWaitlistAction (country-waitlist-actions.ts) :
+  // aucune session à limiter côté formulaire public, seule l'IP protège
+  // contre un flood — et chaque envoi réussi déclenche une notification
+  // au commerçant (notifyOrgAdmins ci-dessous), qu'un flux automatisé ne
+  // doit pas pouvoir saturer. Vérifié avant toute lecture de formulaire :
+  // une requête bloquée ne doit coûter ni validation ni écriture.
+  const headerList = await headers();
+  const forwardedFor = headerList.get("x-forwarded-for");
+  const clientIp = forwardedFor?.split(",")[0]?.trim() ?? "unknown";
+  const retryAfter = await checkRateLimit("booking", clientIp);
+  if (retryAfter !== null) {
+    redirect(buildBookingRedirect(returnTo, { bookingError: "Trop de tentatives — réessayez dans un instant." }));
   }
 
   try {
@@ -89,8 +132,8 @@ export async function requestAppointmentAction(formData: FormData): Promise<void
     });
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Impossible d'envoyer votre demande. Réessayez.";
-    redirect(`/?bookingError=${encodeURIComponent(message)}#booking`);
+    redirect(buildBookingRedirect(returnTo, { bookingError: message }));
   }
 
-  redirect(`/?bookingSuccess=${encodeURIComponent("Votre demande a bien été envoyée !")}#booking`);
+  redirect(buildBookingRedirect(returnTo, { bookingSuccess: "Votre demande a bien été envoyée !" }));
 }

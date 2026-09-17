@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listPlans, listPlanEntitlements, type PlanKey } from "@/application/services/plans-repository";
+import Image from "next/image";
 import { listPublicCountries, isoCodeToFlagEmoji } from "@/application/services/country-service";
 import { joinWaitlistAction } from "./country-waitlist-actions";
 import { MarketingMobileMenu } from "./marketing-mobile-menu";
@@ -29,20 +29,23 @@ import {
  * message central) ; aucun terme technique (API/webhook/provider/RLS/
  * Zernio/Supabase/multi-tenant) dans le texte visible.
  *
- * Les tarifs viennent de la DB (`plans`/`plan_entitlements`, déjà
- * pilotables depuis le Super Admin) — jamais des chiffres codés en dur
- * qui pourraient diverger de ce qui est réellement facturé (§54).
- *
  * Repasse design (réplique pixel par pixel d'une référence fournie par
  * le porteur du projet, sept. 2026) : seul l'habillage visuel change ici
  * (classes `mkt-*`, voir globals.css) — structure des sections, contenu
- * réel et navigation par ancre (#fonctionnalites/#comment-ca-marche/
- * #tarifs/#faq) strictement identiques à avant. La référence montrait
- * une nav "Ressources"/"À propos" et un aperçu de tableau de bord flottant
- * — la nav garde les ancres réelles de cette page plutôt que des liens
- * qui n'existent pas, et l'aperçu ci-dessous est une illustration
- * décorative (aucune donnée réelle) comme sur n'importe quelle landing
- * SaaS, jamais présentée comme un vrai relevé de compte.
+ * réel et navigation par ancre (#fonctionnalites/#comment-ca-marche/#faq)
+ * strictement identiques à avant. La référence montrait une nav
+ * "Ressources"/"À propos" et un aperçu de tableau de bord flottant — la
+ * nav garde les ancres réelles de cette page plutôt que des liens qui
+ * n'existent pas, et l'aperçu ci-dessous est une illustration décorative
+ * (donnée de démonstration, aucune vraie entreprise) comme sur n'importe
+ * quelle landing SaaS, jamais présentée comme un vrai relevé de compte.
+ *
+ * Section tarifs retirée d'ici (sept. 2026) : les offres réelles vivent
+ * désormais sur leur propre page (`/tarifs`, DB-driven, indépendante de
+ * ce fichier) et le lien "Tarifs" du header/footer/menu mobile y pointe
+ * déjà directement — garder une section tarifs dupliquée ici aurait
+ * signifié deux sources pour le même prix, avec le risque qu'elles
+ * divergent avec le temps.
  */
 
 const FEATURES = [
@@ -149,78 +152,34 @@ const TESTIMONIALS = [
   },
 ];
 
-const PLAN_ENTITLEMENT_LABELS: Record<string, (value: number) => string | null> = {
-  whatsapp_groups: (v) => (v === -1 ? "Groupes WhatsApp illimités" : `${v} groupe${v > 1 ? "s" : ""} WhatsApp`),
-  broadcast_contacts: (v) => `${v} contacts par diffusion`,
-  ai_credits: (v) => `${v} réponses assistant / mois`,
-  social_accounts: (v) => (v > 0 ? `${v} compte${v > 1 ? "s" : ""} réseaux sociaux` : null),
-};
-const PLAN_ENTITLEMENT_ORDER = ["whatsapp_groups", "broadcast_contacts", "ai_credits", "social_accounts"];
-
-async function getPricingPlans() {
-  const plans = await listPlans();
-  return Promise.all(
-    plans.map(async (plan) => {
-      const entitlements = await listPlanEntitlements(plan.key as PlanKey);
-      const byKey = new Map(entitlements.map((e) => [e.entitlementKey, e.limitValue]));
-      const highlights = PLAN_ENTITLEMENT_ORDER.map((key) => {
-        const value = byKey.get(key);
-        if (value === undefined) return null;
-        return PLAN_ENTITLEMENT_LABELS[key]?.(value) ?? null;
-      }).filter((h): h is string => Boolean(h));
-      return { ...plan, highlights };
-    }),
-  );
-}
-
 /**
  * Aperçu décoratif façon capture d'écran de tableau de bord, comme sur la
- * quasi-totalité des landings SaaS. AUCUNE donnée réelle : chiffres et
- * répartition inventés pour l'illustration, jamais présentés comme un
- * vrai relevé (à la différence du reste de la page, entièrement branché
- * sur de vraies données via `getPricingPlans()`).
+ * quasi-totalité des landings SaaS. Donnée de démonstration ("StyleHub
+ * Boutique"), aucune vraie entreprise ni vrai relevé de compte — à la
+ * différence du reste de la page, qui reste branché sur de vraies
+ * données (pays, offres sur `/tarifs`, etc).
  */
 function HeroPreview() {
-  const bars = [38, 55, 44, 68, 52, 74, 60];
   return (
-    <div className="mkt-card mx-auto max-w-3xl !p-3 sm:!p-4">
-      <div className="flex items-center gap-1.5 px-2 pb-3 pt-1">
-        <span className="h-2.5 w-2.5 rounded-full bg-navy-900/10" />
-        <span className="h-2.5 w-2.5 rounded-full bg-navy-900/10" />
-        <span className="h-2.5 w-2.5 rounded-full bg-navy-900/10" />
+    <div className="relative mx-auto max-w-3xl">
+      <div className="mkt-dashboard-frame relative overflow-hidden rounded-[1.35rem] border border-white/80 bg-white shadow-[0_30px_80px_-30px_rgba(14,17,48,0.38)]">
+        <div className="absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b from-white/90 to-transparent" />
+        <Image
+          src="/images/landing-dashboard-reference.png"
+          alt="Aperçu du tableau de bord SME-OS"
+          width={826}
+          height={1024}
+          priority
+          className="w-full"
+        />
       </div>
-      <div className="grid grid-cols-2 gap-3 rounded-xl bg-[#F7F6FD] p-3 sm:grid-cols-4 sm:p-5">
-        {[
-          { label: "Ventes du mois", value: "—" },
-          { label: "Commandes", value: "—" },
-          { label: "Nouveaux clients", value: "—" },
-          { label: "Panier moyen", value: "—" },
-        ].map((chip) => (
-          <div key={chip.label} className="rounded-xl bg-white p-3 shadow-[0_1px_2px_rgba(16,23,49,0.05)]">
-            <p className="text-[11px] text-slate-400">{chip.label}</p>
-            <p className="mt-1 font-jakarta text-base font-bold text-navy-900">{chip.value}</p>
-          </div>
-        ))}
-        <div className="col-span-2 rounded-xl bg-white p-4 shadow-[0_1px_2px_rgba(16,23,49,0.05)] sm:col-span-3">
-          <p className="text-[11px] text-slate-400">Évolution</p>
-          <div className="mt-3 flex h-24 items-end gap-2">
-            {bars.map((h, i) => (
-              <div key={i} className="flex-1 rounded-t-md bg-gradient-to-t from-violet-600 to-violet-300" style={{ height: `${h}%` }} />
-            ))}
-          </div>
-        </div>
-        <div className="rounded-xl bg-white p-4 shadow-[0_1px_2px_rgba(16,23,49,0.05)]">
-          <p className="text-[11px] text-slate-400">Répartition</p>
-          <div className="mt-3 flex items-center justify-center">
-            <div
-              className="relative h-16 w-16 rounded-full"
-              style={{ background: "conic-gradient(#5B21E5 0% 40%, #8F6AEA 40% 68%, #B29CF0 68% 88%, #E4DFFB 88% 100%)" }}
-            >
-              <div className="absolute inset-[5px] rounded-full bg-white" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <Image
+        src="/images/landing-mobile-reference.png"
+        alt="Aperçu mobile SME-OS"
+        width={135}
+        height={260}
+        className="absolute -bottom-7 -left-4 hidden w-[100px] rounded-xl border border-navy-900/10 shadow-[0_18px_35px_-16px_rgba(14,17,48,0.5)] sm:block md:-left-10 md:w-[115px]"
+      />
     </div>
   );
 }
@@ -230,8 +189,6 @@ export async function MarketingLanding({
 }: {
   waitlistFeedback?: { success?: string; error?: string };
 } = {}) {
-  const plans = await getPricingPlans();
-  const popularPlanKey = plans.find((p) => p.key === "business")?.key ?? plans[Math.floor(plans.length / 2)]?.key;
   // Country Engine (section 22) : jamais une liste écrite en dur — pilotée
   // par le Super Admin (/admin/countries), synchronisée depuis NotchPay.
   const countries = await listPublicCountries();
@@ -363,58 +320,6 @@ export async function MarketingLanding({
               <p className="mt-1.5 text-sm text-navy-900/60">{feature.description}</p>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* TARIFS */}
-      <section id="tarifs" className="border-y border-navy-900/[0.06] bg-white py-16">
-        <div className="mkt-container max-w-5xl">
-          <h2 className="mkt-section-title text-center">Des offres simples</h2>
-          <p className="mx-auto mt-3 max-w-xl text-center text-navy-900/60">
-            Commencez gratuitement. Changez d&apos;offre à tout moment selon la croissance de votre activité.
-          </p>
-          {plans.length === 0 ? (
-            <p className="mt-10 text-center text-sm text-slate-500">Nos offres seront bientôt disponibles ici.</p>
-          ) : (
-            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-              {plans.map((plan) => {
-                const isPopular = plan.key === popularPlanKey;
-                return (
-                  <div
-                    key={plan.key}
-                    className={`relative flex flex-col rounded-2xl border bg-white p-6 ${
-                      isPopular ? "border-violet-600/25 shadow-[0_12px_32px_-12px_rgba(91,33,229,0.28)]" : "border-navy-900/[0.06]"
-                    }`}
-                  >
-                    {isPopular && (
-                      <span className="absolute -top-3 right-6 rounded-full bg-gradient-to-r from-magenta-600 to-violet-600 px-3 py-1 text-xs font-semibold text-white">
-                        Populaire
-                      </span>
-                    )}
-                    <h3 className="font-jakarta text-lg font-semibold text-navy-900">{plan.name}</h3>
-                    <p className="mt-2 font-jakarta text-2xl font-bold text-navy-900">
-                      {plan.priceFcfa.toLocaleString("fr-FR")}
-                      <span className="text-sm font-normal text-navy-900/50"> FCFA / mois</span>
-                    </p>
-                    {plan.description && <p className="mt-2 text-sm text-navy-900/60">{plan.description}</p>}
-                    {plan.highlights.length > 0 && (
-                      <ul className="mt-4 flex flex-col gap-2 text-sm">
-                        {plan.highlights.map((h) => (
-                          <li key={h} className="flex items-start gap-2 text-navy-900/70">
-                            <IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                            {h}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <Link href="/signup" className={isPopular ? "mkt-btn-primary mt-6" : "mkt-btn-secondary mt-6"}>
-                      Commencer
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </section>
 

@@ -18,16 +18,10 @@ vi.mock("./admin-organizations-service", () => ({
 const mockGetCountries = vi.fn();
 const mockGetCountry = vi.fn();
 const mockGetChannels = vi.fn();
-const mockSyncAllResources = vi.fn();
-const mockSyncChannels = vi.fn();
-const mockGetSyncStatus = vi.fn();
 vi.mock("./notchpay-resources-service", () => ({
   getCountries: (...args: unknown[]) => mockGetCountries(...args),
   getCountry: (...args: unknown[]) => mockGetCountry(...args),
   getChannels: (...args: unknown[]) => mockGetChannels(...args),
-  syncAllResources: (...args: unknown[]) => mockSyncAllResources(...args),
-  syncChannels: (...args: unknown[]) => mockSyncChannels(...args),
-  getSyncStatus: (...args: unknown[]) => mockGetSyncStatus(...args),
 }));
 
 const mockListPlanPricesForCountry = vi.fn();
@@ -41,8 +35,6 @@ import {
   getCountryDetailForAdmin,
   setCountryLaunchStatus,
   upsertCountryPrice,
-  triggerManualSync,
-  triggerCountryChannelsSync,
 } from "./admin-countries-service";
 import { ValidationError, NotFoundError } from "@/lib/errors";
 
@@ -95,7 +87,6 @@ describe("getCountriesOverviewForAdmin", () => {
     ]);
     mockGetChannels.mockResolvedValue([{ isAvailable: true }]);
     mockListPlanPricesForCountry.mockResolvedValue(COMPLETE_PRICES);
-    mockGetSyncStatus.mockResolvedValue({ lastSuccessfulSyncAt: "2026-09-06T03:00:00Z", lastFailedSyncAt: null, lastError: null, isHealthy: true });
 
     const overview = await getCountriesOverviewForAdmin();
 
@@ -262,46 +253,5 @@ describe("upsertCountryPrice", () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ amount: 0, currency_code: "XAF" }));
-  });
-});
-
-describe("triggerManualSync", () => {
-  it("délègue à syncAllResources et audite COUNTRY_SYNCED avec un résumé", async () => {
-    mockSyncAllResources.mockResolvedValue({
-      countries: { status: "success", itemsSynced: 5 },
-      channels: [
-        { status: "success", itemsSynced: 2 },
-        { status: "failed", itemsSynced: 0, errorMessage: "timeout" },
-      ],
-    });
-
-    const result = await triggerManualSync("admin-1");
-
-    expect(result.countries.itemsSynced).toBe(5);
-    expect(mockWriteAdminAuditLog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "COUNTRY_SYNCED",
-        actorUserId: "admin-1",
-        afterState: expect.objectContaining({ channelSyncsRun: 2, channelSyncFailures: 1 }),
-      }),
-    );
-  });
-});
-
-describe("triggerCountryChannelsSync", () => {
-  it("lève NotFoundError pour un pays inconnu", async () => {
-    mockGetCountry.mockResolvedValue(null);
-    await expect(triggerCountryChannelsSync("ZZ", "admin-1")).rejects.toBeInstanceOf(NotFoundError);
-  });
-
-  it("resynchronise UNIQUEMENT les canaux de ce pays et audite COUNTRY_CHANNEL_UPDATED", async () => {
-    mockGetCountry.mockResolvedValue(makeCountry({ isoCode: "CI" }));
-    mockSyncChannels.mockResolvedValue({ status: "success", itemsSynced: 3 });
-
-    const result = await triggerCountryChannelsSync("ci", "admin-1");
-
-    expect(mockSyncChannels).toHaveBeenCalledWith("CI");
-    expect(result.itemsSynced).toBe(3);
-    expect(mockWriteAdminAuditLog).toHaveBeenCalledWith(expect.objectContaining({ action: "COUNTRY_CHANNEL_UPDATED" }));
   });
 });

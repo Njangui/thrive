@@ -902,3 +902,445 @@ export async function getProductForEdit(organizationId: string, productId: strin
     seoDescription: data.seo_description,
   };
 }
+
+// ============================================================
+// Vitrine V2 — lecture catalogue enrichie
+// ============================================================
+//
+// Pourquoi une famille de fonctions distincte de
+// `listActiveProductsForStorefront` plutôt qu'une extension en place :
+// cette dernière est aussi consommée par `sitemap.ts`, par
+// `/dashboard/groups` et par la diffusion WhatsApp, qui n'ont besoin que
+// du strict minimum (id/nom/prix/photo). Leur faire payer les requêtes
+// supplémentaires de badges/ventes serait une régression de performance
+// sur des chemins qui n'affichent aucune vitrine. `StorefrontProduct`
+// ÉTEND `CatalogProductSummary` : un `StorefrontProduct` reste utilisable
+// partout où un `CatalogProductSummary` est attendu.
+
+/**
+ * Badges affichés sur une carte produit. TOUS dérivés de données réelles :
+ *  - `promo`       : compare_at_price > unit_price (même définition que la page produit)
+ *  - `new`         : created_at dans les 30 derniers jours
+ *  - `bestseller`  : figure dans le top des ventes réelles (order_items)
+ *  - `featured`    : épinglé manuellement par le commerçant (products.is_featured)
+ *  - `out_of_stock`: status = 'out_of_stock'
+ * Aucun badge décoratif : rien ne s'affiche qui ne corresponde pas à un
+ * fait vérifiable dans la base du tenant.
+ */
+export type ProductBadge = "promo" | "new" | "bestseller" | "featured" | "out_of_stock";
+
+export interface StorefrontProduct extends CatalogProductSummary {
+  compareAtPrice: number | null;
+  /** Remise arrondie à l'entier inférieur, `null` hors promotion. Calculée ici pour que l'affichage n'ait aucune règle métier. */
+  discountPercent: number | null;
+  createdAt: string;
+  isFeatured: boolean;
+  status: string;
+  badges: ProductBadge[];
+}
+
+export type StorefrontProductSort = "featured" | "recent" | "price_asc" | "price_desc" | "name";
+
+export interface ListStorefrontProductsOptions {
+  limit?: number;
+  offset?: number;
+  categoryId?: string;
+  /** Recherche plein texte simple sur le nom (ILIKE) — voir `searchProductsByName` pour la variante utilisée par l'IA conversationnelle. */
+  search?: string;
+  sort?: StorefrontProductSort;
+  /** Ne retourne que les produits en promotion réelle (compare_at_price > unit_price). */
+  promotionsOnly?: boolean;
+  /** Ne retourne que les produits épinglés (products.is_featured). */
+  featuredOnly?: boolean;
+  /**
+   * Calcul des badges « best-seller » (une requête supplémentaire sur
+   * order_items). Désactivable pour les écrans qui n'affichent pas de
+   * badge — par défaut activé, la vitrine étant le seul appelant.
+   */
+  withBadges?: boolean;
+  /** Exclut un produit du résultat — utilisé par « produits similaires » sur la fiche produit. */
+  excludeProductId?: string;
+}
+
+const NEW_PRODUCT_WINDOW_DAYS = 30;
+
+/** Nombre de produits considérés comme « best-sellers » — un badge sur la moitié du catalogue ne signifierait plus rien. */
+const BESTSELLER_POOL_SIZE = 5;
+
+/**
+ * Identifiants des produits les plus vendus, par quantité réellement
+ * facturée (`order_items.quantity`). PostgREST n'expose pas d'agrégat
+ * `group by` via le query builder fluide ; l'agrégation se fait donc en
+ * mémoire, sur les lignes de commande les plus récentes uniquement
+ * (`ORDER BY created_at DESC LIMIT 500`) — un best-seller est par nature
+ * une notion récente, et cette borne garantit un coût constant quelle que
+ * soit l'ancienneté du tenant.
+ */
+export async function getBestSellerProductIds(
+  organizationId: string,
+  poolSize = BESTSELLER_POOL_SIZE,
+): Promise<Set<string>> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("order_items")
+    .select("product_id, quantity, created_at")
+    .eq("organization_id", organizationId)
+    .not("product_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    // Jamais bloquant : un badge manquant ne doit pas empêcher une
+    // vitrine de s'afficher (même principe que getLandingConfig sur un
+    // jsonb corrompu).
+    console.error(`getBestSellerProductIds(${organizationId}) error:`, error.message);
+    return new Set();
+  }
+
+  const quantityByProduct = new Map<string, number>();
+  for (const item of data ?? []) {
+    if (!item.product_id) continue;
+    quantityByProduct.set(item.product_id, (quantityByProduct.get(item.product_id) ?? 0) + Number(item.quantity ?? 0));
+  }
+
+  return new Set(
+    [...quantityByProduct.entries()]
+      .filter(([, quantity]) => quantity > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, poolSize)
+      .map(([productId]) => productId),
+  );
+}
+
+function computeProductBadges(
+  input: { createdAt: string; unitPrice: number; compareAtPrice: number | null; isFeatured: boolean; status: string },
+  bestSellerIds: Set<string>,
+  productId: string,
+): ProductBadge[] {
+  const badges: ProductBadge[] = [];
+
+  if (input.status === "out_of_stock") badges.push("out_of_stock");
+  if (input.compareAtPrice != null && input.compareAtPrice > input.unitPrice) badges.push("promo");
+
+  const createdAtMs = Date.parse(input.createdAt);
+  if (!Number.isNaN(createdAtMs) && Date.now() - createdAtMs < NEW_PRODUCT_WINDOW_DAYS * 24 * 60 * 60 * 1000) {
+    badges.push("new");
+  }
+
+  if (bestSellerIds.has(productId)) badges.push("bestseller");
+  // `featured` n'est ajouté que s'il apporte une information que les
+  // autres badges ne portent pas déjà : un produit épinglé ET en promo
+  // afficherait sinon deux pastilles concurrentes au même endroit.
+  if (input.isFeatured && badges.length === 0) badges.push("featured");
+
+  return badges;
+}
+
+function discountPercentOf(unitPrice: number, compareAtPrice: number | null): number | null {
+  if (compareAtPrice == null || compareAtPrice <= unitPrice || compareAtPrice <= 0) return null;
+  return Math.floor(((compareAtPrice - unitPrice) / compareAtPrice) * 100);
+}
+
+const STOREFRONT_PRODUCT_COLUMNS =
+  "id, name, slug, unit_price, compare_at_price, description, status, is_featured, created_at, categories(name), product_images(url, position)";
+
+/**
+ * Lecture catalogue de la vitrine, avec filtres, tri, recherche et
+ * badges. Les produits `out_of_stock` sont VOLONTAIREMENT inclus (le
+ * projet interdit explicitement de faire disparaître un produit épuisé,
+ * voir 0008_catalog_faq_business.sql) : ils sont retournés avec le badge
+ * correspondant, à charge de l'affichage de les présenter comme
+ * indisponibles plutôt que de les masquer.
+ *
+ * Le tri « promotion réelle » (compare_at_price > unit_price) ne peut pas
+ * s'exprimer côté PostgREST — comparaison de deux colonnes, limitation
+ * déjà documentée dans `listPromotedProductsForStorefront`. Il est donc
+ * appliqué en mémoire après un sur-échantillonnage, exactement comme là-bas.
+ */
+export async function listStorefrontProducts(
+  organizationId: string,
+  options: ListStorefrontProductsOptions = {},
+): Promise<StorefrontProduct[]> {
+  const supabase = getSupabaseServiceClient();
+  const sort = options.sort ?? "featured";
+  const needsInMemoryFilter = Boolean(options.promotionsOnly);
+
+  let query = supabase
+    .from("products")
+    .select(STOREFRONT_PRODUCT_COLUMNS)
+    .eq("organization_id", organizationId)
+    .in("status", ["active", "out_of_stock"]);
+
+  if (options.categoryId) query = query.eq("category_id", options.categoryId);
+  if (options.featuredOnly) query = query.eq("is_featured", true);
+  if (options.promotionsOnly) query = query.not("compare_at_price", "is", null);
+  if (options.excludeProductId) query = query.neq("id", options.excludeProductId);
+  if (options.search?.trim()) {
+    // `%` et `_` sont les jokers de LIKE : sans échappement, une
+    // recherche « 100% coton » se comporterait comme un joker et
+    // remonterait n'importe quoi. `\` doit être échappé en premier.
+    const escaped = options.search.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+    query = query.ilike("name", `%${escaped}%`);
+  }
+
+  switch (sort) {
+    case "recent":
+      query = query.order("created_at", { ascending: false });
+      break;
+    case "price_asc":
+      query = query.order("unit_price", { ascending: true });
+      break;
+    case "price_desc":
+      query = query.order("unit_price", { ascending: false });
+      break;
+    case "name":
+      query = query.order("name", { ascending: true });
+      break;
+    case "featured":
+    default:
+      // Épinglés d'abord, puis les plus récents — l'ordre de la page
+      // d'accueil. `nullsFirst: false` évite qu'un created_at nul (jeu de
+      // données importé) ne remonte en tête.
+      query = query.order("is_featured", { ascending: false }).order("created_at", { ascending: false, nullsFirst: false });
+      break;
+  }
+
+  if (options.limit !== undefined && !needsInMemoryFilter) {
+    const from = options.offset ?? 0;
+    query = query.range(from, from + options.limit - 1);
+  } else if (needsInMemoryFilter && options.limit !== undefined) {
+    query = query.limit(options.limit * 4);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Erreur lecture vitrine catalogue : ${error.message}`);
+
+  const bestSellerIds =
+    options.withBadges === false ? new Set<string>() : await getBestSellerProductIds(organizationId);
+
+  let products: StorefrontProduct[] = (data ?? []).map((p) => {
+    const raw = p as unknown as {
+      categories?: { name?: string };
+      product_images?: { url: string; position: number }[];
+    };
+    const unitPrice = Number(p.unit_price);
+    const compareAtPrice = p.compare_at_price == null ? null : Number(p.compare_at_price);
+    return {
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      unitPrice,
+      compareAtPrice,
+      discountPercent: discountPercentOf(unitPrice, compareAtPrice),
+      description: p.description,
+      categoryName: raw.categories?.name ?? null,
+      imageUrl: resolvePrimaryImageUrl(raw.product_images),
+      createdAt: p.created_at,
+      isFeatured: Boolean(p.is_featured),
+      status: p.status,
+      badges: computeProductBadges(
+        {
+          createdAt: p.created_at,
+          unitPrice,
+          compareAtPrice,
+          isFeatured: Boolean(p.is_featured),
+          status: p.status,
+        },
+        bestSellerIds,
+        p.id,
+      ),
+    };
+  });
+
+  if (options.promotionsOnly) {
+    products = products.filter((product) => product.compareAtPrice != null && product.compareAtPrice > product.unitPrice);
+    if (options.limit !== undefined) {
+      const from = options.offset ?? 0;
+      products = products.slice(from, from + options.limit);
+    }
+  }
+
+  return products;
+}
+
+/** Total correspondant aux mêmes filtres que `listStorefrontProducts`, pour la pagination du catalogue public. */
+export async function countStorefrontProducts(
+  organizationId: string,
+  options: Pick<ListStorefrontProductsOptions, "categoryId" | "search" | "promotionsOnly" | "featuredOnly"> = {},
+): Promise<number> {
+  const supabase = getSupabaseServiceClient();
+
+  // Cas « promotions » : le filtre réel (deux colonnes comparées) n'étant
+  // pas exprimable côté serveur, le comptage exact passe par la lecture
+  // des seules colonnes de prix, pas par un `count` PostgREST qui
+  // compterait aussi les compare_at_price ≤ unit_price (saisie erronée
+  // fréquente) et afficherait une pagination fantôme.
+  if (options.promotionsOnly) {
+    const { data, error } = await supabase
+      .from("products")
+      .select("unit_price, compare_at_price")
+      .eq("organization_id", organizationId)
+      .in("status", ["active", "out_of_stock"])
+      .not("compare_at_price", "is", null);
+    if (error) throw new Error(`Erreur comptage promotions : ${error.message}`);
+    return (data ?? []).filter((p) => Number(p.compare_at_price) > Number(p.unit_price)).length;
+  }
+
+  let query = supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .in("status", ["active", "out_of_stock"]);
+
+  if (options.categoryId) query = query.eq("category_id", options.categoryId);
+  if (options.featuredOnly) query = query.eq("is_featured", true);
+  if (options.search?.trim()) {
+    const escaped = options.search.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+    query = query.ilike("name", `%${escaped}%`);
+  }
+
+  const { count, error } = await query;
+  if (error) throw new Error(`Erreur comptage vitrine catalogue : ${error.message}`);
+  return count ?? 0;
+}
+
+export interface StorefrontCategory {
+  id: string;
+  name: string;
+  slug: string;
+  productCount: number;
+  /**
+   * Vignette. `categories.image_url` si le commerçant en a défini une,
+   * sinon la photo principale d'un produit RÉEL de la catégorie. Jamais
+   * d'illustration générique : une vignette qui ne montre pas ce que le
+   * client va trouver derrière est un mensonge visuel.
+   */
+  imageUrl: string | null;
+  position: number;
+}
+
+/**
+ * Catégories ayant au moins un produit visible (actif ou en rupture),
+ * triées par `position` puis par nom. Remplace
+ * `listCategoriesWithProductCounts` (landing-config-service.ts) pour
+ * toute la vitrine : même contrat, plus la vignette et l'ordre choisi par
+ * le commerçant.
+ *
+ * Trois requêtes plutôt qu'un agrégat embarqué PostgREST, cohérent avec
+ * le reste du projet : catégories, produits (pour le comptage), photos
+ * (pour le repli de vignette). Les deux dernières sont parallélisées.
+ */
+export async function listStorefrontCategories(organizationId: string): Promise<StorefrontCategory[]> {
+  const supabase = getSupabaseServiceClient();
+
+  const [{ data: categories, error: categoriesError }, { data: products, error: productsError }] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("id, name, slug, image_url, position")
+      .eq("organization_id", organizationId)
+      .order("position")
+      .order("name"),
+    supabase
+      .from("products")
+      .select("id, category_id")
+      .eq("organization_id", organizationId)
+      .in("status", ["active", "out_of_stock"]),
+  ]);
+
+  if (categoriesError) throw new Error(`Erreur lecture catégories : ${categoriesError.message}`);
+  if (productsError) throw new Error(`Erreur comptage produits par catégorie : ${productsError.message}`);
+
+  const counts = new Map<string, number>();
+  const productIdsByCategory = new Map<string, string[]>();
+  for (const product of products ?? []) {
+    if (!product.category_id) continue;
+    counts.set(product.category_id, (counts.get(product.category_id) ?? 0) + 1);
+    const bucket = productIdsByCategory.get(product.category_id);
+    if (bucket) bucket.push(product.id);
+    else productIdsByCategory.set(product.category_id, [product.id]);
+  }
+
+  // Repli de vignette : une seule requête pour toutes les catégories qui
+  // n'ont pas d'image propre, plutôt qu'une requête par catégorie.
+  const categoriesNeedingFallback = (categories ?? []).filter(
+    (category) => !category.image_url && (counts.get(category.id) ?? 0) > 0,
+  );
+  const candidateProductIds = categoriesNeedingFallback.flatMap(
+    (category) => productIdsByCategory.get(category.id)?.slice(0, 4) ?? [],
+  );
+
+  const imageByProductId = new Map<string, string>();
+  if (candidateProductIds.length > 0) {
+    const { data: images, error: imagesError } = await supabase
+      .from("product_images")
+      .select("product_id, url, position")
+      .eq("organization_id", organizationId)
+      .in("product_id", candidateProductIds)
+      .order("position");
+    if (imagesError) throw new Error(`Erreur lecture vignettes de catégorie : ${imagesError.message}`);
+    for (const image of images ?? []) {
+      if (!imageByProductId.has(image.product_id)) imageByProductId.set(image.product_id, image.url);
+    }
+  }
+
+  return (categories ?? [])
+    .map((category) => {
+      const productCount = counts.get(category.id) ?? 0;
+      const fallbackImage =
+        category.image_url ??
+        (productIdsByCategory.get(category.id) ?? [])
+          .map((productId) => imageByProductId.get(productId))
+          .find((url): url is string => Boolean(url)) ??
+        null;
+
+      return {
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        productCount,
+        imageUrl: fallbackImage,
+        position: category.position ?? 0,
+      };
+    })
+    .filter((category) => category.productCount > 0);
+}
+
+/** Variante mono-catégorie de `listStorefrontCategories`, pour la page /categories/[slug]. */
+export async function getStorefrontCategoryBySlug(
+  organizationId: string,
+  slug: string,
+): Promise<StorefrontCategory | null> {
+  const categories = await listStorefrontCategories(organizationId);
+  return categories.find((category) => category.slug === slug) ?? null;
+}
+
+/** Bornes de prix du catalogue visible — alimente le filtre de prix du catalogue public sans valeurs codées en dur. */
+export async function getStorefrontPriceRange(
+  organizationId: string,
+): Promise<{ min: number; max: number } | null> {
+  const supabase = getSupabaseServiceClient();
+  const [{ data: cheapest }, { data: priciest }] = await Promise.all([
+    supabase
+      .from("products")
+      .select("unit_price")
+      .eq("organization_id", organizationId)
+      .in("status", ["active", "out_of_stock"])
+      .order("unit_price", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("products")
+      .select("unit_price")
+      .eq("organization_id", organizationId)
+      .in("status", ["active", "out_of_stock"])
+      .order("unit_price", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (!cheapest || !priciest) return null;
+  const min = Number(cheapest.unit_price);
+  const max = Number(priciest.unit_price);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= 0) return null;
+  return { min, max };
+}

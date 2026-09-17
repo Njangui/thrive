@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 
@@ -69,7 +70,7 @@ interface RawOrganizationRow {
  * dépendre d'une syntaxe de filtre sur ressource imbriquée non testée
  * contre une vraie instance dans cet environnement.
  */
-export async function resolveRequestTenant(): Promise<TenantContext | null> {
+export const resolveRequestTenant = cache(async function resolveRequestTenant(): Promise<TenantContext | null> {
   const headerList = await headers();
   const slug = headerList.get("x-tenant-slug");
   const customDomain = headerList.get("x-tenant-custom-domain");
@@ -117,7 +118,7 @@ export async function resolveRequestTenant(): Promise<TenantContext | null> {
     seoDescription: org.seo_description,
     seoOgImageUrl: org.seo_og_image_url,
   };
-}
+});
 
 /**
  * Origine (protocole + host) de la requête courante — Lot H, Partie 1.
@@ -131,16 +132,24 @@ export async function resolveRequestTenant(): Promise<TenantContext | null> {
  * qu'un sitemap.xml ou une URL canonique pointent vers le bon domaine.
  * `https` par défaut (tous les domaines tenant en production le sont),
  * `http` uniquement en local (hostname commençant par localhost/127.0.0.1).
+ *
+ * MÉMOÏSATION (vitrine V2) : `resolveRequestTenant` et
+ * `resolveRequestOrigin` sont enveloppées dans `cache()` de React. Avec
+ * une vitrine devenue multi-pages, chaque requête traverse désormais
+ * `generateMetadata`, le layout du site ET la page elle-même — soit trois
+ * résolutions de tenant identiques (donc trois requêtes Supabase) là où
+ * une seule est nécessaire. `cache()` déduplique par requête HTTP, sans
+ * jamais partager entre deux visiteurs ni entre deux tenants : la
+ * mémoïsation est scopée au rendu en cours.
  */
-export async function resolveRequestOrigin(): Promise<string> {
+export const resolveRequestOrigin = cache(async function resolveRequestOrigin(): Promise<string> {
   const headerList = await headers();
   const host = headerList.get("host") ?? "localhost:3000";
   const protocol = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
   return `${protocol}://${host}`;
-}
+});
 
-/** Construit un lien wa.me avec message pré-rempli (section 12 : CTA WhatsApp). */
-export function buildWhatsAppLink(whatsappNumber: string, prefilledText: string): string {
-  const digitsOnly = whatsappNumber.replace(/[^\d]/g, "");
-  return `https://wa.me/${digitsOnly}?text=${encodeURIComponent(prefilledText)}`;
-}
+// `buildWhatsAppLink` vit désormais dans src/lib/whatsapp.ts (fonction
+// pure, sans dépendance à next/headers ni à React `cache()`) — réexportée
+// ici pour ne casser aucun des imports existants depuis ce fichier.
+export { buildWhatsAppLink } from "@/lib/whatsapp";

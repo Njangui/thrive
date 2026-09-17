@@ -1,13 +1,31 @@
-import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tenant";
+import Link from "next/link";
+import type { StorefrontSite } from "@/application/services/storefront-service";
+import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
+import { sectionHeading } from "@/application/config/storefront-blueprint";
+import { Section, SectionHeading } from "../storefront/storefront-ui";
 
-/** Rend `null` sans description — jamais un encart vide (voir mandat de vague, pas de rendu décoratif). */
-export function AboutSection({ tenant }: { tenant: TenantContext }) {
+/** Rend `null` sans description — jamais un encart vide. */
+export function AboutSection({ site, compact = false }: { site: StorefrontSite; compact?: boolean }) {
+  const { tenant, blueprint } = site;
   if (!tenant.description) return null;
 
+  const text = compact ? tenant.description.slice(0, 420) : tenant.description;
+  const truncated = compact && tenant.description.length > 420;
+
   return (
-    <section className="flex flex-col gap-3 border-l-2 border-brand pl-5">
-      <h2 className="font-display text-lg font-semibold">À propos de {tenant.name}</h2>
-      <p className="whitespace-pre-line text-muted">{tenant.description}</p>
-    </section>
+    <Section tone="muted">
+      <SectionHeading title={sectionHeading(blueprint, "about", `À propos de ${tenant.name}`)} />
+      <div className="max-w-3xl">
+        <p className="whitespace-pre-line text-base leading-8 text-black/70">
+          {text}
+          {truncated ? "…" : ""}
+        </p>
+        {truncated && (
+          <Link href={STOREFRONT_PATHS.about} className="mt-4 inline-flex text-sm font-semibold text-brand hover:underline">
+            En savoir plus
+          </Link>
+        )}
+      </div>
+    </Section>
   );
 }

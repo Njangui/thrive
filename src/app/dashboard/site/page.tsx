@@ -5,19 +5,59 @@ import { resolveImageFromFormData } from "@/application/services/media-service";
 import { listActiveTldPricing, listMyDomainRequests, requestDomain } from "@/application/services/domain-service";
 import {
   getLandingConfig,
+  getOrganizationIndustry,
   updateLandingConfig,
   listTestimonials,
   createTestimonial,
   deleteTestimonial,
 } from "@/application/services/landing-config-service";
-import { LANDING_SECTION_LABELS, LANDING_PRESET_KEYS, buildDefaultSections } from "@/application/config/landing-presets";
-import { FONT_CHOICES, type FontChoice } from "@/domain/entities/landing";
+import { LANDING_SECTION_LABELS, LANDING_PRESET_KEYS, LANDING_PRESET_LABELS, buildDefaultSections } from "@/application/config/landing-presets";
+import { getStorefrontBlueprint } from "@/application/config/storefront-blueprint";
+import {
+  FONT_CHOICES,
+  HERO_LAYOUTS,
+  HERO_LAYOUT_LABELS,
+  HIGHLIGHT_ICON_KEYS,
+  PAYMENT_METHOD_KEYS,
+  PAYMENT_METHOD_LABELS,
+  LandingHighlightsSchema,
+  type FontChoice,
+  type HeroLayout,
+  type HighlightIconKey,
+  type LandingHighlight,
+  type PaymentMethodKey,
+} from "@/domain/entities/landing";
 import { FONT_CHOICE_LABELS } from "@/app/fonts";
 import { AppError, ValidationError } from "@/lib/errors";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { HighlightIcon } from "@/app/_components/storefront/storefront-icons";
 import { DomainSearchField } from "./domain-search-field";
 import { env } from "@/lib/env";
+
+/** Libellés FR des icônes de la bande de confiance, pour le sélecteur du formulaire (voir updateHighlightsAction plus bas). Purement de l'affichage dashboard — la clé technique reste celle de storefront-blueprint.ts. */
+const HIGHLIGHT_ICON_LABELS: Record<HighlightIconKey, string> = {
+  truck: "Livraison",
+  wallet: "Paiement",
+  shield: "Garantie / sécurité",
+  headset: "Support client",
+  clock: "Horaires",
+  pin: "Localisation",
+  sparkles: "Qualité / soin",
+  star: "Avis / satisfaction",
+  chef: "Cuisine / préparation",
+  leaf: "Fraîcheur / naturel",
+  scissors: "Coiffure / beauté",
+  calendar: "Rendez-vous",
+  briefcase: "Professionnalisme",
+  handshake: "Confiance / accompagnement",
+  key: "Immobilier / accès",
+  ruler: "Détails / mesures",
+  whatsapp: "WhatsApp",
+  bag: "Achat",
+};
+
+const HIGHLIGHT_SLOTS = 4;
 
 /**
  * NOTE DE PORTÉE (voir RAPPORT_LOT_E.md) : cette page n'existait pas dans
@@ -240,12 +280,127 @@ async function updateHeroAction(formData: FormData) {
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
   try {
     const config = await getLandingConfig(organizationId);
-    await updateLandingConfig(organizationId, { sections: config.sections, brandColorPrimary: config.brandColorPrimary, brandColorSecondary: config.brandColorSecondary, fontChoice: config.fontChoice, heroTitle: String(formData.get("heroTitle") ?? "") || null, heroSubtitle: String(formData.get("heroSubtitle") ?? "") || null, ctaLabel: String(formData.get("ctaLabel") ?? "") || null, ctaUrl: String(formData.get("ctaUrl") ?? "") || null, visualStyle: (String(formData.get("visualStyle") ?? "soft") || "soft") as "soft" | "clean" | "bold" });
+
+    // Visuel d'en-tête : même mécanique mixte upload/URL que
+    // logo/bannière/favicon (ImageUploadField + resolveImageFromFormData),
+    // gardée cohérente avec le reste de cet écran plutôt que d'inventer un
+    // second pattern pour une seule image.
+    const heroMediaUrl = await resolveImageFromFormData(formData, {
+      organizationId,
+      mediaType: "hero",
+      fileField: "heroMediaFile",
+      urlField: "heroMediaUrl",
+      currentUrl: config.heroMediaUrl ?? undefined,
+    });
+
+    const heroLayoutRaw = String(formData.get("heroLayout") ?? "");
+    const heroLayout = HERO_LAYOUTS.includes(heroLayoutRaw as HeroLayout) ? (heroLayoutRaw as HeroLayout) : null;
+
+    await updateLandingConfig(organizationId, {
+      sections: config.sections,
+      brandColorPrimary: config.brandColorPrimary,
+      brandColorSecondary: config.brandColorSecondary,
+      fontChoice: config.fontChoice,
+      heroTitle: String(formData.get("heroTitle") ?? "") || null,
+      heroSubtitle: String(formData.get("heroSubtitle") ?? "") || null,
+      ctaLabel: String(formData.get("ctaLabel") ?? "") || null,
+      ctaUrl: String(formData.get("ctaUrl") ?? "") || null,
+      visualStyle: (String(formData.get("visualStyle") ?? "soft") || "soft") as "soft" | "clean" | "bold",
+      announcement: String(formData.get("announcement") ?? "") || null,
+      announcementEnabled: formData.get("announcementEnabled") === "on",
+      heroLayout,
+      heroMediaUrl: (heroMediaUrl ?? "") !== (config.heroMediaUrl ?? "") ? heroMediaUrl : undefined,
+      secondaryCtaLabel: String(formData.get("secondaryCtaLabel") ?? "") || null,
+      secondaryCtaUrl: String(formData.get("secondaryCtaUrl") ?? "") || null,
+      showStats: formData.get("showStats") === "on",
+    });
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la personnalisation.";
     redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
   }
   redirect("/dashboard/site?success=" + encodeURIComponent("Personnalisation enregistrée."));
+}
+
+/**
+ * Bande de confiance (jusqu'à 4 promesses). Formulaire à créneaux fixes
+ * plutôt qu'un ajout dynamique en JavaScript (cahier historique du
+ * projet : pas de sur-ingénierie sur ce type d'UI, voir moveSectionAction
+ * ci-dessus) — 4 blocs identiques, un créneau au TITRE vide est
+ * simplement omis du tableau enregistré.
+ *
+ * Un tableau VIDE (les 4 titres laissés vides) est une valeur légitime :
+ * le commerçant retire volontairement la bande. C'est distinct de
+ * `resetHighlightsAction` ci-dessous, qui revient aux promesses par
+ * défaut du secteur (voir resolveStorefrontHighlights).
+ */
+async function updateHighlightsAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+
+  try {
+    const highlights: LandingHighlight[] = [];
+    for (let i = 0; i < HIGHLIGHT_SLOTS; i += 1) {
+      const title = String(formData.get(`highlightTitle${i}`) ?? "").trim();
+      if (!title) continue;
+      const iconRaw = String(formData.get(`highlightIcon${i}`) ?? "sparkles");
+      const icon = (HIGHLIGHT_ICON_KEYS as readonly string[]).includes(iconRaw) ? (iconRaw as HighlightIconKey) : "sparkles";
+      const subtitle = String(formData.get(`highlightSubtitle${i}`) ?? "").trim();
+      highlights.push({ icon, title, subtitle });
+    }
+
+    const parsed = LandingHighlightsSchema.safeParse(highlights);
+    if (!parsed.success) throw new ValidationError("Bande de confiance invalide.");
+
+    const config = await getLandingConfig(organizationId);
+    await updateLandingConfig(organizationId, { sections: config.sections, highlights: parsed.data });
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour de la bande de confiance.";
+    redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
+  }
+
+  redirect("/dashboard/site?success=" + encodeURIComponent("Bande de confiance mise à jour."));
+}
+
+/** Revient aux promesses par défaut du secteur — distinct d'un tableau vide (« aucune »), voir le commentaire ci-dessus. */
+async function resetHighlightsAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+
+  try {
+    const config = await getLandingConfig(organizationId);
+    await updateLandingConfig(organizationId, { sections: config.sections, highlights: null });
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors de la réinitialisation.";
+    redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
+  }
+
+  redirect("/dashboard/site?success=" + encodeURIComponent("Bande de confiance réinitialisée sur votre secteur."));
+}
+
+/**
+ * Moyens de paiement affichés en pied de page. Une case cochée n'engage
+ * QUE le commerçant — jamais pré-cochée par défaut à la création d'un
+ * tenant (voir 0052_storefront_v2.sql, commentaire sur payment_methods) :
+ * afficher un logo Visa chez quelqu'un qui n'accepte que le cash
+ * tromperait son client.
+ */
+async function updatePaymentMethodsAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+
+  try {
+    const selected = PAYMENT_METHOD_KEYS.filter((key) => formData.get(`payment_${key}`) === "on");
+    const config = await getLandingConfig(organizationId);
+    await updateLandingConfig(organizationId, { sections: config.sections, paymentMethods: selected });
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour des moyens de paiement.";
+    redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
+  }
+
+  redirect("/dashboard/site?success=" + encodeURIComponent("Moyens de paiement mis à jour."));
 }
 
 async function updateBrandingAction(formData: FormData) {
@@ -325,13 +480,19 @@ export default async function SitePage({
 }) {
   const { error, success } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
-  const [media, tldPricing, domainRequests, landingConfig, testimonials] = await Promise.all([
+  const [media, tldPricing, domainRequests, landingConfig, testimonials, industry] = await Promise.all([
     getSiteMedia(organizationId),
     listActiveTldPricing(),
     listMyDomainRequests(organizationId),
     getLandingConfig(organizationId),
     listTestimonials(organizationId),
+    getOrganizationIndustry(organizationId),
   ]);
+  // Secteur de la vitrine — sert uniquement à afficher, dans l'éditeur de
+  // bande de confiance, à quoi ressemblent les promesses par défaut avant
+  // personnalisation (voir resolveStorefrontHighlights, storefront-service.ts,
+  // qui fait exactement ce calcul côté vitrine publique).
+  const sectorBlueprint = getStorefrontBlueprint(industry);
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
@@ -469,30 +630,163 @@ export default async function SitePage({
         <SubmitButton pendingLabel="Enregistrement...">Enregistrer</SubmitButton>
       </form>
 
-      {/* Lot K — Sections de ma page */}
+      {/* Structure de page + personnalisation vitrine (Lot K, étendu par le chantier vitrine V2) */}
       <div className="mt-4 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {LANDING_PRESET_KEYS.filter((key) => key !== "default").map((preset) => (
               <form key={preset} action={applyPresetAction} className="rounded-2xl border border-navy-900/[0.06] bg-[#FBFAFF] p-4">
                 <input type="hidden" name="organizationId" value={organizationId} />
                 <input type="hidden" name="preset" value={preset} />
-                <p className="text-sm font-bold capitalize">{preset === "boutique" ? "Boutique" : preset === "salon" ? "Salon / beauté" : "Restaurant"}</p>
+                <p className="text-sm font-bold">{LANDING_PRESET_LABELS[preset]}</p>
                 <p className="mt-1 text-xs leading-5 text-slate-500">Une structure optimisée pour ce type d&apos;activité.</p>
                 <SubmitButton pendingLabel="Application…" className="mt-3 w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700">Utiliser ce modèle</SubmitButton>
               </form>
             ))}
           </div>
 
-          <form action={updateHeroAction} className="grid gap-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-4 lg:grid-cols-2">
+          <form
+            action={updateHeroAction}
+            encType="multipart/form-data"
+            className="grid gap-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-4 lg:grid-cols-2"
+          >
             <input type="hidden" name="organizationId" value={organizationId} />
             <div className="lg:col-span-2"><p className="text-sm font-bold">Personnaliser votre première impression</p><p className="mt-1 text-xs text-slate-500">Modifiez le message principal, le bouton et le style sans toucher au code.</p></div>
             <label className="text-sm font-semibold">Titre principal<input name="heroTitle" defaultValue={landingConfig.heroTitle ?? ""} placeholder="Ex. Votre beauté, notre savoir-faire." className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
             <label className="text-sm font-semibold">Sous-titre<textarea name="heroSubtitle" defaultValue={landingConfig.heroSubtitle ?? ""} rows={2} placeholder="Une phrase qui explique votre valeur." className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
             <label className="text-sm font-semibold">Texte du bouton<input name="ctaLabel" defaultValue={landingConfig.ctaLabel ?? ""} placeholder="Nous contacter" className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
             <label className="text-sm font-semibold">Lien du bouton<input name="ctaUrl" defaultValue={landingConfig.ctaUrl ?? ""} placeholder="https://wa.me/..." className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
+
+            <label className="text-sm font-semibold">Texte du second bouton (optionnel)<input name="secondaryCtaLabel" defaultValue={landingConfig.secondaryCtaLabel ?? ""} placeholder="Voir les promotions" className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
+            <label className="text-sm font-semibold">Lien du second bouton<input name="secondaryCtaUrl" defaultValue={landingConfig.secondaryCtaUrl ?? ""} placeholder="/promotions" className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal" /></label>
+
             <label className="text-sm font-semibold">Ambiance visuelle<select name="visualStyle" defaultValue={landingConfig.visualStyle} className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal"><option value="soft">Douce</option><option value="clean">Épurée</option><option value="bold">Impactante</option></select></label>
-            <div className="flex items-end"><SubmitButton pendingLabel="Enregistrement…" className="w-full rounded-xl bg-navy-900 px-4 py-3 text-sm font-semibold text-white">Enregistrer la personnalisation</SubmitButton></div>
+            <label className="text-sm font-semibold">
+              Disposition de l&apos;en-tête
+              <select name="heroLayout" defaultValue={landingConfig.heroLayout ?? ""} className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal">
+                <option value="">Automatique (selon vos photos)</option>
+                {HERO_LAYOUTS.map((layout) => (
+                  <option key={layout} value={layout}>{HERO_LAYOUT_LABELS[layout]}</option>
+                ))}
+              </select>
+            </label>
+
+            <div className="lg:col-span-2">
+              <ImageUploadField
+                name="heroMedia"
+                label="Photo de l'en-tête"
+                currentUrl={landingConfig.heroMediaUrl}
+                helpText="Utilisée par la disposition « texte + visuel côte à côte ». Sans photo, votre bannière ou la photo de votre premier produit peut être utilisée à la place."
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm font-semibold lg:col-span-2">
+              <input type="checkbox" name="announcementEnabled" defaultChecked={landingConfig.announcementEnabled} className="h-4 w-4 rounded border-navy-900/20" />
+              Afficher une barre d&apos;annonce en haut de la page
+            </label>
+            <label className="text-sm font-semibold lg:col-span-2">
+              Message de la barre d&apos;annonce
+              <input
+                name="announcement"
+                defaultValue={landingConfig.announcement ?? ""}
+                maxLength={160}
+                placeholder="Ex. Livraison gratuite dès 15 000 FCFA d'achats"
+                className="mt-2 w-full rounded-xl border border-navy-900/10 bg-white px-3 py-3 text-sm font-normal"
+              />
+            </label>
+
+            <label className="flex items-center gap-2 text-sm font-semibold lg:col-span-2">
+              <input type="checkbox" name="showStats" defaultChecked={landingConfig.showStats} className="h-4 w-4 rounded border-navy-900/20" />
+              Afficher les chiffres clés (nombre de produits, catégories, avis…) — calculés automatiquement, jamais inventés
+            </label>
+
+            <div className="flex items-end lg:col-span-2"><SubmitButton pendingLabel="Enregistrement…" className="w-full rounded-xl bg-navy-900 px-4 py-3 text-sm font-semibold text-white sm:w-auto">Enregistrer la personnalisation</SubmitButton></div>
+          </form>
+
+          {/* Bande de confiance — jusqu'à 4 promesses. Sans personnalisation,
+              les promesses par défaut du secteur s'appliquent (voir
+              resolveStorefrontHighlights) ; ce formulaire permet de les
+              remplacer ou de les retirer entièrement. */}
+          <form action={updateHighlightsAction} className="mt-4 grid gap-4 rounded-2xl border border-navy-900/[0.06] bg-white p-4">
+            <input type="hidden" name="organizationId" value={organizationId} />
+            <div>
+              <p className="text-sm font-bold">Bande de confiance</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {landingConfig.highlights === null
+                  ? `Actuellement : les promesses par défaut de votre secteur (${sectorBlueprint.eyebrow.toLowerCase()}).`
+                  : landingConfig.highlights.length === 0
+                    ? "Actuellement : masquée (vous l'avez retirée)."
+                    : "Personnalisée."}
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {Array.from({ length: HIGHLIGHT_SLOTS }).map((_, index) => {
+                const existing = landingConfig.highlights?.[index] ?? sectorBlueprint.highlights[index] ?? null;
+                return (
+                  <div key={index} className="flex flex-col gap-2 rounded-xl border border-navy-900/10 p-3">
+                    <div className="flex items-center gap-2">
+                      <HighlightIcon name={(existing?.icon as HighlightIconKey) ?? "sparkles"} className="h-4 w-4 text-violet-600" />
+                      <select
+                        name={`highlightIcon${index}`}
+                        defaultValue={existing?.icon ?? "sparkles"}
+                        className="flex-1 rounded-lg border border-navy-900/10 bg-white px-2 py-2 text-xs"
+                      >
+                        {HIGHLIGHT_ICON_KEYS.map((icon) => (
+                          <option key={icon} value={icon}>{HIGHLIGHT_ICON_LABELS[icon]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <input
+                      name={`highlightTitle${index}`}
+                      defaultValue={landingConfig.highlights ? existing?.title ?? "" : ""}
+                      placeholder={index === 0 ? "Ex. Livraison rapide" : "Titre (laisser vide pour ignorer)"}
+                      maxLength={60}
+                      className="rounded-lg border border-navy-900/10 px-3 py-2 text-sm"
+                    />
+                    <input
+                      name={`highlightSubtitle${index}`}
+                      defaultValue={landingConfig.highlights ? existing?.subtitle ?? "" : ""}
+                      placeholder="Sous-titre (optionnel)"
+                      maxLength={90}
+                      className="rounded-lg border border-navy-900/10 px-3 py-2 text-sm"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <SubmitButton pendingLabel="Enregistrement…" className="rounded-xl bg-navy-900 px-4 py-3 text-sm font-semibold text-white">Enregistrer la bande de confiance</SubmitButton>
+            </div>
+          </form>
+          <form action={resetHighlightsAction}>
+            <input type="hidden" name="organizationId" value={organizationId} />
+            <SubmitButton pendingLabel="…" className="mt-2 text-xs font-medium text-slate-500 underline">
+              Revenir aux promesses par défaut de mon secteur
+            </SubmitButton>
+          </form>
+
+          {/* Moyens de paiement — aucun n'est pré-coché : afficher un moyen
+              non réellement accepté tromperait le client final. */}
+          <form action={updatePaymentMethodsAction} className="mt-4 flex flex-col gap-3 rounded-2xl border border-navy-900/[0.06] bg-white p-4">
+            <input type="hidden" name="organizationId" value={organizationId} />
+            <div>
+              <p className="text-sm font-bold">Moyens de paiement acceptés</p>
+              <p className="mt-1 text-xs text-slate-500">Affichés en pied de page de votre site. Ne cochez que ce que vous acceptez réellement.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {PAYMENT_METHOD_KEYS.map((method) => (
+                <label key={method} className="flex items-center gap-2 rounded-xl border border-navy-900/10 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name={`payment_${method}`}
+                    defaultChecked={(landingConfig.paymentMethods ?? []).includes(method as PaymentMethodKey)}
+                    className="h-4 w-4 rounded border-navy-900/20"
+                  />
+                  {PAYMENT_METHOD_LABELS[method]}
+                </label>
+              ))}
+            </div>
+            <SubmitButton pendingLabel="Enregistrement…" className="w-fit rounded-xl bg-navy-900 px-4 py-3 text-sm font-semibold text-white">Enregistrer les moyens de paiement</SubmitButton>
           </form>
 
           <h2 className="font-jakarta text-lg font-semibold">Sections de ma page</h2>

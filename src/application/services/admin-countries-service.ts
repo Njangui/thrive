@@ -1,18 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { writeAdminAuditLog } from "./admin-organizations-service";
-import {
-  getCountries,
-  getCountry,
-  getChannels,
-  syncAllResources,
-  syncChannels,
-  getSyncStatus,
-  type CountryRecord,
-  type PaymentChannelRecord,
-  type SyncResult,
-  type SyncStatusSummary,
-} from "./notchpay-resources-service";
+import { getCountries, getCountry, getChannels, type CountryRecord, type PaymentChannelRecord } from "./notchpay-resources-service";
 import { listPlanPricesForCountry, PLAN_KEYS, type PlanKey, type ResolvedPlanPrice, type PlanSummary } from "./plans-repository";
 import { normalizeMoney, validateMoney } from "./currency-service";
 
@@ -47,12 +36,11 @@ export interface AdminCountriesOverview {
     waitlistCount: number;
     disabledCount: number;
   };
-  syncStatus: SyncStatusSummary;
 }
 
-/** Vue `/admin/countries` (section 18/67) : tableau + KPIs + état de la dernière synchronisation. */
+/** Vue `/admin/countries` (section 18/67) : tableau + KPIs. */
 export async function getCountriesOverviewForAdmin(): Promise<AdminCountriesOverview> {
-  const [countries, syncStatus] = await Promise.all([getCountries(), getSyncStatus("countries")]);
+  const countries = await getCountries();
 
   const countriesWithDetails = await Promise.all(
     countries.map(async (country) => {
@@ -79,7 +67,6 @@ export async function getCountriesOverviewForAdmin(): Promise<AdminCountriesOver
       waitlistCount: countries.filter((c) => c.launchStatus === "waitlist").length,
       disabledCount: countries.filter((c) => c.launchStatus === "disabled").length,
     },
-    syncStatus,
   };
 }
 
@@ -117,7 +104,9 @@ async function assertActivationReadiness(country: CountryRecord): Promise<void> 
   const problems: string[] = [];
 
   if (!country.notchpaySupported) {
-    problems.push("NotchPay ne supporte pas (encore) ce pays — synchronisez d'abord.");
+    problems.push(
+      "NotchPay ne supporte pas (encore) ce pays — mettez à jour countries.notchpay_supported en base (colonne gérée manuellement, plus de synchronisation automatique depuis le 16/09/2026).",
+    );
   }
 
   const channels = await getChannels(country.isoCode);
@@ -244,43 +233,4 @@ export async function upsertCountryPrice(
     beforeState: before ? { planKey, countryCode: country.isoCode, amount: before.amount, currencyCode: before.currency_code } : null,
     afterState: { planKey, countryCode: country.isoCode, amount, currencyCode: country.currencyCode },
   });
-}
-
-/** Bouton "Synchroniser NotchPay" du Super Admin (section 9/18/67). */
-export async function triggerManualSync(actorUserId: string): Promise<{ countries: SyncResult; channels: SyncResult[] }> {
-  const result = await syncAllResources();
-
-  await writeAdminAuditLog({
-    actorUserId,
-    organizationId: null,
-    action: "COUNTRY_SYNCED",
-    entityType: "country_sync",
-    afterState: {
-      countriesStatus: result.countries.status,
-      countriesItemsSynced: result.countries.itemsSynced,
-      channelSyncsRun: result.channels.length,
-      channelSyncFailures: result.channels.filter((c) => c.status === "failed").length,
-    },
-  });
-
-  return result;
-}
-
-/** Bouton "Synchroniser" de la page détail d'UN pays (section 19) — ne resynchronise que ses canaux, pas les 195 pays du monde. */
-export async function triggerCountryChannelsSync(isoCode: string, actorUserId: string): Promise<SyncResult> {
-  const country = await getCountry(isoCode);
-  if (!country) throw new NotFoundError(`Pays introuvable : "${isoCode}".`);
-
-  const result = await syncChannels(country.isoCode);
-
-  await writeAdminAuditLog({
-    actorUserId,
-    organizationId: null,
-    entityId: country.id,
-    action: "COUNTRY_CHANNEL_UPDATED",
-    entityType: "country",
-    afterState: { isoCode: country.isoCode, status: result.status, itemsSynced: result.itemsSynced, errorMessage: result.errorMessage },
-  });
-
-  return result;
 }

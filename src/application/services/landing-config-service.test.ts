@@ -217,9 +217,47 @@ describe("updateLandingConfig — validation", () => {
       expect.objectContaining({
         organization_id: "org-1",
         brand_color_primary: "#123abc",
-        brand_color_secondary: null,
         font_choice: "friendly",
       }),
     );
+  });
+
+  /**
+   * Couvre le correctif du chantier vitrine V2 : `updateLandingConfig`
+   * n'écrit désormais QUE les champs explicitement fournis dans `input`
+   * — avant ce correctif, tout appel qui omettait `brandColorSecondary`
+   * (ou n'importe quel autre champ optionnel) écrivait `null` en base
+   * sans le vouloir, ce qui aurait effacé silencieusement une couleur
+   * déjà enregistrée par un formulaire précédent (ex :
+   * `updateHighlightsAction` dans /dashboard/site, qui ne touche QUE
+   * `highlights`, ne doit jamais toucher aux couleurs de marque).
+   */
+  it("n'écrit dans le payload que les champs fournis — un champ omis ne doit jamais atterrir en base, même à null", async () => {
+    const upsert = vi.fn().mockResolvedValue({ data: null, error: null });
+    mockFrom.mockReturnValue({ upsert });
+
+    await updateLandingConfig("org-1", {
+      sections: [{ type: "hero", enabled: true, order: 0 }],
+      // Aucun autre champ fourni : couleurs, police, hero, annonce,
+      // moyens de paiement, etc. doivent tous rester absents du payload.
+    });
+
+    const payload = upsert.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).toEqual({ organization_id: "org-1", sections: [{ type: "hero", enabled: true, order: 0 }] });
+    expect(payload).not.toHaveProperty("brand_color_secondary");
+    expect(payload).not.toHaveProperty("announcement");
+    expect(payload).not.toHaveProperty("payment_methods");
+  });
+
+  it("un champ explicitement passé à null l'efface bien (distinct d'un champ omis)", async () => {
+    const upsert = vi.fn().mockResolvedValue({ data: null, error: null });
+    mockFrom.mockReturnValue({ upsert });
+
+    await updateLandingConfig("org-1", {
+      sections: [{ type: "hero", enabled: true, order: 0 }],
+      highlights: null, // "revenir aux promesses par défaut du secteur" (resetHighlightsAction)
+    });
+
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ highlights: null }));
   });
 });

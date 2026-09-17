@@ -79,12 +79,14 @@ export async function submitBusinessStep(
   name: string,
   industry: string,
   countryCode: string,
+  promoCode?: string,
 ): Promise<OnboardingStepResult & { organizationId?: string }> {
   try {
     const cookieStore = await cookies();
     const { organizationId } = await createOrganization(
       { name, industry: industry || undefined, countryCode },
       cookieStore.get(AFFILIATE_COOKIE_NAME)?.value,
+      promoCode,
     );
     await persistStep(organizationId, 2);
     return { ok: true, organizationId };
