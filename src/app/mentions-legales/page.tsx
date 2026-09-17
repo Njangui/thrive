@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { LegalPageLayout } from "@/app/_components/legal-page-layout";
 
-export const metadata: Metadata = { title: "Mentions légales — SME-OS" };
+export const metadata: Metadata = { title: "Mentions légales — CRESYVA" };
 
 export default function MentionsLegalesPage() {
   return (
     <LegalPageLayout title="Mentions légales">
       <h2>Éditeur du site</h2>
       <p>
-        Le service SME-OS est édité par <strong>[À COMPLÉTER — dénomination sociale]</strong>, [À COMPLÉTER — forme
+        Le service CRESYVA est édité par <strong>[À COMPLÉTER — dénomination sociale]</strong>, [À COMPLÉTER — forme
         juridique], au capital de [À COMPLÉTER] FCFA, immatriculée au Registre du Commerce et du Crédit Mobilier
         (RCCM) sous le numéro [À COMPLÉTER], dont le siège social est situé [À COMPLÉTER — adresse], [À COMPLÉTER —
         ville, pays].
@@ -32,7 +32,7 @@ export default function MentionsLegalesPage() {
 
       <h2>Propriété intellectuelle</h2>
       <p>
-        La marque SME-OS, son logo, et l&apos;ensemble des éléments graphiques et logiciels de la plateforme sont la
+        La marque CRESYVA, son logo, et l&apos;ensemble des éléments graphiques et logiciels de la plateforme sont la
         propriété de [À COMPLÉTER]. Toute reproduction non autorisée est interdite.
       </p>
 

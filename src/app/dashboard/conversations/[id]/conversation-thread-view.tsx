@@ -34,7 +34,7 @@ export function ConversationThreadView({
     <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
       <div className="overflow-hidden rounded-3xl border border-navy-900/[0.07] bg-white shadow-[0_12px_35px_-25px_rgba(14,17,48,.35)]">
         <div className="border-b border-navy-900/[0.06] bg-gradient-to-r from-navy-900 to-[#24145d] px-5 py-4 text-white"><p className="text-xs font-semibold uppercase tracking-wider text-violet-200">Conversation sécurisée</p><p className="mt-1 text-sm text-white/60">Répondez au client ou laissez l&apos;IA reprendre la main.</p></div>
-        <div className="flex min-h-[420px] flex-col gap-2 overflow-y-auto bg-[#F7F6FD] p-4 sm:p-6">
+        <div className="flex min-h-[420px] flex-col gap-2 overflow-y-auto bg-[#F8FAFC] p-4 sm:p-6">
         {messages.length === 0 ? (
           <p className="text-sm text-slate-500">Aucun message pour l&apos;instant.</p>
         ) : (
@@ -85,7 +85,7 @@ export function ConversationThreadView({
       </div>
       <aside className="adm-card h-fit">
         <p className="adm-eyebrow">Assistance</p><h3 className="mt-1 adm-heading-2">Actions rapides</h3>
-        <div className="mt-4 space-y-2 text-xs text-slate-500"><p className="rounded-xl bg-[#F7F6FD] p-3">💡 Utilisez l&apos;IA pour les questions répétitives.</p><p className="rounded-xl bg-[#F7F6FD] p-3">⚡ Une demande humaine reste prioritaire.</p><p className="rounded-xl bg-[#F7F6FD] p-3">🔒 Les échanges restent isolés par entreprise.</p></div>
+        <div className="mt-4 space-y-2 text-xs text-slate-500"><p className="rounded-xl bg-[#F8FAFC] p-3">💡 Utilisez l&apos;IA pour les questions répétitives.</p><p className="rounded-xl bg-[#F8FAFC] p-3">⚡ Une demande humaine reste prioritaire.</p><p className="rounded-xl bg-[#F8FAFC] p-3">🔒 Les échanges restent isolés par entreprise.</p></div>
       </aside>
     </div>
   );

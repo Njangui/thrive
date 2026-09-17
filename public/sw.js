@@ -47,7 +47,7 @@ self.addEventListener("fetch", (event) => {
  */
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "SME-OS",
+    title: "CRESYVA",
     body: "Vous avez une nouvelle notification.",
     url: "/dashboard/notifications",
   };

@@ -26,15 +26,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const tenant = await resolveRequestTenant();
 
   // Lot 2 — sans tenant résolu, cette route sert la landing marketing de
-  // SME-OS lui-même (avant ce lot : aucune métadonnée du tout, `{}`).
+  // CRESYVA lui-même (avant ce lot : aucune métadonnée du tout, `{}`).
   if (!tenant) {
     return {
-      title: "SME-OS — Gérez votre entreprise depuis un seul endroit",
+      title: "CRESYVA — Gérez votre entreprise depuis un seul endroit",
       description:
-        "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés. SME-OS aide les commerçants et prestataires à organiser leur activité, sans compétences techniques.",
+        "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés. CRESYVA aide les commerçants et prestataires à organiser leur activité, sans compétences techniques.",
       openGraph: {
         type: "website",
-        title: "SME-OS — Gérez votre entreprise depuis un seul endroit",
+        title: "CRESYVA — Gérez votre entreprise depuis un seul endroit",
         description:
           "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés, pour les commerçants et prestataires.",
       },

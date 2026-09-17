@@ -24,7 +24,7 @@ const GUIDES: Record<string, { title: string; intro: string; steps: string[]; ti
       "Définissez une prochaine action plutôt que de laisser le prospect sans suivi.",
       "Passez le prospect en client dès que la vente est réellement confirmée.",
     ],
-    tip: "SME-OS propose automatiquement une relance à 24 h ou 48 h selon l'engagement observé.",
+    tip: "CRESYVA propose automatiquement une relance à 24 h ou 48 h selon l'engagement observé.",
   },
   "/dashboard/orders": {
     title: "Traiter une commande",
@@ -38,7 +38,7 @@ const GUIDES: Record<string, { title: string; intro: string; steps: string[]; ti
   },
   "/dashboard/finance": {
     title: "Lire votre situation financière",
-    intro: "Utilisez cette page pour suivre les encaissements, dépenses et mouvements enregistrés dans SME-OS.",
+    intro: "Utilisez cette page pour suivre les encaissements, dépenses et mouvements enregistrés dans CRESYVA.",
     steps: [
       "Commencez par vérifier la période sélectionnée.",
       "Contrôlez les entrées et sorties avant d'interpréter le résultat.",
@@ -99,11 +99,11 @@ const GUIDES: Record<string, { title: string; intro: string; steps: string[]; ti
   },
   "/dashboard/channels": {
     title: "Connecter vos canaux",
-    intro: "Chaque connexion se fait depuis SME-OS avec des étapes guidées. Aucun réglage technique n'est nécessaire au quotidien.",
+    intro: "Chaque connexion se fait depuis CRESYVA avec des étapes guidées. Aucun réglage technique n'est nécessaire au quotidien.",
     steps: [
       "Choisissez le canal à connecter.",
       "Suivez l'autorisation officielle affichée par le service concerné.",
-      "Revenez dans SME-OS et vérifiez que le statut passe à Connecté.",
+      "Revenez dans CRESYVA et vérifiez que le statut passe à Connecté.",
       "Testez ensuite un message ou une publication avant de lancer une campagne.",
     ],
     tip: "Les détails techniques des services utilisés restent volontairement cachés dans l'interface marchand.",
@@ -155,7 +155,7 @@ export function DashboardHelp() {
             <p className="mt-3 text-sm leading-6 text-slate-500">{guide.intro}</p>
             <ol className="mt-5 space-y-3">
               {guide.steps.map((step, index) => (
-                <li key={step} className="flex gap-3 rounded-2xl bg-[#F7F6FD] p-3.5 text-sm leading-5 text-slate-700">
+                <li key={step} className="flex gap-3 rounded-2xl bg-[#F8FAFC] p-3.5 text-sm leading-5 text-slate-700">
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-violet-600 text-xs font-bold text-white">{index + 1}</span>
                   <span>{step}</span>
                 </li>

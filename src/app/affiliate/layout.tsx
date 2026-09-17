@@ -17,7 +17,7 @@ export default async function AffiliateLayout({ children }: { children: React.Re
       <header className="border-b border-ink/10 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
           <Link href="/" className="font-display text-lg font-bold tracking-tight">
-            SME-OS <span className="text-leaf">Affiliation</span>
+            CRESYVA <span className="text-leaf">Affiliation</span>
           </Link>
           {affiliate?.status === "active" && (
             <nav className="flex items-center gap-4 text-sm">

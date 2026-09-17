@@ -38,4 +38,4 @@ function SignupForm() {
     </>
   );
 }
-export default function SignupPage() { return <Suspense fallback={null}><AuthShell mode="signup" title="Créer votre compte" subtitle="Commencez par votre email. Ensuite, SME-OS vous accompagne pour configurer votre entreprise."><SignupForm /></AuthShell></Suspense>; }
+export default function SignupPage() { return <Suspense fallback={null}><AuthShell mode="signup" title="Créer votre compte" subtitle="Commencez par votre email. Ensuite, CRESYVA vous accompagne pour configurer votre entreprise."><SignupForm /></AuthShell></Suspense>; }

@@ -159,7 +159,7 @@ export function StorefrontFooter({ site }: { site: StorefrontSite }) {
           <p>
             Site propulsé par{" "}
             <a href="https://sme-os.app" target="_blank" rel="noopener noreferrer" className="font-medium hover:text-brand">
-              SME-OS
+              CRESYVA
             </a>
           </p>
         </Container>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { CresyvaBrand } from "./cresyva-brand";
 
 function MiniBarChart() {
   const bars = [34, 48, 42, 64, 56, 76, 62, 84, 72];
@@ -25,7 +26,7 @@ export function AuthShell({
     ? { kicker: "Lancez votre activité", title: "Votre entreprise, enfin organisée.", body: "Catalogue, clients, commandes et visibilité réunis dans un espace simple." }
     : mode === "reset"
       ? { kicker: "Accès sécurisé", title: "Reprenez le contrôle de votre compte.", body: "Votre espace reste protégé. Choisissez un nouveau mot de passe et continuez votre activité." }
-      : { kicker: "Bienvenue sur SME-OS", title: "Pilotez votre entreprise avec plus de clarté.", body: "Un espace unique pour vendre, suivre vos clients et développer votre activité." };
+      : { kicker: "Bienvenue sur CRESYVA", title: "Pilotez votre entreprise avec plus de clarté.", body: "Un espace unique pour vendre, suivre vos clients et développer votre activité." };
 
   return (
     <main className="auth-page">
@@ -33,10 +34,7 @@ export function AuthShell({
       <div className="auth-bg-orb auth-bg-orb-two" />
       <div className="auth-layout">
         <section className="auth-brand-panel">
-          <Link href="/" className="auth-logo">
-            <span className="auth-logo-mark">S</span>
-            <span>SME-OS</span>
-          </Link>
+          <CresyvaBrand href="/" dark />
           <div className="auth-brand-copy">
             <span className="auth-kicker">{copy.kicker}</span>
             <h2>{copy.title}</h2>
@@ -59,14 +57,14 @@ export function AuthShell({
         </section>
 
         <section className="auth-form-panel">
-          <div className="auth-mobile-logo"><span className="auth-logo-mark">S</span><span>SME-OS</span></div>
+          <div className="auth-mobile-logo"><CresyvaBrand compact dark /></div>
           <div className="auth-form-card">
             <span className="auth-form-badge">{mode === "reset" ? "Mot de passe" : mode === "signup" ? "Créer un compte" : "Connexion"}</span>
             <h1>{title}</h1>
             <p className="auth-form-subtitle">{subtitle}</p>
             {children}
           </div>
-          <p className="auth-footer">© {new Date().getFullYear()} SME-OS · Une solution pensée pour les PME africaines.</p>
+          <p className="auth-footer">© {new Date().getFullYear()} CRESYVA · Une solution pensée pour les PME africaines.</p>
         </section>
       </div>
     </main>

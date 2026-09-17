@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { LegalPageLayout } from "@/app/_components/legal-page-layout";
 
-export const metadata: Metadata = { title: "Politique de confidentialité — SME-OS" };
+export const metadata: Metadata = { title: "Politique de confidentialité — CRESYVA" };
 
 export default function ConfidentialitePage() {
   return (
@@ -10,7 +10,7 @@ export default function ConfidentialitePage() {
 
       <h2>1. Deux niveaux de données</h2>
       <p>
-        SME-OS traite deux catégories de données bien distinctes :
+        CRESYVA traite deux catégories de données bien distinctes :
       </p>
       <ul>
         <li>
@@ -20,7 +20,7 @@ export default function ConfidentialitePage() {
         <li>
           <strong>Les données que le Client saisit ou reçoit via la plateforme</strong> concernant SES PROPRES
           clients (contacts, conversations WhatsApp, commandes) — le Client en est le responsable de traitement ;
-          SME-OS agit comme sous-traitant technique pour cette partie-là, au sens du droit applicable à la
+          CRESYVA agit comme sous-traitant technique pour cette partie-là, au sens du droit applicable à la
           protection des données.
         </li>
       </ul>
@@ -39,7 +39,7 @@ export default function ConfidentialitePage() {
           Usage et navigation : pages vues, clics, événements d&apos;analytics agrégés — utilisés pour les
           statistiques affichées au Client sur son propre tableau de bord, jamais revendus.
         </li>
-        <li>Paiement : le numéro de carte/Mobile Money n&apos;est jamais stocké par SME-OS — traité directement par NotchPay.</li>
+        <li>Paiement : le numéro de carte/Mobile Money n&apos;est jamais stocké par CRESYVA — traité directement par NotchPay.</li>
       </ul>
 
       <h2>3. Sous-traitants (prestataires tiers)</h2>
@@ -78,7 +78,7 @@ export default function ConfidentialitePage() {
 
       <h2>7. Cookies et sessions</h2>
       <p>
-        SME-OS utilise uniquement des cookies strictement nécessaires (session de connexion, préférences
+        CRESYVA utilise uniquement des cookies strictement nécessaires (session de connexion, préférences
         d&apos;affichage) — aucun cookie publicitaire ou de traçage tiers.
       </p>
 

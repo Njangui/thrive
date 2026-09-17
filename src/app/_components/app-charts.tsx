@@ -1,5 +1,5 @@
 /**
- * Graphiques SVG faits main — chrome de l'app authentifiée SME-OS
+ * Graphiques SVG faits main — chrome de l'app authentifiée CRESYVA
  * (Super Admin `/admin/*` ET dashboard marchand `/dashboard/*`).
  *
  * Déplacé de `admin/_components/charts.tsx` vers ici (sept. 2026, chantier
@@ -56,17 +56,17 @@ export function AppLineChart({
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none" role="img" aria-label="Évolution sur la période">
       <defs>
         <linearGradient id="adm-line-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#5B21E5" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#5B21E5" stopOpacity="0" />
+          <stop offset="0%" stopColor="#00D1A0" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#00D1A0" stopOpacity="0" />
         </linearGradient>
       </defs>
       {gridLines.map((y) => (
-        <line key={y} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#0E1130" strokeOpacity={0.05} strokeWidth={1} />
+        <line key={y} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#0F172A" strokeOpacity={0.05} strokeWidth={1} />
       ))}
       <path d={areaPath} fill="url(#adm-line-fill)" stroke="none" />
-      <path d={linePath} fill="none" stroke="#5B21E5" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      <path d={linePath} fill="none" stroke="#00D1A0" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
       {coords.map((c) => (
-        <circle key={c.label} cx={c.x} cy={c.y} r={3.5} fill="#5B21E5" stroke="white" strokeWidth={1.5} />
+        <circle key={c.label} cx={c.x} cy={c.y} r={3.5} fill="#00D1A0" stroke="white" strokeWidth={1.5} />
       ))}
       {coords.map((c) => (
         <text key={`${c.label}-label`} x={c.x} y={height - 8} textAnchor="middle" fontSize={11} fill="#64748B">

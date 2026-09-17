@@ -166,7 +166,7 @@ const RETAIL: StorefrontBlueprint = {
   primaryCtaTarget: "catalog",
   secondaryCtaLabel: "Voir les promotions",
   secondaryCtaTarget: "promotions",
-  defaultAccent: { primary: "#6D3EE8", secondary: "#F97316" },
+  defaultAccent: { primary: "#34D4B5", secondary: "#F97316" },
   highlights: [
     { icon: "wallet", title: "Paiement à la livraison", subtitle: "Mobile Money ou espèces" },
     { icon: "truck", title: "Livraison rapide", subtitle: "Commandez, on s'occupe du reste" },
@@ -252,7 +252,7 @@ const BEAUTY: StorefrontBlueprint = {
   primaryCtaTarget: "booking",
   secondaryCtaLabel: "Voir les prestations",
   secondaryCtaTarget: "services",
-  defaultAccent: { primary: "#BE185D", secondary: "#8F6AEA" },
+  defaultAccent: { primary: "#BE185D", secondary: "#6EE7D0" },
   highlights: [
     { icon: "calendar", title: "Sur rendez-vous", subtitle: "Pas d'attente inutile" },
     { icon: "scissors", title: "Savoir-faire", subtitle: "Équipe formée" },

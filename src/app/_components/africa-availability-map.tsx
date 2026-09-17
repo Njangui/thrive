@@ -33,7 +33,7 @@ import africaTopologyRaw from "@/data/africa-map-topology.json";
 const MAP_WIDTH = 640;
 const MAP_HEIGHT = 700;
 
-const NEUTRAL_FILL = "#EDE9FE"; // violet-100 : continent non renseigné, sur la marque
+const NEUTRAL_FILL = "#ECFDF8"; // violet-100 : continent non renseigné, sur la marque
 const NEUTRAL_STROKE = "#C9BEF2";
 const ACTIVE_FILL = "#16A34A"; // success-600
 const ACTIVE_FILL_HOVER = "#15803D"; // success-700
@@ -98,7 +98,7 @@ export function AfricaAvailabilityMap({ countries }: { countries: PublicCountry[
             height={MAP_HEIGHT}
             projection={projection}
             role="img"
-            aria-label="Carte d'Afrique indiquant les pays où SME-OS est disponible ou bientôt disponible"
+            aria-label="Carte d'Afrique indiquant les pays où CRESYVA est disponible ou bientôt disponible"
             className="block h-auto w-full"
           >
             <Geographies geography={geography}>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { CresyvaBrand } from "@/app/_components/cresyva-brand";
 import { usePathname } from "next/navigation";
 import { ADMIN_NAV_GROUPS } from "./sidebar";
 import { IconGrid } from "./icons";
@@ -50,7 +51,7 @@ export function AdminMobileNav() {
                 <div className="mb-4 flex items-center justify-between px-2">
                   <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center gap-2.5">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 font-jakarta text-sm font-bold text-white">S</span>
-                    <span className="font-jakarta text-sm font-bold text-white">SME-OS Admin</span>
+                    <span className="font-jakarta text-sm font-bold text-white">CRESYVA Admin</span>
                   </Link>
                   <button type="button" onClick={() => setOpen(false)} aria-label="Fermer" className="text-white/60">
                     ✕

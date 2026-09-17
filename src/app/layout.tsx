@@ -5,7 +5,7 @@ import { ServiceWorkerRegister } from "./_components/service-worker-register";
 import { PLATFORM_FONT_VARIABLES } from "./fonts";
 
 /**
- * Paire de polices pour la landing marketing SME-OS et la console Super
+ * Paire de polices pour la landing marketing CRESYVA et la console Super
  * Admin (`/admin/*`) UNIQUEMENT — n'a rien à voir avec `displayFont`/
  * `bodyFont` ci-dessus, qui restent le mécanisme de police PAR TENANT de
  * la vitrine publique (`resolveTenantFontClassName`, non touché ici).
@@ -42,8 +42,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SME-OS — Phase 0 scaffold",
-  description: "Fondation multi-tenant pour PME camerounaises.",
+  title: "CRESYVA — Plus qu’un outil, un levier de croissance.",
+  description: "Gérez. Vendez. Communiquez. Faites grandir votre entreprise.",
   // Manifest PWA global (Lot E, Partie 3) : neutre, pas de branding tenant
   // (voir public/manifest.json — le favicon PAR TENANT de la vitrine
   // publique est géré séparément via generateMetadata dans app/page.tsx).
@@ -58,13 +58,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1C1B19",
+  themeColor: "#0F172A",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={`${PLATFORM_FONT_VARIABLES} ${jakarta.variable} ${inter.variable}`}>
-      <body className="bg-paper font-body text-ink antialiased">
+      <body className="bg-slate-50 font-body text-navy-900 antialiased">
         {children}
         <ServiceWorkerRegister />
       </body>

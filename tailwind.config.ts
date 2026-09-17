@@ -25,45 +25,32 @@ import type { Config } from "tailwindcss";
  *    ces tokens.
  */
 const config: Config = {
+  darkMode: "class",
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "var(--brand-primary, #0f172a)",
-          secondary: "var(--brand-secondary, #10b981)",
+          DEFAULT: "var(--brand-primary, #00D1A0)",
+          secondary: "var(--brand-secondary, #0F172A)",
         },
-        ink: "#1C1B19",
-        paper: "#F3F1EC",
-        leaf: "#178A4C",
-        clay: "#C1562C",
-        muted: "#6B6459",
+        ink: "#0F172A",
+        paper: "#F8FAFC",
+        leaf: "#00D1A0",
+        clay: "#C2410C",
+        muted: "#64748B",
         violet: {
-          50: "#F5F2FE",
-          100: "#ECE6FD",
-          200: "#D6C9FA",
-          300: "#B29CF0",
-          400: "#8F6AEA",
-          500: "#6D3EE8",
-          600: "#5B21E5",
-          700: "#4A15D1",
-          800: "#3D10A8",
-          900: "#2E0C7E",
-          950: "#1F0857",
+          50: "#ECFDF8", 100: "#D5F9EF", 200: "#A7F3E0", 300: "#6EE7D0",
+          400: "#34D4B5", 500: "#00D1A0", 600: "#007A63", 700: "#006352",
+          800: "#007A63", 900: "#065F51", 950: "#064E44",
         },
-        magenta: {
-          500: "#B026DE",
-          600: "#9A1FD8",
-          700: "#7E17B8",
-        },
-        navy: {
-          900: "#0E1130",
-          800: "#171A3A",
-          700: "#232752",
-        },
-        success: { 50: "#E4F8EE", 600: "#16A34A", 700: "#15803D" },
-        warning: { 50: "#FEF4E3", 600: "#D97706", 700: "#B45309" },
-        danger: { 50: "#FEEBEA", 600: "#DC2626", 700: "#B91C1C" },
+        magenta: { 500: "#00B98C", 600: "#009979", 700: "#007A63" },
+        navy: { 900: "#0F172A", 800: "#172033", 700: "#243047" },
+        success: { 50: "#ECFDF5", 600: "#16A34A", 700: "#15803D" },
+        warning: { 50: "#FFFBEB", 600: "#D97706", 700: "#B45309" },
+        danger: { 50: "#FEF2F2", 600: "#DC2626", 700: "#B91C1C" },
+        info: { 50: "#EFF6FF", 600: "#2563EB", 700: "#1D4ED8" },
+        primary: { DEFAULT: "#00D1A0", 50: "#ECFDF8", 100: "#D5F9EF", 200: "#A7F3E0", 600: "#00B98C", 700: "#009979", foreground: "#0F172A" },
       },
       fontFamily: {
         display: ["var(--font-display)", "sans-serif"],

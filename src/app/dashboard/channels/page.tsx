@@ -24,6 +24,18 @@ function flash(kind: "success" | "error", message: string): never {
   redirect(`/dashboard/channels?${kind}=${encodeURIComponent(message)}`);
 }
 
+// IMPORTANT : redirect() (et flash(), qui appelle redirect()) ne doit JAMAIS
+// être appelé à l'intérieur d'un try dont le catch ci-dessous pourrait
+// l'intercepter. Next.js implémente redirect() en levant une exception
+// spéciale (digest "NEXT_REDIRECT") pour que son propre runtime effectue
+// la redirection ; si on l'appelle dans un try, c'est notre catch qui
+// l'attrape à la place et la traite comme une vraie erreur — d'où le
+// message d'erreur littéral "NEXT_REDIRECT" affiché à l'utilisateur.
+// Pattern correct (voir aussi dashboard/site/page.tsx et
+// dashboard/services/new/page.tsx) : tout calcul/appel réseau reste dans
+// le try ; seul le résultat est capturé dans une variable ; le
+// redirect()/flash() de succès n'intervient qu'après le try/catch.
+
 async function connectSocialAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
@@ -31,12 +43,13 @@ async function connectSocialAction(formData: FormData) {
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
   const supabase = getSupabaseServiceClient();
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
+  let url: string;
   try {
-    const url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise SME-OS", platform as never);
-    redirect(url);
+    url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise SME-OS", platform as never);
   } catch (error) {
     flash("error", error instanceof AppError ? error.message : error instanceof Error ? error.message : "Impossible de démarrer la connexion.");
   }
+  redirect(url);
 }
 
 async function connectWhatsAppAction(formData: FormData) {
@@ -45,10 +58,13 @@ async function connectWhatsAppAction(formData: FormData) {
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
   const supabase = getSupabaseServiceClient();
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
+  let url: string;
   try {
-    const url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise SME-OS", "whatsapp");
-    redirect(url);
-  } catch (error) { flash("error", error instanceof Error ? error.message : "Impossible de démarrer WhatsApp."); }
+    url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise SME-OS", "whatsapp");
+  } catch (error) {
+    flash("error", error instanceof Error ? error.message : "Impossible de démarrer WhatsApp.");
+  }
+  redirect(url);
 }
 
 async function connectTelegramAction(formData: FormData) {
@@ -56,26 +72,39 @@ async function connectTelegramAction(formData: FormData) {
   const organizationId = String(formData.get("organizationId") ?? "");
   const botToken = String(formData.get("botToken") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  let botUsername: string;
   try {
     const result = await connectTelegramChannel(organizationId, membership.userId, botToken);
-    flash("success", `Telegram connecté : @${result.botUsername}`);
-  } catch (error) { flash("error", error instanceof Error ? error.message : "Connexion Telegram impossible."); }
+    botUsername = result.botUsername;
+  } catch (error) {
+    flash("error", error instanceof Error ? error.message : "Connexion Telegram impossible.");
+  }
+  flash("success", `Telegram connecté : @${botUsername}`);
 }
 
 async function disconnectTelegramAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
-  try { await disconnectTelegramChannel(organizationId, membership.userId); flash("success", "Telegram déconnecté."); }
-  catch (error) { flash("error", error instanceof Error ? error.message : "Déconnexion Telegram impossible."); }
+  try {
+    await disconnectTelegramChannel(organizationId, membership.userId);
+  } catch (error) {
+    flash("error", error instanceof Error ? error.message : "Déconnexion Telegram impossible.");
+  }
+  flash("success", "Telegram déconnecté.");
 }
 
 async function connectYouTubeAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   await requireMembership(organizationId, ["owner", "admin"]);
-  try { redirect(createYouTubeConnectUrl(organizationId)); }
-  catch (error) { flash("error", error instanceof Error ? error.message : "Connexion YouTube indisponible."); }
+  let url: string;
+  try {
+    url = createYouTubeConnectUrl(organizationId);
+  } catch (error) {
+    flash("error", error instanceof Error ? error.message : "Connexion YouTube indisponible.");
+  }
+  redirect(url);
 }
 
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string }> }) {

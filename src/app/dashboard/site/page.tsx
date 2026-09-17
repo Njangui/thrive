@@ -495,7 +495,7 @@ export default async function SitePage({
   const sectorBlueprint = getStorefrontBlueprint(industry);
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="site-editor-page mx-auto flex w-full max-w-7xl flex-col gap-5">
       <h1 className="font-jakarta text-2xl font-bold tracking-tight">Mon site</h1>
       <p className="text-sm text-slate-500">
         Le logo, la bannière et l&apos;icône de votre site apparaissent sur la page que voient vos clients.
@@ -508,7 +508,7 @@ export default async function SitePage({
         <p className="adm-alert-success">{success}</p>
       )}
 
-      <form action={updateSiteAction} className="flex flex-col gap-4">
+      <form action={updateSiteAction} className="site-editor-main flex flex-col gap-4">
         <input type="hidden" name="organizationId" value={organizationId} />
         <input type="hidden" name="currentLogoUrl" value={media.logoUrl ?? ""} />
         <input type="hidden" name="currentBannerUrl" value={media.bannerUrl ?? ""} />
@@ -630,12 +630,37 @@ export default async function SitePage({
         <SubmitButton pendingLabel="Enregistrement...">Enregistrer</SubmitButton>
       </form>
 
+      <aside className="site-editor-preview">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="cresyva-eyebrow">Aperçu</p>
+            <h2 className="mt-1 font-jakarta text-base font-bold">Votre vitrine</h2>
+          </div>
+          {env.NEXT_PUBLIC_ROOT_DOMAIN !== "localhost:3000" && (
+            <a href={`https://${media.slug}.${env.NEXT_PUBLIC_ROOT_DOMAIN}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-primary hover:underline">Ouvrir le site ↗</a>
+          )}
+        </div>
+        <div className="site-preview-frame">
+          {env.NEXT_PUBLIC_ROOT_DOMAIN !== "localhost:3000" ? (
+            <iframe title="Aperçu de votre site" src={`https://${media.slug}.${env.NEXT_PUBLIC_ROOT_DOMAIN}`} className="h-full w-full border-0" loading="lazy" />
+          ) : (
+            <div className="grid h-full place-items-center p-6 text-center">
+              <div>
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary-50 text-primary">✦</div>
+                <p className="mt-3 font-jakarta text-sm font-bold">Votre aperçu apparaîtra ici</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Configurez votre domaine pour afficher votre vitrine directement dans cet espace.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
+
       {/* Structure de page + personnalisation vitrine (Lot K, étendu par le chantier vitrine V2) */}
       <div className="mt-4 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {LANDING_PRESET_KEYS.filter((key) => key !== "default").map((preset) => (
-              <form key={preset} action={applyPresetAction} className="rounded-2xl border border-navy-900/[0.06] bg-[#FBFAFF] p-4">
+              <form key={preset} action={applyPresetAction} className="rounded-2xl border border-navy-900/[0.06] bg-[#F8FAFC] p-4">
                 <input type="hidden" name="organizationId" value={organizationId} />
                 <input type="hidden" name="preset" value={preset} />
                 <p className="text-sm font-bold">{LANDING_PRESET_LABELS[preset]}</p>

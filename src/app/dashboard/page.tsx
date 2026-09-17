@@ -62,7 +62,7 @@ export default async function DashboardHomePage() {
   const industry = getIndustryUi(organization.data?.industry);
   const hasInventory = enabledModules.includes("inventory");
 
-  const donutPalette = ["#5B21E5", "#8B5CF6", "#C4B5FD", "#F0EDFB", "#94A3B8"];
+  const donutPalette = ["#00D1A0", "#34D4B5", "#A7F3E0", "#F0EDFB", "#94A3B8"];
   const donutSegments = charts.salesByCategory.map((c, i) => ({
     label: c.label,
     value: c.revenue,

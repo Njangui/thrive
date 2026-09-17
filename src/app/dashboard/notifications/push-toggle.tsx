@@ -77,7 +77,7 @@ export function PushToggle({
     <div className="flex items-center justify-between gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] px-4 py-3">
       <div>
         <p className="text-sm font-medium text-navy-900">Notifications sur cet appareil</p>
-        <p className="text-xs text-slate-500">Recevez une alerte même quand SME-OS est fermé.</p>
+        <p className="text-xs text-slate-500">Recevez une alerte même quand CRESYVA est fermé.</p>
         {error && <p className="mt-1 text-xs text-danger-600">{error}</p>}
         {justEnabled && !error && (
           <p className="mt-1 text-xs text-success-600">Activées — une notification de test vient d&apos;être envoyée.</p>

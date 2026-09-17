@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { listPublicCountries, isoCodeToFlagEmoji } from "@/application/services/country-service";
 import { joinWaitlistAction } from "./country-waitlist-actions";
+import { CresyvaBrand } from "./cresyva-brand";
 import { MarketingMobileMenu } from "./marketing-mobile-menu";
 import { AfricaAvailabilityMap } from "./africa-availability-map";
 import {
@@ -19,7 +20,7 @@ import {
 } from "./marketing-icons";
 
 /**
- * Landing marketing SME-OS (master prompt §6-7) — remplace l'ancienne
+ * Landing marketing CRESYVA (master prompt §6-7) — remplace l'ancienne
  * page de statut de développement interne (`internal-status.tsx`,
  * supprimée par ce lot — plus aucune route ne la rendait, elle n'avait
  * jamais eu vocation à être vue par un client final).
@@ -111,7 +112,7 @@ const PROBLEMS = [
 const FAQ_ITEMS = [
   {
     question: "Dois-je savoir coder ou avoir des compétences techniques ?",
-    answer: "Non. SME-OS est conçu pour être utilisé par un commerçant, pas par un développeur. Tout se fait depuis votre tableau de bord, en français.",
+    answer: "Non. CRESYVA est conçu pour être utilisé par un commerçant, pas par un développeur. Tout se fait depuis votre tableau de bord, en français.",
   },
   {
     question: "Est-ce que ça fonctionne avec le numéro WhatsApp que j'utilise déjà ?",
@@ -127,7 +128,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "Mes informations et celles de mes clients sont-elles en sécurité ?",
-    answer: "Oui. Chaque entreprise a ses propres données, strictement séparées de celles des autres entreprises sur SME-OS.",
+    answer: "Oui. Chaque entreprise a ses propres données, strictement séparées de celles des autres entreprises sur CRESYVA.",
   },
 ];
 
@@ -166,7 +167,7 @@ function HeroPreview() {
         <div className="absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b from-white/90 to-transparent" />
         <Image
           src="/images/landing-dashboard-reference.png"
-          alt="Aperçu du tableau de bord SME-OS"
+          alt="Aperçu du tableau de bord CRESYVA"
           width={826}
           height={1024}
           priority
@@ -175,7 +176,7 @@ function HeroPreview() {
       </div>
       <Image
         src="/images/landing-mobile-reference.png"
-        alt="Aperçu mobile SME-OS"
+        alt="Aperçu mobile CRESYVA"
         width={135}
         height={260}
         className="absolute -bottom-7 -left-4 hidden w-[100px] rounded-xl border border-navy-900/10 shadow-[0_18px_35px_-16px_rgba(14,17,48,0.5)] sm:block md:-left-10 md:w-[115px]"
@@ -200,12 +201,7 @@ export async function MarketingLanding({
       {/* HEADER */}
       <header className="sticky top-0 z-40 border-b border-navy-900/[0.06] bg-white/85 backdrop-blur">
         <div className="mkt-container flex items-center justify-between py-4">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 font-jakarta text-sm font-bold text-white">
-              S
-            </span>
-            <span className="font-jakarta text-lg font-bold tracking-tight text-navy-900">SME-OS</span>
-          </Link>
+<CresyvaBrand href="/" />
           <nav className="hidden items-center gap-7 text-sm font-medium text-navy-900/70 md:flex">
             <Link href="#fonctionnalites" className="hover:text-navy-900">Fonctionnalités</Link>
             <Link href="#comment-ca-marche" className="hover:text-navy-900">Comment ça marche</Link>
@@ -229,17 +225,17 @@ export async function MarketingLanding({
       <section className="mkt-container py-16 md:py-24">
         <div className="mx-auto max-w-3xl text-center">
           <span className="mkt-badge-pill">
-            <IconPlus className="h-3.5 w-3.5" />
-            La plateforme tout-en-un pour votre entreprise
+            <IconTrendUp className="h-3.5 w-3.5" />
+            Plus qu’un outil, un levier de croissance
           </span>
           <h1 className="mt-5 font-jakarta text-3xl font-extrabold tracking-tight text-navy-900 md:text-5xl">
-            Gérez toute votre entreprise,
+            Gérez. Vendez. Communiquez.
             <br className="hidden sm:block" />
-            <span className="text-violet-600"> du catalogue à WhatsApp</span>, en un seul endroit.
+            <span className="text-violet-600"> Faites grandir votre entreprise.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-base text-navy-900/60 md:text-lg">
-            SME-OS connecte vos produits, vos ventes, vos clients et vos canaux de communication — pour que vous
-            passiez moins de temps à jongler entre vos outils, et plus de temps à vendre.
+            Cresyva réunit votre activité dans un seul espace : catalogue, ventes, clients, communication et finances.
+            Vous gagnez en clarté, en temps et en capacité de croissance.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link href="/signup" className="mkt-btn-primary w-full sm:w-auto">
@@ -328,7 +324,7 @@ export async function MarketingLanding({
         <section id="disponibilite" className="mkt-container max-w-5xl py-16 text-center">
           <h2 className="mkt-section-title">Disponible en Afrique</h2>
           <p className="mx-auto mt-3 max-w-xl text-navy-900/60">
-            SME-OS s&apos;étend progressivement à de nouveaux pays.
+            CRESYVA s&apos;étend progressivement à de nouveaux pays.
           </p>
 
           {waitlistFeedback?.error && (
@@ -415,7 +411,7 @@ export async function MarketingLanding({
 
       {/* TÉMOIGNAGES */}
       <section className="mkt-container py-16">
-        <h2 className="mkt-section-title text-center">Ils utilisent SME-OS</h2>
+        <h2 className="mkt-section-title text-center">Ils utilisent CRESYVA</h2>
         <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
           {TESTIMONIALS.map((t) => (
             <div key={t.name} className="mkt-card">
@@ -473,7 +469,7 @@ export async function MarketingLanding({
       {/* FOOTER */}
       <footer className="border-t border-navy-900/[0.06] bg-white py-10">
         <div className="mkt-container flex flex-col items-center gap-4 text-sm text-slate-500 md:flex-row md:justify-between">
-          <p className="font-jakarta font-semibold text-navy-900">SME-OS</p>
+          <p className="font-jakarta font-semibold text-navy-900">CRESYVA</p>
           <nav className="flex flex-wrap items-center justify-center gap-5">
             <Link href="#fonctionnalites" className="hover:text-navy-900">Fonctionnalités</Link>
             <Link href="/tarifs" className="hover:text-navy-900">Tarifs</Link>
@@ -483,7 +479,7 @@ export async function MarketingLanding({
             <Link href="/confidentialite" className="hover:text-navy-900">Confidentialité</Link>
             <Link href="/mentions-legales" className="hover:text-navy-900">Mentions légales</Link>
           </nav>
-          <p>&copy; {new Date().getFullYear()} SME-OS. Tous droits réservés.</p>
+          <p>&copy; {new Date().getFullYear()} CRESYVA. Tous droits réservés.</p>
         </div>
       </footer>
     </div>

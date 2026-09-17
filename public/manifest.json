@@ -1,12 +1,12 @@
 {
-  "name": "SME-OS",
-  "short_name": "SME-OS",
+  "name": "CRESYVA",
+  "short_name": "CRESYVA",
   "description": "Gérez votre catalogue, vos conversations et vos ventes depuis votre téléphone.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#F3F1EC",
-  "theme_color": "#1C1B19",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0F172A",
   "lang": "fr",
   "icons": [
     {

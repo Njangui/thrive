@@ -30,7 +30,7 @@ export function AdminTopbar({ role, email }: { role: string; email: string | nul
           type="text"
           name="q"
           placeholder="Rechercher une entreprise..."
-          className="w-full rounded-xl border border-navy-900/10 bg-[#F7F6FD] py-2.5 pl-9 pr-3 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100"
+          className="w-full rounded-xl border border-navy-900/10 bg-[#F8FAFC] py-2.5 pl-9 pr-3 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100"
         />
       </form>
 

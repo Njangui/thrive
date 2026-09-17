@@ -18,7 +18,7 @@ function GaugeBar({ used, limit }: { used: number; limit: number }) {
   const pct = limit <= 0 ? 100 : Math.min((used / limit) * 100, 100);
   const nearLimit = pct >= 90;
   return (
-    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#F7F6FD]">
+    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#F8FAFC]">
       <div
         className={`h-full rounded-full transition-[width] ${nearLimit ? "bg-warning-600" : "bg-violet-600"}`}
         style={{ width: `${pct}%` }}
@@ -191,7 +191,7 @@ export default async function SubscriptionPage({
           <form action={payPlanAction} className="mt-3">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="planKey" value={overview.planKey} />
-            <button type="submit" className="rounded-xl border border-navy-900/15 px-3 py-2 text-xs font-medium hover:bg-[#F7F6FD]">
+            <button type="submit" className="rounded-xl border border-navy-900/15 px-3 py-2 text-xs font-medium hover:bg-[#F8FAFC]">
               Renouveler mon forfait actuel
             </button>
           </form>

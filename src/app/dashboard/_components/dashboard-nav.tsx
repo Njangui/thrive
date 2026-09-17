@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ModuleKey } from "@/application/config/modules";
 import type { CreditStatus } from "@/application/services/ai-credits-service";
 import { getIndustryUi } from "@/application/config/industry-ui";
+import { CresyvaBrand } from "@/app/_components/cresyva-brand";
 import {
   IconGrid,
   IconTag,
@@ -29,7 +30,7 @@ import {
  * Sidebar du dashboard marchand — habillage repris de `AdminSidebar`
  * (chantier d'unification design, sept. 2026) : mêmes classes
  * `adm-sidebar-link`/`adm-sidebar-link-active`/`adm-sidebar-group-label`,
- * même structure navy `#0E1130` + item actif violet `#5027B9`.
+ * même structure navy `#0F172A` + item actif violet `#00B98C`.
  *
  * Remplace l'ancienne nav horizontale plate de `layout.tsx` (17 liens
  * dans un `<header>`, illisible dès qu'on dépasse ~8 sections) par les 4
@@ -177,15 +178,10 @@ export function DashboardSidebar({
 
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">
-      <Link href="/dashboard" className="mb-4 flex items-center gap-2.5 rounded-xl px-2 py-1.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600 font-jakarta text-sm font-bold text-white">
-          S
-        </span>
-        <span className="flex flex-col leading-tight">
-          <span className="font-jakarta text-sm font-bold text-white">SME-OS</span>
-          <span className="max-w-[160px] truncate text-[11px] font-medium text-white/40">{organizationName}</span>
-        </span>
-      </Link>
+      <div className="mb-4 px-2 py-1.5">
+        <CresyvaBrand href="/dashboard" compact dark />
+        <p className="mt-2 max-w-[180px] truncate text-[11px] font-medium text-white/40">{organizationName}</p>
+      </div>
 
       <nav className="flex-1 overflow-y-auto pb-2">
         {groups.map((group) => (

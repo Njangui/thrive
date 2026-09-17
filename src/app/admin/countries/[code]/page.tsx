@@ -157,7 +157,7 @@ export default async function AdminCountryDetailPage({
       </section>
 
       <section className="rounded-xl border border-navy-900/10 bg-white p-4">
-        <h2 className="font-jakarta text-sm font-semibold uppercase tracking-wide text-slate-500">SME-OS</h2>
+        <h2 className="font-jakarta text-sm font-semibold uppercase tracking-wide text-slate-500">CRESYVA</h2>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
             <p>

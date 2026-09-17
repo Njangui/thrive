@@ -42,7 +42,7 @@ export default async function OnboardingPage() {
 
   if (!org) {
     return (
-      <main className="min-h-screen bg-[#F7F6FD] px-5">
+      <main className="min-h-screen bg-[#F8FAFC] px-5">
         <OnboardingWizard countries={countries} />
       </main>
     );
@@ -57,7 +57,7 @@ export default async function OnboardingPage() {
   const resumeStep = Math.min(Math.max(status.step, 2), 6);
 
   return (
-    <main className="min-h-screen bg-[#F7F6FD] px-5">
+    <main className="min-h-screen bg-[#F8FAFC] px-5">
       <OnboardingWizard countries={countries} initialStep={resumeStep} initialOrganizationId={org.organizationId} />
     </main>
   );

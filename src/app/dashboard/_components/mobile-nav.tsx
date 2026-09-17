@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CresyvaBrand } from "@/app/_components/cresyva-brand";
 import type { ModuleKey } from "@/application/config/modules";
 import { isActive, useVisibleNavGroups } from "./dashboard-nav";
 
 /**
  * `DashboardSidebar` est masquée sous `lg` (`hidden lg:flex`) — sans ce
  * composant, le dashboard serait impossible à naviguer sur mobile, alors
- * que la majorité des commerçants cibles de SME-OS l'utilisent
+ * que la majorité des commerçants cibles de CRESYVA l'utilisent
  * probablement depuis leur téléphone. Miroir de `AdminMobileNav`.
  *
  * Filtrée par `enabledModules` comme `DashboardSidebar` (même
@@ -70,13 +71,10 @@ export function DashboardMobileNav({
               <button type="button" aria-label="Fermer le menu" onClick={() => setOpen(false)} className="flex-1 bg-navy-900/40" />
               <div className="flex h-full w-[280px] flex-col overflow-y-auto bg-navy-900 px-3 py-5">
                 <div className="mb-4 flex items-center justify-between px-2">
-                  <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 font-jakarta text-sm font-bold text-white">S</span>
-                    <span className="flex flex-col leading-tight">
-                      <span className="font-jakarta text-sm font-bold text-white">SME-OS</span>
-                      <span className="max-w-[160px] truncate text-[11px] font-medium text-white/40">{organizationName}</span>
-                    </span>
-                  </Link>
+                  <div onClick={() => setOpen(false)}>
+                    <CresyvaBrand href="/dashboard" compact dark />
+                    <p className="mt-2 max-w-[180px] truncate text-[11px] font-medium text-white/40">{organizationName}</p>
+                  </div>
                   <button type="button" onClick={() => setOpen(false)} aria-label="Fermer" className="text-white/60">
                     ✕
                   </button>

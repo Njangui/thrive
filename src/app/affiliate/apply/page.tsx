@@ -79,9 +79,9 @@ export default async function AffiliateApplyPage({
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="font-display text-2xl font-bold">Devenir affilié SME-OS</h1>
+      <h1 className="font-display text-2xl font-bold">Devenir affilié CRESYVA</h1>
       <p className="mt-1 text-sm text-muted">
-        Recommandez SME-OS et touchez une commission sur chaque nouveau client que vous apportez.
+        Recommandez CRESYVA et touchez une commission sur chaque nouveau client que vous apportez.
       </p>
 
       {success && (
@@ -119,7 +119,7 @@ export default async function AffiliateApplyPage({
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium uppercase text-muted" htmlFor="promotionChannels">
-            Comment comptez-vous promouvoir SME-OS ?
+            Comment comptez-vous promouvoir CRESYVA ?
           </label>
           <textarea
             id="promotionChannels"

@@ -44,7 +44,7 @@ export async function ensureZernioProfile(organizationId: string, organizationNa
   const created = await client.createProfile({
     name: organizationName.trim().slice(0, 80) || `SME-OS ${organizationId.slice(0, 8)}`,
     description: `Profil SME-OS — ${organizationName}`,
-    color: "#6D28D9",
+    color: "#009979",
   });
   const profileId = created.profile._id;
 

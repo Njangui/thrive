@@ -17,7 +17,7 @@ import { DashboardHelp } from "./_components/dashboard-help";
  * `admin/layout.tsx` (chantier d'unification design, sept. 2026).
  * Remplace l'ancien `<header>` horizontal (17 liens à plat, illisible :
  * voir l'historique de ce fichier) par `DashboardSidebar`/
- * `DashboardTopbar`, sur `adm-shell` — même fond `#F7F6FD`, même police
+ * `DashboardTopbar`, sur `adm-shell` — même fond `#F8FAFC`, même police
  * que la console Super Admin et la landing.
  *
  * Toute la logique métier (auth, onboarding, garde-fous) est inchangée —

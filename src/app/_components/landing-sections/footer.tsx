@@ -17,7 +17,7 @@ export function FooterSection({ tenant }: { tenant: TenantContext }) {
       <p className="mt-1">
         Site propulsé par{" "}
         <a href="https://sme-os.app" className="font-medium hover:text-brand">
-          SME-OS
+          CRESYVA
         </a>
       </p>
     </footer>

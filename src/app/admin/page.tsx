@@ -57,7 +57,7 @@ export default async function AdminOverviewPage() {
     <div className="flex flex-col gap-6">
       <AdminSectionHeader
         title="Vue globale"
-        description="Ce qui se passe sur la plateforme SME-OS en ce moment."
+        description="Ce qui se passe sur la plateforme CRESYVA en ce moment."
         action={<span className="adm-badge-neutral">Fenêtre : 30 derniers jours</span>}
       />
 

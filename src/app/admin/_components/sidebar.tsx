@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CresyvaBrand } from "@/app/_components/cresyva-brand";
 import {
   IconGrid,
   IconBuilding,
@@ -18,8 +19,8 @@ import {
 
 /**
  * Sidebar de la console Super Admin — habillage visuel repris pixel par
- * pixel d'une référence fournie (sidebar navy `#0E1130`, item actif
- * violet `#5027B9`), mais avec les VRAIES sections `/admin/*` du projet
+ * pixel d'une référence fournie (sidebar navy `#0F172A`, item actif
+ * violet `#00B98C`), mais avec les VRAIES sections `/admin/*` du projet
  * (03_LOT_C_super_admin.md), pas les items d'une boutique tenant
  * (Produits/Commandes/Clients) qui figuraient dans la référence — la
  * console Super Admin gère la plateforme, pas une boutique individuelle.
@@ -74,15 +75,10 @@ export function AdminSidebar() {
 
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">
-      <Link href="/admin" className="mb-4 flex items-center gap-2.5 rounded-xl px-2 py-1.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600 font-jakarta text-sm font-bold text-white">
-          S
-        </span>
-        <span className="flex flex-col leading-tight">
-          <span className="font-jakarta text-sm font-bold text-white">SME-OS</span>
-          <span className="text-[11px] font-medium text-white/40">Console Super Admin</span>
-        </span>
-      </Link>
+      <div className="mb-4 px-2 py-1.5">
+        <CresyvaBrand href="/admin" compact dark />
+        <p className="mt-2 text-[11px] font-medium text-white/40">Console Super Admin</p>
+      </div>
 
       <nav className="flex-1 overflow-y-auto pb-2">
         {ADMIN_NAV_GROUPS.map((group) => (
