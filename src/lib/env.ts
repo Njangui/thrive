@@ -63,7 +63,7 @@ const EnvSchema = z.object({
   // avec `npx web-push generate-vapid-keys`.
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_SUBJECT: z.string().default("mailto:support@sme-os.app"),
+  VAPID_SUBJECT: z.string().default("mailto:support@cresyva.app"),
 
   // Lot L, Partie 1 — EmailProvider (invitations d'équipe). Optionnelle :
   // en son absence, getEmailProvider() (registry.ts) retombe sur

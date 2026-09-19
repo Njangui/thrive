@@ -27,6 +27,7 @@ export function DashboardTopbar({
   roleLabel,
   initials,
   industry,
+  isPlatformAdmin,
 }: {
   organizationName: string;
   enabledModules: ModuleKey[];
@@ -35,10 +36,11 @@ export function DashboardTopbar({
   roleLabel: string;
   initials: string;
   industry?: string | null;
+  isPlatformAdmin?: boolean;
 }) {
   return (
     <header className="flex min-w-0 items-center gap-2 border-b border-navy-900/[0.06] bg-white/80 px-4 py-3 backdrop-blur sm:px-6">
-      <DashboardMobileNav organizationName={organizationName} enabledModules={enabledModules} industry={industry} />
+      <DashboardMobileNav organizationName={organizationName} enabledModules={enabledModules} industry={industry} isPlatformAdmin={isPlatformAdmin} />
 
       <TopbarSearch enabledModules={enabledModules} industry={industry} />
 

@@ -291,12 +291,32 @@ export function IconMegaphone(props: IconProps) {
   );
 }
 
+export function IconLink(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 13.5 8.5 15a3.5 3.5 0 0 1-5-5l2.5-2.5a3.5 3.5 0 0 1 5 0" />
+      <path d="m14 10.5 1.5-1.5a3.5 3.5 0 0 1 5 5L18 16.5a3.5 3.5 0 0 1-5 0" />
+      <path d="m8.5 12 7-7" />
+    </svg>
+  );
+}
+
 export function IconHelp(props: IconProps) {
   return (
     <svg {...base} {...props}>
       <circle cx="12" cy="12" r="9" />
       <path d="M9.3 9.3a2.7 2.7 0 1 1 3.7 2.5c-.9.4-1 1-1 1.9" />
       <circle cx="12" cy="17" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** Lien "Console Admin" de la nav dashboard (visible uniquement pour les platform_admins, voir dashboard-nav.tsx). */
+export function IconShield(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3.5l7 3v5.2c0 4.4-2.9 7.9-7 9.3-4.1-1.4-7-4.9-7-9.3V6.5l7-3Z" />
+      <path d="M9 12l2 2 4-4.2" />
     </svg>
   );
 }

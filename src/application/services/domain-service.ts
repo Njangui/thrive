@@ -2,6 +2,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { ValidationError } from "@/lib/errors";
 import { getDomainProvider } from "@/infrastructure/providers/registry";
 import { notifyOrgAdmins } from "./notification-service";
+import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 
 /**
  * Lot G, Partie 3 — face tenant. Le cahier (07_LOT_G) ne liste que
@@ -144,6 +145,14 @@ export async function requestDomain(
     body: `Votre demande pour ${normalized} a été transmise à notre équipe et sera traitée sous peu.`,
     relatedEntityType: "domain_request",
     relatedEntityId: result.requestId,
+    priority: "normal",
+  });
+
+  await notifyPlatformAdminTelegram("DOMAIN_REQUESTED", {
+    organizationId,
+    entityType: "domain_request",
+    entityId: result.requestId,
+    details: { domaine: normalized },
   });
 
   return { requestId: result.requestId };

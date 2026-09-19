@@ -4,6 +4,7 @@ import {
   resolveStorefrontHighlights,
   resolveHeroLayout,
   resolveHeroMedia,
+  countCurrentPromotions,
   type StorefrontCapabilities,
 } from "./storefront-service";
 import { STOREFRONT_BLUEPRINTS } from "@/application/config/storefront-blueprint";
@@ -265,5 +266,44 @@ describe("resolveHeroMedia", () => {
     const config = makeConfig({ heroMediaUrl: null });
     const tenant = makeTenant({ bannerUrl: null });
     expect(resolveHeroMedia(config, tenant)).toBeNull();
+  });
+});
+
+describe("countCurrentPromotions", () => {
+  const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  it("compte une promotion sans échéance et une promotion à échéance future", () => {
+    expect(
+      countCurrentPromotions([
+        { unit_price: 20000, compare_at_price: 25000, promotion_ends_at: null },
+        { unit_price: 10000, compare_at_price: 12000, promotion_ends_at: future },
+      ]),
+    ).toBe(2);
+  });
+
+  it("ne compte pas une promotion dont l'échéance est dépassée — sinon le lien « Promotions » mènerait à une page vide", () => {
+    expect(
+      countCurrentPromotions([
+        { unit_price: 20000, compare_at_price: 25000, promotion_ends_at: past },
+      ]),
+    ).toBe(0);
+  });
+
+  it("ne compte pas un prix barré inférieur ou égal au prix de vente (saisie erronée)", () => {
+    expect(
+      countCurrentPromotions([
+        { unit_price: 20000, compare_at_price: 20000, promotion_ends_at: null },
+        { unit_price: 20000, compare_at_price: 15000, promotion_ends_at: null },
+      ]),
+    ).toBe(0);
+  });
+
+  it("accepte les valeurs numériques renvoyées en chaîne par PostgREST (colonnes numeric) et l'absence de promotion_ends_at", () => {
+    expect(countCurrentPromotions([{ unit_price: "20000", compare_at_price: "25000" }])).toBe(1);
+  });
+
+  it("liste vide → 0", () => {
+    expect(countCurrentPromotions([])).toBe(0);
   });
 });

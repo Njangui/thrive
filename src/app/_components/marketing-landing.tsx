@@ -187,8 +187,10 @@ function HeroPreview() {
 
 export async function MarketingLanding({
   waitlistFeedback,
+  isAuthenticated,
 }: {
   waitlistFeedback?: { success?: string; error?: string };
+  isAuthenticated?: boolean;
 } = {}) {
   // Country Engine (section 22) : jamais une liste écrite en dur — pilotée
   // par le Super Admin (/admin/countries), synchronisée depuis NotchPay.
@@ -210,14 +212,22 @@ export async function MarketingLanding({
             <Link href="/devenir-affilie" className="hover:text-navy-900">Devenir affilié</Link>
           </nav>
           <div className="hidden items-center gap-5 md:flex">
-            <Link href="/login" className="text-sm font-medium text-navy-900/70 hover:text-navy-900">
-              Connexion
-            </Link>
-            <Link href="/signup" className="mkt-btn-primary !px-5 !py-2.5">
-              Commencer gratuitement
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/dashboard" className="mkt-btn-primary !px-5 !py-2.5">
+                Accéder à mon tableau de bord
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm font-medium text-navy-900/70 hover:text-navy-900">
+                  Connexion
+                </Link>
+                <Link href="/signup" className="mkt-btn-primary !px-5 !py-2.5">
+                  Commencer gratuitement
+                </Link>
+              </>
+            )}
           </div>
-          <MarketingMobileMenu />
+          <MarketingMobileMenu isAuthenticated={isAuthenticated} />
         </div>
       </header>
 
@@ -238,18 +248,26 @@ export async function MarketingLanding({
             Vous gagnez en clarté, en temps et en capacité de croissance.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/signup" className="mkt-btn-primary w-full sm:w-auto">
-              Essayer gratuitement
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/dashboard" className="mkt-btn-primary w-full sm:w-auto">
+                Accéder à mon tableau de bord
+              </Link>
+            ) : (
+              <Link href="/signup" className="mkt-btn-primary w-full sm:w-auto">
+                Essayer gratuitement
+              </Link>
+            )}
             <Link href="#comment-ca-marche" className="mkt-btn-secondary w-full sm:w-auto">
               Voir comment ça marche
             </Link>
           </div>
-          <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs font-medium text-navy-900/50 sm:flex-row sm:gap-6">
-            <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Aucune carte bancaire</span>
-            <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Prêt en quelques minutes</span>
-            <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Annulable à tout moment</span>
-          </div>
+          {!isAuthenticated && (
+            <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs font-medium text-navy-900/50 sm:flex-row sm:gap-6">
+              <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Aucune carte bancaire</span>
+              <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Prêt en quelques minutes</span>
+              <span className="mkt-check"><IconCheck className="h-3.5 w-3.5 text-violet-600" /> Annulable à tout moment</span>
+            </div>
+          )}
         </div>
 
         <div className="mt-14">
@@ -453,16 +471,33 @@ export async function MarketingLanding({
       {/* CTA FINAL */}
       <section className="mkt-container py-16 text-center">
         <div className="mx-auto max-w-3xl rounded-3xl bg-navy-900 px-6 py-14 sm:px-16">
-          <h2 className="font-jakarta text-2xl font-bold tracking-tight text-white md:text-3xl">
-            Prêt à organiser votre entreprise ?
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-white/60">
-            Créez votre compte en quelques minutes. Aucune carte bancaire nécessaire pour commencer.
-          </p>
-          <Link href="/signup" className="mkt-btn-primary mt-7 inline-flex">
-            Commencer gratuitement
-            <IconArrowRight className="ml-2 h-4 w-4" />
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <h2 className="font-jakarta text-2xl font-bold tracking-tight text-white md:text-3xl">
+                Prêt à continuer votre activité ?
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-white/60">
+                Retrouvez votre catalogue, vos clients et vos ventes là où vous les avez laissés.
+              </p>
+              <Link href="/dashboard" className="mkt-btn-primary mt-7 inline-flex">
+                Accéder à mon tableau de bord
+                <IconArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <h2 className="font-jakarta text-2xl font-bold tracking-tight text-white md:text-3xl">
+                Prêt à organiser votre entreprise ?
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-white/60">
+                Créez votre compte en quelques minutes. Aucune carte bancaire nécessaire pour commencer.
+              </p>
+              <Link href="/signup" className="mkt-btn-primary mt-7 inline-flex">
+                Commencer gratuitement
+                <IconArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </>
+          )}
         </div>
       </section>
 
@@ -474,7 +509,11 @@ export async function MarketingLanding({
             <Link href="#fonctionnalites" className="hover:text-navy-900">Fonctionnalités</Link>
             <Link href="/tarifs" className="hover:text-navy-900">Tarifs</Link>
             <Link href="/devenir-affilie" className="hover:text-navy-900">Devenir affilié</Link>
-            <Link href="/login" className="hover:text-navy-900">Connexion</Link>
+            {isAuthenticated ? (
+              <Link href="/dashboard" className="hover:text-navy-900">Tableau de bord</Link>
+            ) : (
+              <Link href="/login" className="hover:text-navy-900">Connexion</Link>
+            )}
             <Link href="/cgu" className="hover:text-navy-900">CGU</Link>
             <Link href="/confidentialite" className="hover:text-navy-900">Confidentialité</Link>
             <Link href="/mentions-legales" className="hover:text-navy-900">Mentions légales</Link>

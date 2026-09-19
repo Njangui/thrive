@@ -5,10 +5,12 @@ import type { MemberRole } from "./auth-service";
 import {
   listStorefrontProducts,
   listStorefrontCategories,
+  resolvePrimaryImageUrl,
   type CatalogProductSummary,
   type StorefrontProduct,
   type StorefrontCategory,
 } from "./catalog-service";
+import type { CatalogSpecification } from "@/domain/entities/catalog";
 import {
   LANDING_SECTION_TYPES,
   LandingSectionsSchema,
@@ -418,6 +420,8 @@ export interface ServiceSummary {
   price: number;
   durationMinutes: number | null;
   categoryName: string | null;
+  /** Catalogue V2 (0056) — parité avec CatalogProductSummary.imageUrl. */
+  imageUrl: string | null;
 }
 
 /** `services` actifs, mêmes conventions que `catalog-service.ts::listActiveProductsForStorefront`. */
@@ -425,7 +429,7 @@ export async function listActiveServicesForStorefront(organizationId: string, li
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, slug, description, price, duration_minutes, categories(name)")
+    .select("id, name, slug, description, price, duration_minutes, categories(name), service_images(url, position)")
     .eq("organization_id", organizationId)
     .eq("status", "active")
     .order("name")
@@ -441,6 +445,9 @@ export async function listActiveServicesForStorefront(organizationId: string, li
     price: Number(s.price),
     durationMinutes: s.duration_minutes,
     categoryName: (s as unknown as { categories?: { name?: string } }).categories?.name ?? null,
+    imageUrl: resolvePrimaryImageUrl(
+      (s as unknown as { service_images?: { url: string; position: number }[] }).service_images,
+    ),
   }));
 }
 
@@ -738,6 +745,10 @@ export async function deleteTestimonial(organizationId: string, testimonialId: s
 
 export interface ServiceDetail extends ServiceSummary {
   status: string;
+  /** Catalogue V2 (0056) — galerie complète triée par position ; images[0] === imageUrl. */
+  images: string[];
+  /** Catalogue V2 (0056) — jamais undefined : [] si aucune configurée. */
+  specifications: CatalogSpecification[];
 }
 
 /**
@@ -750,13 +761,22 @@ export async function getServiceBySlug(organizationId: string, slug: string): Pr
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, slug, description, price, duration_minutes, status, categories(name)")
+    .select(
+      "id, name, slug, description, price, duration_minutes, status, specifications, categories(name), service_images(url, position)",
+    )
     .eq("organization_id", organizationId)
     .eq("slug", slug)
     .maybeSingle();
 
   if (error) throw new Error(`Erreur lecture prestation : ${error.message}`);
   if (!data) return null;
+
+  const images = (
+    (data as unknown as { service_images?: { url: string; position: number }[] }).service_images ?? []
+  )
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((img) => img.url);
 
   return {
     id: data.id,
@@ -767,6 +787,9 @@ export async function getServiceBySlug(organizationId: string, slug: string): Pr
     durationMinutes: data.duration_minutes,
     categoryName: (data as unknown as { categories?: { name?: string } }).categories?.name ?? null,
     status: data.status,
+    imageUrl: images[0] ?? null,
+    images,
+    specifications: (data as unknown as { specifications?: CatalogSpecification[] | null }).specifications ?? [],
   };
 }
 

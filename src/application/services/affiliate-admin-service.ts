@@ -2,7 +2,6 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { writeAdminAuditLog } from "./admin-organizations-service";
 import { getPlatformSettingNumber } from "./platform-settings-service";
-import { notifyPlatformOperators } from "./affiliate-service";
 import type { AffiliateStatus, FraudSeverity } from "@/domain/entities/affiliate";
 
 /**
@@ -391,5 +390,3 @@ export async function updateAffiliateProgramSettings(
   }
 }
 
-/** Ré-export pratique pour les Server Actions admin (évite un import supplémentaire pour une simple notification). */
-export { notifyPlatformOperators };

@@ -6,6 +6,7 @@ import { trackProductClickAction } from "../track-product-click-action";
 import { StorefrontImage } from "./storefront-image";
 import { ProductBadges } from "./product-badges";
 import { ProductPrice } from "./product-price";
+import { CountdownTimer } from "./countdown-timer";
 
 /**
  * Carte produit de la vitrine. Remplace `src/app/_components/product-card.tsx`
@@ -54,6 +55,11 @@ export function ProductCard({
           newLabel={newBadgeLabel}
           className="absolute left-2.5 top-2.5"
         />
+        {product.promotionEndsAt && (
+          <div className="absolute right-2.5 top-2.5">
+            <CountdownTimer endsAt={product.promotionEndsAt} variant="compact" />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-4">

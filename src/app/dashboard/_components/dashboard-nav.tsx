@@ -24,6 +24,8 @@ import {
   IconHelp,
   IconCard,
   IconPuzzle,
+  IconLink,
+  IconShield,
 } from "@/app/_components/app-icons";
 
 /**
@@ -93,6 +95,7 @@ export const DASHBOARD_NAV_GROUPS: {
     items: [
       { href: "/dashboard/subscription", label: "Mon abonnement", icon: IconCard },
       { href: "/dashboard/addons", label: "Add-ons", icon: IconPuzzle },
+      { href: "/affiliate/dashboard", label: "Affiliation", icon: IconLink },
     ],
   },
 ];
@@ -103,10 +106,20 @@ export function isActive(pathname: string | null, href: string): boolean {
 }
 
 /** Groupes filtrés par modules activés, groupes devenus vides retirés
- * entièrement (jamais un titre "GESTION" affiché au-dessus de rien). */
-export function useVisibleNavGroups(enabledModules: ModuleKey[], industry?: string | null) {
+ * entièrement (jamais un titre "GESTION" affiché au-dessus de rien).
+ *
+ * `isPlatformAdmin` (optionnel) ajoute un dernier groupe "Plateforme" avec
+ * le lien vers la console Super Admin (`/admin`) — jamais un `item` avec
+ * `module` dans `DASHBOARD_NAV_GROUPS` (ça n'a rien à voir avec les
+ * modules par secteur d'activité). Simple confort d'accès pour un compte
+ * qui est À LA FOIS commerçant et admin plateforme : la vraie protection
+ * de `/admin/*` reste `requirePlatformAdmin()` dans son propre layout —
+ * masquer ce lien pour tout le monde d'autre n'est qu'un affichage
+ * cohérent avec le choix déjà fait là-bas de ne jamais confirmer
+ * l'existence de la console à qui n'y a pas droit (voir sa note). */
+export function useVisibleNavGroups(enabledModules: ModuleKey[], industry?: string | null, isPlatformAdmin?: boolean) {
   const ui = getIndustryUi(industry);
-  return DASHBOARD_NAV_GROUPS.map((group) => ({
+  const groups = DASHBOARD_NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items
       .filter((item) => !item.module || enabledModules.includes(item.module))
@@ -121,6 +134,15 @@ export function useVisibleNavGroups(enabledModules: ModuleKey[], industry?: stri
         return item;
       }),
   })).filter((group) => group.items.length > 0);
+
+  if (isPlatformAdmin) {
+    groups.push({
+      label: "Plateforme",
+      items: [{ href: "/admin", label: "Console Admin", icon: IconShield }],
+    });
+  }
+
+  return groups;
 }
 
 function CreditsWidget({ credits }: { credits: CreditStatus }) {
@@ -164,6 +186,7 @@ export function DashboardSidebar({
   roleLabel,
   initials,
   industry,
+  isPlatformAdmin,
 }: {
   organizationName: string;
   enabledModules: ModuleKey[];
@@ -172,9 +195,10 @@ export function DashboardSidebar({
   roleLabel: string;
   initials: string;
   industry?: string | null;
+  isPlatformAdmin?: boolean;
 }) {
   const pathname = usePathname();
-  const groups = useVisibleNavGroups(enabledModules, industry);
+  const groups = useVisibleNavGroups(enabledModules, industry, isPlatformAdmin);
 
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">

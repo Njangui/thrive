@@ -1,8 +1,8 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { pauseScheduledPostsForProduct } from "./marketing-service";
 import { notifyOrgAdmins } from "./notification-service";
-import { slugify } from "@/domain/entities/catalog";
-import { NotFoundError } from "@/lib/errors";
+import { slugify, CatalogSpecificationsSchema, type CatalogSpecification } from "@/domain/entities/catalog";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 
 export interface CatalogProductSummary {
   id: string;
@@ -199,12 +199,24 @@ export async function getActiveProducts(
 
 export interface CatalogProductDetail extends CatalogProductSummary {
   compareAtPrice: number | null;
+  /** Catalogue V2, itération 2 (0057) — échéance optionnelle de la promotion en cours ; `null` = pas de compte à rebours. */
+  promotionEndsAt: string | null;
   currentStock: number;
   status: string;
   images: string[];
   /** Lot H, Partie 1 — repli géré par src/lib/seo.ts::resolveProductSeo, pas ici. */
   seoTitle: string | null;
   seoDescription: string | null;
+  /** Catalogue V2 (0056) — jamais undefined : [] si aucune configurée, voir migration. */
+  specifications: CatalogSpecification[];
+}
+
+/** Une promotion SANS échéance reste "en promotion" indéfiniment (comportement historique) ; AVEC échéance, seulement tant qu'elle n'est pas dépassée. Détermine le prix barré ET le compte à rebours affichés (voir getProductBySlug/listStorefrontProducts) — la seule porte d'entrée de cette règle, jamais redérivée ailleurs. Exportée pour `storefront-service.ts::getStorefrontCapabilities` (visibilité du lien « Promotions », sitemap) : sans cela, ce décompte aurait continué de voir une promotion expirée. */
+export function isPromotionCurrentlyOn(compareAtPrice: number | null, unitPrice: number, promotionEndsAt: string | null): boolean {
+  if (compareAtPrice == null || compareAtPrice <= unitPrice) return false;
+  if (!promotionEndsAt) return true;
+  const deadline = Date.parse(promotionEndsAt);
+  return Number.isNaN(deadline) || deadline > Date.now();
 }
 
 /** Total de produits actifs pour la pagination de la vitrine publique (voir listActiveProductsForStorefront). */
@@ -339,7 +351,7 @@ export async function getProductBySlug(
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, slug, unit_price, compare_at_price, current_stock, status, description, seo_title, seo_description, categories(name), product_images(url, position)",
+      "id, name, slug, unit_price, compare_at_price, promotion_ends_at, current_stock, status, description, seo_title, seo_description, specifications, categories(name), product_images(url, position)",
     )
     .eq("organization_id", organizationId)
     .eq("slug", slug)
@@ -353,12 +365,22 @@ export async function getProductBySlug(
     .sort((a, b) => a.position - b.position)
     .map((img) => img.url);
 
+  const unitPrice = Number(data.unit_price);
+  const rawCompareAtPrice = data.compare_at_price ? Number(data.compare_at_price) : null;
+  const rawPromotionEndsAt = (data as unknown as { promotion_ends_at?: string | null }).promotion_ends_at ?? null;
+  // Effectif, pas brut : une promotion dont l'échéance est dépassée cesse
+  // d'être affichée comme telle sur la fiche publique — voir
+  // isPromotionCurrentlyOn ci-dessus et le commentaire de la migration
+  // 0057. La valeur brute reste consultable côté dashboard (getProductForEdit).
+  const promotionOn = isPromotionCurrentlyOn(rawCompareAtPrice, unitPrice, rawPromotionEndsAt);
+
   return {
     id: data.id,
     name: data.name,
     slug: data.slug,
-    unitPrice: Number(data.unit_price),
-    compareAtPrice: data.compare_at_price ? Number(data.compare_at_price) : null,
+    unitPrice,
+    compareAtPrice: promotionOn ? rawCompareAtPrice : null,
+    promotionEndsAt: promotionOn ? rawPromotionEndsAt : null,
     currentStock: Number(data.current_stock),
     status: data.status,
     description: data.description,
@@ -367,6 +389,7 @@ export async function getProductBySlug(
     categoryName: (data as unknown as { categories?: { name?: string } }).categories?.name ?? null,
     imageUrl: images[0] ?? null,
     images,
+    specifications: (data as unknown as { specifications?: CatalogSpecification[] | null }).specifications ?? [],
   };
 }
 
@@ -602,6 +625,13 @@ export interface CreateProductInput {
    * page produit — jusqu'ici jamais réglable depuis aucune UI.
    */
   compareAtPrice?: number | null;
+  /**
+   * Échéance optionnelle de la promotion (compare_at_price) — catalogue V2,
+   * itération 2 (0057). Ignorée si `compareAtPrice` ne donne finalement
+   * aucune promotion réelle (voir normalisation ci-dessous) : une
+   * échéance sans promotion n'aurait aucun sens à afficher.
+   */
+  promotionEndsAt?: string | null;
 }
 
 /** Création manuelle depuis le dashboard (section 50) — même chemin de données que l'import CSV. */
@@ -619,6 +649,9 @@ export async function createProduct(input: CreateProductInput): Promise<{ produc
   const status = input.status ?? (stock > 0 ? "active" : "draft");
   const compareAtPrice =
     input.compareAtPrice && input.compareAtPrice > input.unitPrice ? input.compareAtPrice : null;
+  // Jamais une échéance orpheline : sans promotion réelle, une date de fin
+  // n'a rien à clôturer (voir le commentaire de CreateProductInput).
+  const promotionEndsAt = compareAtPrice ? (input.promotionEndsAt ?? null) : null;
 
   const { data, error } = await supabase
     .from("products")
@@ -630,6 +663,7 @@ export async function createProduct(input: CreateProductInput): Promise<{ produc
       category_id: categoryId,
       unit_price: input.unitPrice,
       compare_at_price: compareAtPrice,
+      promotion_ends_at: promotionEndsAt,
       current_stock: stock,
       status,
     })
@@ -768,6 +802,81 @@ export async function setPrimaryProductImage(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Catalogue V2 (0056) — "informations complémentaires" : liste ordonnée de
+// paires libellé/valeur (products.specifications, JSONB). Même politique
+// que la galerie photo ci-dessus : une action dédiée par opération
+// (ajouter/supprimer), jamais mélangée à updateProduct pour ne jamais
+// écraser silencieusement la liste par un update partiel du reste du
+// formulaire.
+// ---------------------------------------------------------------------------
+
+async function readProductSpecifications(organizationId: string, productId: string): Promise<CatalogSpecification[]> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("specifications")
+    .eq("id", productId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erreur lecture des informations complémentaires du produit ${productId}: ${error.message}`);
+  if (!data) throw new NotFoundError("Produit introuvable.");
+  return (data as unknown as { specifications?: CatalogSpecification[] | null }).specifications ?? [];
+}
+
+export async function listProductSpecifications(organizationId: string, productId: string): Promise<CatalogSpecification[]> {
+  return readProductSpecifications(organizationId, productId);
+}
+
+/** Ajoute une ligne à la FIN de la liste — jamais de réordonnancement (pas critique comme la photo principale, section 11 : éviter la complexité inutile pour le MVP). */
+export async function addProductSpecification(
+  organizationId: string,
+  productId: string,
+  label: string,
+  value: string,
+): Promise<void> {
+  const existing = await readProductSpecifications(organizationId, productId);
+  const parsed = CatalogSpecificationsSchema.safeParse([...existing, { label, value }]);
+  if (!parsed.success) {
+    throw new ValidationError(
+      "Informations invalides : libellé et valeur obligatoires (12 lignes maximum au total).",
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ specifications: parsed.data })
+    .eq("id", productId)
+    .eq("organization_id", organizationId);
+
+  if (error) throw new Error(`Impossible d'ajouter l'information: ${error.message}`);
+}
+
+export async function removeProductSpecification(
+  organizationId: string,
+  productId: string,
+  index: number,
+): Promise<void> {
+  const existing = await readProductSpecifications(organizationId, productId);
+  const next = existing.filter((_, i) => i !== index);
+
+  const supabase = getSupabaseServiceClient();
+  // [] explicite (retrait volontaire de la dernière ligne), jamais null ici
+  // — null resterait réservé au produit qui n'a jamais rien configuré (voir
+  // commentaire de la colonne, migration 0056). Un affichage public traite
+  // les deux de la même façon (bloc masqué), la distinction n'a d'intérêt
+  // que pour un futur historique, pas pour ce chemin.
+  const { error } = await supabase
+    .from("products")
+    .update({ specifications: next })
+    .eq("id", productId)
+    .eq("organization_id", organizationId);
+
+  if (error) throw new Error(`Impossible de supprimer l'information: ${error.message}`);
+}
+
 export interface UpdateProductInput {
   name: string;
   description?: string;
@@ -783,6 +892,14 @@ export interface UpdateProductInput {
   seoDescription?: string;
   /** Prix barré — voir CreateProductInput. `null` explicite retire la promotion. */
   compareAtPrice?: number | null;
+  /**
+   * Échéance de la promotion — catalogue V2, itération 2 (0057). N'est
+   * pris en compte QUE lorsque `compareAtPrice` fait partie du même
+   * appel (voir la normalisation dans `updateProduct` ci-dessous) :
+   * l'écran d'édition envoie toujours les deux champs ensemble, jamais
+   * l'un sans l'autre.
+   */
+  promotionEndsAt?: string | null;
 }
 
 /**
@@ -832,8 +949,12 @@ export async function updateProduct(
   // à l'envers affichée à un client) — silencieusement ramené à null
   // plutôt qu'une erreur bloquante pour une simple faute de saisie.
   if (input.compareAtPrice !== undefined) {
-    updatePayload.compare_at_price =
+    const finalCompareAtPrice =
       input.compareAtPrice !== null && input.compareAtPrice > input.unitPrice ? input.compareAtPrice : null;
+    updatePayload.compare_at_price = finalCompareAtPrice;
+    // Jamais une échéance orpheline (voir CreateProductInput) : sans
+    // promotion réelle après normalisation, aucune échéance n'a de sens.
+    updatePayload.promotion_ends_at = finalCompareAtPrice ? (input.promotionEndsAt ?? null) : null;
   }
 
   const { data, error } = await supabase
@@ -860,11 +981,17 @@ export interface ProductForEdit {
   categoryId: string | null;
   unitPrice: number;
   compareAtPrice: number | null;
+  /** Catalogue V2, itération 2 (0057) — valeur BRUTE telle qu'enregistrée (contrairement à CatalogProductDetail, jamais masquée si dépassée : le commerçant doit toujours voir ce qu'il a configuré pour pouvoir le relancer). */
+  promotionEndsAt: string | null;
+  /** Dérivé ici pour que l'écran d'édition n'ait aucune règle de date à recalculer — vrai si une échéance est renseignée et déjà dépassée. */
+  isPromotionExpired: boolean;
   currentStock: number;
   status: string;
   imageUrl: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
+  /** Catalogue V2 (0056) — jamais undefined : [] si aucune configurée. */
+  specifications: CatalogSpecification[];
 }
 
 /** Charge un produit pour pré-remplir le formulaire d'édition (Partie 2). */
@@ -874,7 +1001,7 @@ export async function getProductForEdit(organizationId: string, productId: strin
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, description, category_id, unit_price, compare_at_price, current_stock, status, seo_title, seo_description, categories(name), product_images(url, position)",
+      "id, name, description, category_id, unit_price, compare_at_price, promotion_ends_at, current_stock, status, seo_title, seo_description, specifications, categories(name), product_images(url, position)",
     )
     .eq("id", productId)
     .eq("organization_id", organizationId)
@@ -887,6 +1014,8 @@ export async function getProductForEdit(organizationId: string, productId: strin
     (data as unknown as { product_images?: { url: string; position: number }[] }).product_images ?? []
   ).sort((a, b) => a.position - b.position);
 
+  const promotionEndsAt = (data as unknown as { promotion_ends_at?: string | null }).promotion_ends_at ?? null;
+
   return {
     id: data.id,
     name: data.name,
@@ -895,11 +1024,14 @@ export async function getProductForEdit(organizationId: string, productId: strin
     categoryId: (data as unknown as { category_id?: string | null }).category_id ?? null,
     unitPrice: Number(data.unit_price),
     compareAtPrice: data.compare_at_price ? Number(data.compare_at_price) : null,
+    promotionEndsAt,
+    isPromotionExpired: Boolean(promotionEndsAt) && Date.parse(promotionEndsAt!) <= Date.now(),
     currentStock: Number(data.current_stock),
     status: data.status,
     imageUrl: images[0]?.url ?? null,
     seoTitle: data.seo_title,
     seoDescription: data.seo_description,
+    specifications: (data as unknown as { specifications?: CatalogSpecification[] | null }).specifications ?? [],
   };
 }
 
@@ -931,6 +1063,8 @@ export type ProductBadge = "promo" | "new" | "bestseller" | "featured" | "out_of
 
 export interface StorefrontProduct extends CatalogProductSummary {
   compareAtPrice: number | null;
+  /** Catalogue V2, itération 2 (0057) — `null` si pas d'échéance ou promotion expirée (voir isPromotionCurrentlyOn, appliqué avant que cet objet soit construit). */
+  promotionEndsAt: string | null;
   /** Remise arrondie à l'entier inférieur, `null` hors promotion. Calculée ici pour que l'affichage n'ait aucune règle métier. */
   discountPercent: number | null;
   createdAt: string;
@@ -1042,7 +1176,7 @@ function discountPercentOf(unitPrice: number, compareAtPrice: number | null): nu
 }
 
 const STOREFRONT_PRODUCT_COLUMNS =
-  "id, name, slug, unit_price, compare_at_price, description, status, is_featured, created_at, categories(name), product_images(url, position)";
+  "id, name, slug, unit_price, compare_at_price, promotion_ends_at, description, status, is_featured, created_at, categories(name), product_images(url, position)";
 
 /**
  * Lecture catalogue de la vitrine, avec filtres, tri, recherche et
@@ -1122,15 +1256,25 @@ export async function listStorefrontProducts(
     const raw = p as unknown as {
       categories?: { name?: string };
       product_images?: { url: string; position: number }[];
+      promotion_ends_at?: string | null;
     };
     const unitPrice = Number(p.unit_price);
-    const compareAtPrice = p.compare_at_price == null ? null : Number(p.compare_at_price);
+    const rawCompareAtPrice = p.compare_at_price == null ? null : Number(p.compare_at_price);
+    const rawPromotionEndsAt = raw.promotion_ends_at ?? null;
+    // Effectif partout ici : une promotion expirée ne doit alimenter ni
+    // le prix barré, ni le badge `promo`, ni le filtre `promotionsOnly`
+    // ci-dessous — voir isPromotionCurrentlyOn et le commentaire de la
+    // migration 0057.
+    const promotionOn = isPromotionCurrentlyOn(rawCompareAtPrice, unitPrice, rawPromotionEndsAt);
+    const compareAtPrice = promotionOn ? rawCompareAtPrice : null;
+    const promotionEndsAt = promotionOn ? rawPromotionEndsAt : null;
     return {
       id: p.id,
       name: p.name,
       slug: p.slug,
       unitPrice,
       compareAtPrice,
+      promotionEndsAt,
       discountPercent: discountPercentOf(unitPrice, compareAtPrice),
       description: p.description,
       categoryName: raw.categories?.name ?? null,
@@ -1178,12 +1322,17 @@ export async function countStorefrontProducts(
   if (options.promotionsOnly) {
     const { data, error } = await supabase
       .from("products")
-      .select("unit_price, compare_at_price")
+      .select("unit_price, compare_at_price, promotion_ends_at")
       .eq("organization_id", organizationId)
       .in("status", ["active", "out_of_stock"])
       .not("compare_at_price", "is", null);
     if (error) throw new Error(`Erreur comptage promotions : ${error.message}`);
-    return (data ?? []).filter((p) => Number(p.compare_at_price) > Number(p.unit_price)).length;
+    // Catalogue V2, itération 2 (0057) : une promotion dont l'échéance est
+    // dépassée ne doit plus compter — même filtre que listStorefrontProducts,
+    // sinon la pagination promettrait une page que le contenu ne tient plus.
+    return (data ?? []).filter((p) =>
+      isPromotionCurrentlyOn(Number(p.compare_at_price), Number(p.unit_price), p.promotion_ends_at),
+    ).length;
   }
 
   let query = supabase

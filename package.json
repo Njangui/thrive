@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
-    "seed:demo": "tsx scripts/seed-demo.ts"
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "telegram:setup": "node scripts/configure-telegram-admin-webhook.mjs",
+    "telegram:discover-chat": "node scripts/discover-telegram-admin-chat.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.6",

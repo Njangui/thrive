@@ -495,11 +495,25 @@ export default async function SitePage({
   const sectorBlueprint = getStorefrontBlueprint(industry);
 
   return (
-    <div className="site-editor-page mx-auto flex w-full max-w-7xl flex-col gap-5">
-      <h1 className="font-jakarta text-2xl font-bold tracking-tight">Mon site</h1>
-      <p className="text-sm text-slate-500">
-        Le logo, la bannière et l&apos;icône de votre site apparaissent sur la page que voient vos clients.
-      </p>
+    <div className="site-editor-page mx-auto flex w-full max-w-7xl flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="cresyva-eyebrow">Ma vitrine</p>
+          <h1 className="mt-1 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Personnalisation du site</h1>
+          <p className="mt-1 text-sm text-slate-500">Personnalisez l&apos;apparence et le contenu de votre site web.</p>
+        </div>
+        <div className="flex gap-2">
+          {env.NEXT_PUBLIC_ROOT_DOMAIN !== "localhost:3000" && <a href={`https://${media.slug}.${env.NEXT_PUBLIC_ROOT_DOMAIN}`} target="_blank" rel="noopener noreferrer" className="adm-btn-secondary">Aperçu du site ↗</a>}
+          <button type="submit" form="site-settings-form" className="adm-btn-primary">Enregistrer</button>
+        </div>
+      </div>
+
+      <nav className="site-editor-tabs" aria-label="Sections de l&apos;éditeur">
+        <a href="#theme" className="is-active">Thème</a>
+        <a href="#content">Contenu</a>
+        <a href="#sections">Sections</a>
+        <a href="#settings">Paramètres</a>
+      </nav>
 
       {error && (
         <p className="adm-alert-danger">{error}</p>
@@ -508,14 +522,14 @@ export default async function SitePage({
         <p className="adm-alert-success">{success}</p>
       )}
 
-      <form action={updateSiteAction} className="site-editor-main flex flex-col gap-4">
+      <form id="site-settings-form" action={updateSiteAction} className="site-editor-main flex flex-col gap-4">
         <input type="hidden" name="organizationId" value={organizationId} />
         <input type="hidden" name="currentLogoUrl" value={media.logoUrl ?? ""} />
         <input type="hidden" name="currentBannerUrl" value={media.bannerUrl ?? ""} />
         <input type="hidden" name="currentFaviconUrl" value={media.faviconUrl ?? ""} />
         <input type="hidden" name="currentSeoOgImageUrl" value={media.seoOgImageUrl ?? ""} />
 
-        <ImageUploadField
+        <div id="theme" className="site-editor-section-card"><div className="site-editor-section-heading"><span className="site-editor-section-dot">01</span><div><p className="text-sm font-bold">Identité visuelle</p><p className="text-xs text-slate-500">Logo, bannière et icône de votre vitrine.</p></div></div><ImageUploadField
           name="logo"
           label="Logo"
           currentUrl={media.logoUrl}
@@ -535,8 +549,10 @@ export default async function SitePage({
           currentUrl={media.faviconUrl}
           helpText="Petite icône affichée dans l'onglet du navigateur. Optionnel."
         />
+        </div>
 
-        <div className="flex flex-col gap-4 rounded-xl border border-navy-900/10 p-4">
+        <div id="content" className="site-editor-section-card flex flex-col gap-4 rounded-xl border border-navy-900/10 p-4">
+          <div className="site-editor-section-heading"><span className="site-editor-section-dot">02</span><div><p className="text-sm font-bold">Contenu & référencement</p><p className="text-xs text-slate-500">Les informations qui apparaissent sur Google et au partage.</p></div></div>
           <div>
             <p className="text-sm font-medium">Référencement sur Google</p>
             <p className="text-xs text-slate-500">
@@ -577,7 +593,8 @@ export default async function SitePage({
           />
         </div>
 
-        <div className="flex flex-col gap-4 rounded-xl border border-navy-900/10 p-4">
+        <div className="site-editor-section-card flex flex-col gap-4 rounded-xl border border-navy-900/10 p-4">
+          <div className="site-editor-section-heading"><span className="site-editor-section-dot">03</span><div><p className="text-sm font-bold">Réseaux sociaux</p><p className="text-xs text-slate-500">Ajoutez les profils visibles depuis votre vitrine.</p></div></div>
           <div>
             <p className="text-sm font-medium">Réseaux sociaux</p>
             <p className="text-xs text-slate-500">
@@ -656,8 +673,9 @@ export default async function SitePage({
       </aside>
 
       {/* Structure de page + personnalisation vitrine (Lot K, étendu par le chantier vitrine V2) */}
-      <div className="mt-4 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
+      <div id="sections" className="mt-2 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
+          <div className="site-editor-section-heading mb-3"><span className="site-editor-section-dot">04</span><div><p className="text-sm font-bold">Structure de la page</p><p className="text-xs text-slate-500">Choisissez un modèle puis activez et réordonnez les sections.</p></div></div>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {LANDING_PRESET_KEYS.filter((key) => key !== "default").map((preset) => (
               <form key={preset} action={applyPresetAction} className="rounded-2xl border border-navy-900/[0.06] bg-[#F8FAFC] p-4">
@@ -875,7 +893,7 @@ export default async function SitePage({
           Le pied de page (coordonnées, mentions) est toujours affiché, quelle que soit cette configuration.
         </p>
 
-        <form action={updateBrandingAction} className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
+        <div id="settings" className="site-editor-section-card"><div className="site-editor-section-heading"><span className="site-editor-section-dot">05</span><div><p className="text-sm font-bold">Paramètres de vitrine</p><p className="text-xs text-slate-500">Couleurs, typographie, témoignages et domaine.</p></div></div><form action={updateBrandingAction} className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
           <input type="hidden" name="organizationId" value={organizationId} />
           <p className="text-sm font-medium">Couleurs et police</p>
           <div className="flex gap-6">
@@ -913,7 +931,7 @@ export default async function SitePage({
             </select>
           </label>
           <SubmitButton pendingLabel="Enregistrement...">Enregistrer l&apos;apparence</SubmitButton>
-        </form>
+        </form></div>
 
         {env.NEXT_PUBLIC_ROOT_DOMAIN === "localhost:3000" ? (
           <p className="adm-muted text-sm">

@@ -1,22 +1,34 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { slugify } from "@/domain/entities/catalog";
-import { NotFoundError, ValidationError } from "@/lib/errors";
 
 /**
  * Lot 3 (audit master prompt §17) — la table `services` existe depuis
  * 0008_catalog_faq_business.sql (RLS déjà en place, "members can access
- * services of their org" for all), mais n'avait jusqu'ici aucune couche
- * applicative : ni service métier, ni page dashboard, ni intégration au
- * router IA (voir conversation-orchestrator.ts). Ce fichier comble le
- * premier point, en miroir direct de catalog-service.ts pour les
- * produits — même discipline (slug unique, statut dérivé, RLS comme
- * seule barrière DB, application layer pour la validation).
+ * services of their org" for all). Ce fichier ne porte plus QUE la
+ * lecture pour le router IA (recherche par nom, message de découverte
+ * WhatsApp) — voir conversation-orchestrator.ts.
  *
- * Volontairement plus simple que catalog-service.ts : pas d'image (le
- * cahier §17 la note "si utile", pas requise), pas de stock (une
- * prestation n'a pas de quantité), pas d'import CSV (périmètre non
- * demandé pour ce lot — un service à la fois suffit pour un catalogue de
- * prestations, généralement bien plus court qu'un catalogue produits).
+ * CORRECTIF (chantier catalogue V2, 0056) : ce fichier portait jusqu'ici
+ * AUSSI `createService`/`updateService`/`deleteService`, un second chemin
+ * d'écriture complet vers `services`, indépendant et incompatible de
+ * `service-service.ts` (Lot 2) — les deux existaient en parallèle depuis
+ * la fusion des lots 2 et 3, jamais réconciliés. Concrètement :
+ * `/dashboard/services` (page principale) écrivait via CE fichier
+ * (`priceFcfa`, suppression DÉFINITIVE), tandis que `/dashboard/services/
+ * new` et `/dashboard/services/[id]/edit` — seuls écrans à exposer la
+ * galerie photo et les informations complémentaires ajoutées par ce même
+ * chantier — écrivaient via `service-service.ts` (`price`, jamais de
+ * suppression dure, même convention que les produits). Un commerçant
+ * créant une prestation depuis la page principale n'avait donc AUCUN
+ * moyen d'atteindre la galerie qu'il venait de configurer nulle part
+ * ailleurs, et pouvait supprimer définitivement une prestation dont le
+ * lien était déjà partagé sur WhatsApp — contraire à la règle "jamais de
+ * suppression dure d'une entrée de catalogue" tenue partout ailleurs
+ * (voir l'en-tête de service-service.ts et de catalog-service.ts).
+ * `/dashboard/services/page.tsx` a été repointé sur `service-service.ts`
+ * (seul chemin d'écriture désormais) ; `listServices`/`createService`/
+ * `updateService`/`deleteService`/`findOrCreateCategory` de CE fichier
+ * sont donc retirés (plus aucun appelant) plutôt que laissés comme code
+ * mort divergent.
  */
 
 export interface ServiceSummary {
@@ -50,22 +62,6 @@ function mapServiceRow(row: {
     durationMinutes: row.duration_minutes,
     status: row.status as ServiceSummary["status"],
   };
-}
-
-export async function listServices(organizationId: string, includeInactive = true): Promise<ServiceSummary[]> {
-  const supabase = getSupabaseServiceClient();
-  let query = supabase
-    .from("services")
-    .select("id, name, slug, description, price, duration_minutes, status, categories(name)")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false });
-
-  if (!includeInactive) query = query.eq("status", "active");
-
-  const { data, error } = await query;
-  if (error) throw new Error(`Erreur lecture prestations: ${error.message}`);
-
-  return (data ?? []).map((r) => mapServiceRow(r as unknown as Parameters<typeof mapServiceRow>[0]));
 }
 
 /**
@@ -108,108 +104,4 @@ export function formatServiceDiscoveryMessage(services: ServiceSummary[]): strin
       return `• ${parts.join(" — ")}`;
     })
     .join("\n");
-}
-
-async function findOrCreateCategory(organizationId: string, categoryName: string): Promise<string> {
-  const supabase = getSupabaseServiceClient();
-  const slug = slugify(categoryName);
-
-  const { data: existing } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("slug", slug)
-    .maybeSingle();
-
-  if (existing) return existing.id;
-
-  const { data: created, error } = await supabase
-    .from("categories")
-    .insert({ organization_id: organizationId, name: categoryName, slug })
-    .select("id")
-    .single();
-
-  if (error || !created) throw new Error(`Impossible de créer la catégorie: ${error?.message}`);
-  return created.id;
-}
-
-export interface CreateServiceInput {
-  organizationId: string;
-  name: string;
-  description?: string;
-  categoryName?: string;
-  priceFcfa: number;
-  durationMinutes?: number;
-}
-
-export async function createService(input: CreateServiceInput): Promise<{ serviceId: string }> {
-  if (!input.name.trim()) throw new ValidationError("Le nom de la prestation est requis.");
-  if (input.priceFcfa < 0) throw new ValidationError("Le prix doit être positif.");
-
-  const supabase = getSupabaseServiceClient();
-  const categoryId = input.categoryName ? await findOrCreateCategory(input.organizationId, input.categoryName) : null;
-  const slug = `${slugify(input.name)}-${Math.random().toString(36).slice(2, 7)}`;
-
-  const { data, error } = await supabase
-    .from("services")
-    .insert({
-      organization_id: input.organizationId,
-      name: input.name,
-      slug,
-      description: input.description ?? null,
-      category_id: categoryId,
-      price: input.priceFcfa,
-      duration_minutes: input.durationMinutes ?? null,
-      status: "active",
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) throw new Error(`Impossible de créer la prestation: ${error?.message}`);
-  return { serviceId: data.id };
-}
-
-export interface UpdateServiceInput {
-  name?: string;
-  description?: string;
-  priceFcfa?: number;
-  durationMinutes?: number;
-  status?: "active" | "inactive" | "draft";
-}
-
-export async function updateService(organizationId: string, serviceId: string, input: UpdateServiceInput): Promise<void> {
-  const patch: Record<string, unknown> = {};
-  if (input.name !== undefined) {
-    if (!input.name.trim()) throw new ValidationError("Le nom de la prestation est requis.");
-    patch.name = input.name;
-  }
-  if (input.description !== undefined) patch.description = input.description || null;
-  if (input.priceFcfa !== undefined) {
-    if (input.priceFcfa < 0) throw new ValidationError("Le prix doit être positif.");
-    patch.price = input.priceFcfa;
-  }
-  if (input.durationMinutes !== undefined) patch.duration_minutes = input.durationMinutes || null;
-  if (input.status !== undefined) patch.status = input.status;
-
-  const supabase = getSupabaseServiceClient();
-  const { error, count } = await supabase
-    .from("services")
-    .update(patch, { count: "exact" })
-    .eq("id", serviceId)
-    .eq("organization_id", organizationId);
-
-  if (error) throw new Error(`Impossible de mettre à jour la prestation: ${error.message}`);
-  if (!count) throw new NotFoundError("Prestation introuvable.");
-}
-
-export async function deleteService(organizationId: string, serviceId: string): Promise<void> {
-  const supabase = getSupabaseServiceClient();
-  const { error, count } = await supabase
-    .from("services")
-    .delete({ count: "exact" })
-    .eq("id", serviceId)
-    .eq("organization_id", organizationId);
-
-  if (error) throw new Error(`Impossible de supprimer la prestation: ${error.message}`);
-  if (!count) throw new NotFoundError("Prestation introuvable.");
 }

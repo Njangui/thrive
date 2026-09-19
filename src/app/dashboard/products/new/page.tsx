@@ -28,6 +28,9 @@ async function createProductAction(formData: FormData) {
       categoryId: String(formData.get("categoryId") ?? ""),
       unitPrice: Number(formData.get("price") ?? 0),
       compareAtPrice: formData.get("compareAtPrice") ? Number(formData.get("compareAtPrice")) : undefined,
+      promotionEndsAt: formData.get("promotionEndsAt")
+        ? new Date(String(formData.get("promotionEndsAt"))).toISOString()
+        : undefined,
       currentStock: Number(formData.get("stock") ?? 0),
       imageUrl: imageUrl ?? undefined,
     });
@@ -81,6 +84,15 @@ export default async function NewProductPage({
           <span className="text-xs text-slate-500">
             Doit être supérieur au prix ci-dessus — affiché barré, avec un badge « Promo », sur la fiche produit et
             dans la section Promotions de votre site.
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          Fin de la promotion (optionnel)
+          <input name="promotionEndsAt" type="datetime-local" className="rounded-xl border border-navy-900/10 px-4 py-3" />
+          <span className="text-xs text-slate-500">
+            Affiche un compte à rebours sur votre site tant que la promotion n&apos;est pas terminée. Laissez vide
+            pour une promotion sans date de fin.
           </span>
         </label>
 

@@ -43,6 +43,13 @@ export interface MessageReceivedEvent extends DomainEventBase {
     content: string;
     externalMessageId: string;
     channel: string;
+    attachment?: {
+      url: string;
+      type: "image" | "video" | "audio" | "file";
+      fileName?: string;
+      mimeType?: string;
+      fileId?: string;
+    };
   };
 }
 

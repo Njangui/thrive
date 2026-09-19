@@ -3,6 +3,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tenant";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getLandingConfig, type LandingConfig } from "./landing-config-service";
+import { isPromotionCurrentlyOn } from "./catalog-service";
 import {
   getStorefrontBlueprint,
   resolveStorefrontSector,
@@ -130,6 +131,28 @@ async function countRows(
 }
 
 /**
+ * Nombre de produits ACTUELLEMENT en promotion — même définition que
+ * `catalog-service.ts::isPromotionCurrentlyOn` (seule porte d'entrée de
+ * cette règle) : un `compare_at_price` inférieur ou égal au prix de vente
+ * (saisie erronée courante) n'est pas une promotion, et une promotion dont
+ * l'échéance (`promotion_ends_at`, catalogue V2) est dépassée n'en est plus
+ * une non plus. Sans ce second point, le lien « Promotions » du menu, le
+ * CTA du hero et le sitemap auraient continué d'annoncer une page vide dès
+ * la dernière échéance passée. Fonction pure, exportée pour être testée.
+ */
+export function countCurrentPromotions(
+  rows: { unit_price: number | string; compare_at_price: number | string | null; promotion_ends_at?: string | null }[],
+): number {
+  return rows.filter((row) =>
+    isPromotionCurrentlyOn(
+      row.compare_at_price == null ? null : Number(row.compare_at_price),
+      Number(row.unit_price),
+      row.promotion_ends_at ?? null,
+    ),
+  ).length;
+}
+
+/**
  * Une seule photo des capacités par requête HTTP (mémoïsée par `cache()`),
  * partagée par le layout, la page et le pied de page. Sans ça, chaque
  * composant qui a besoin de savoir « est-ce que ce tenant a des
@@ -160,7 +183,7 @@ export const getStorefrontCapabilities = cache(async function getStorefrontCapab
         .limit(1000),
       supabase
         .from("products")
-        .select("unit_price, compare_at_price")
+        .select("unit_price, compare_at_price, promotion_ends_at")
         .eq("organization_id", organizationId)
         .in("status", ["active", "out_of_stock"])
         .not("compare_at_price", "is", null)
@@ -169,12 +192,7 @@ export const getStorefrontCapabilities = cache(async function getStorefrontCapab
     ]);
 
   const categoryCount = new Set((categoryRows.data ?? []).map((row) => row.category_id)).size;
-  // Même définition de « promotion » que partout ailleurs : un
-  // compare_at_price renseigné mais inférieur au prix de vente (saisie
-  // erronée courante) n'est pas une promotion.
-  const promotionCount = (promotionRows.data ?? []).filter(
-    (row) => Number(row.compare_at_price) > Number(row.unit_price),
-  ).length;
+  const promotionCount = countCurrentPromotions(promotionRows.data ?? []);
   const galleryCount = galleryRows.count ?? 0;
 
   const socialLinkCount = Object.values(tenant.socialLinks).filter((url) => toSafeHref(url)).length;

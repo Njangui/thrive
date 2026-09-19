@@ -13,8 +13,24 @@ import { ValidationError } from "@/lib/errors";
  * Lot E, alors que la composition « texte + visuel » attend un format
  * portrait/carré ; les ranger sous le même type rendrait impossible de
  * remplacer l'un sans écraser l'autre.
+ *
+ * "service" (catalogue V2, 0056) : galerie photo d'une prestation —
+ * distinct de "product" pour la même raison que le reste de ce fichier
+ * distingue produits et services (dossiers de stockage séparés, jamais
+ * mélangés dans le même sous-répertoire du bucket).
+ *
+ * "telegram-inbox" : pièces jointes reçues par le bot Telegram d'un tenant
+ * (webhook /api/webhooks/telegram/tenant/[token]) — Telegram Omnichannel v3.
  */
-export type MediaType = "logo" | "banner" | "favicon" | "product" | "seo_og" | "hero";
+export type MediaType =
+  | "logo"
+  | "banner"
+  | "favicon"
+  | "product"
+  | "seo_og"
+  | "hero"
+  | "service"
+  | "telegram-inbox";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 Mo — large mais borné (section 54 : échouer fort plutôt que silencieusement)
 

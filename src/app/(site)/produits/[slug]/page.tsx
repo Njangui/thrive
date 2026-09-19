@@ -10,7 +10,9 @@ import { STOREFRONT_PATHS, productPath } from "@/application/config/storefront-r
 import { TrackedCtaLink } from "@/app/_components/tracked-cta-link";
 import { formatPrice } from "@/lib/format";
 import { StorefrontImage } from "@/app/_components/storefront/storefront-image";
+import { SpecificationsTable } from "@/app/_components/storefront/specifications-table";
 import { ProductPrice } from "@/app/_components/storefront/product-price";
+import { CountdownTimer } from "@/app/_components/storefront/countdown-timer";
 import { ProductGrid } from "@/app/_components/storefront/product-card";
 import { Container, Breadcrumbs, SectionHeading } from "@/app/_components/storefront/storefront-ui";
 import { requireStorefront, buildBreadcrumbJsonLd } from "../../_lib/storefront-page";
@@ -174,6 +176,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
             <ProductPrice unitPrice={product.unitPrice} compareAtPrice={product.compareAtPrice} size="lg" />
 
+            {product.promotionEndsAt && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-black/45">Offre limitée — se termine dans</p>
+                <CountdownTimer endsAt={product.promotionEndsAt} variant="full" />
+              </div>
+            )}
+
             <span
               className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${
                 statusInfo.available ? "bg-leaf/10 text-leaf" : "bg-black/[0.07] text-black/55"
@@ -226,6 +235,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             )}
           </div>
         </div>
+
+        <SpecificationsTable specifications={product.specifications} />
 
         {related.length > 0 && (
           <div className="mt-14 border-t border-black/[0.07] pt-10">

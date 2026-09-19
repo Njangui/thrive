@@ -12,7 +12,7 @@ const LINKS = [
 ];
 
 /** Menu mobile de la landing marketing (§6/§93) — même esprit que dashboard-nav.tsx : simple, léger, jamais bloquant. */
-export function MarketingMobileMenu() {
+export function MarketingMobileMenu({ isAuthenticated }: { isAuthenticated?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -41,16 +41,28 @@ export function MarketingMobileMenu() {
                 {link.label}
               </Link>
             ))}
-            <Link href="/login" onClick={() => setIsOpen(false)} className="text-navy-900/70 hover:text-navy-900">
-              Connexion
-            </Link>
-            <Link
-              href="/signup"
-              onClick={() => setIsOpen(false)}
-              className="rounded-xl bg-violet-600 px-4 py-2.5 text-center font-medium text-white"
-            >
-              Commencer gratuitement
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setIsOpen(false)}
+                className="rounded-xl bg-violet-600 px-4 py-2.5 text-center font-medium text-white"
+              >
+                Accéder à mon tableau de bord
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" onClick={() => setIsOpen(false)} className="text-navy-900/70 hover:text-navy-900">
+                  Connexion
+                </Link>
+                <Link
+                  href="/signup"
+                  onClick={() => setIsOpen(false)}
+                  className="rounded-xl bg-violet-600 px-4 py-2.5 text-center font-medium text-white"
+                >
+                  Commencer gratuitement
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}

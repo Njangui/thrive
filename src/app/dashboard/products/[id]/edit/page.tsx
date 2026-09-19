@@ -8,12 +8,15 @@ import {
   removeProductImage,
   moveProductImage,
   setPrimaryProductImage,
+  addProductSpecification,
+  removeProductSpecification,
   restockProduct,
   listCategories,
 } from "@/application/services/catalog-service";
 import { resolveImageFromFormData } from "@/application/services/media-service";
 import { AppError, NotFoundError } from "@/lib/errors";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
+import { PromotionDeadlineField } from "@/app/_components/promotion-deadline-field";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { CategorySelect } from "../../../_components/category-select";
 
@@ -38,6 +41,9 @@ async function updateProductAction(formData: FormData) {
       categoryId: String(formData.get("categoryId") ?? ""),
       unitPrice: Number(formData.get("price") ?? 0),
       compareAtPrice: formData.get("compareAtPrice") ? Number(formData.get("compareAtPrice")) : null,
+      promotionEndsAt: formData.get("promotionEndsAt")
+        ? new Date(String(formData.get("promotionEndsAt"))).toISOString()
+        : null,
       currentStock: Number(formData.get("stock") ?? 0),
       status: String(formData.get("status") ?? "draft") as "draft" | "active" | "out_of_stock" | "inactive",
       // Lot H, Partie 1 — pas explicitement listés par le cahier pour cette
@@ -128,6 +134,44 @@ async function setPrimaryProductImageAction(formData: FormData) {
 
   await setPrimaryProductImage(organizationId, productId, imageId);
   redirect(`/dashboard/products/${productId}/edit?success=${encodeURIComponent("Photo principale mise à jour.")}`);
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue V2 (0056) — "informations complémentaires" : mêmes règles que
+// la galerie ci-dessus (une action dédiée par opération, jamais mêlée à
+// updateProductAction).
+// ---------------------------------------------------------------------------
+
+async function addProductSpecificationAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const productId = String(formData.get("productId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+
+  try {
+    await addProductSpecification(
+      organizationId,
+      productId,
+      String(formData.get("label") ?? ""),
+      String(formData.get("value") ?? ""),
+    );
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors de l'ajout de l'information.";
+    redirect(`/dashboard/products/${productId}/edit?error=${encodeURIComponent(message)}`);
+  }
+
+  redirect(`/dashboard/products/${productId}/edit?success=${encodeURIComponent("Information ajoutée.")}`);
+}
+
+async function removeProductSpecificationAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const productId = String(formData.get("productId") ?? "");
+  const index = Number(formData.get("index") ?? -1);
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+
+  await removeProductSpecification(organizationId, productId, index);
+  redirect(`/dashboard/products/${productId}/edit`);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +270,16 @@ export default async function EditProductPage({
           <span className="text-xs text-slate-500">
             Doit être supérieur au prix ci-dessus — affiché barré, avec un badge « Promo », sur la fiche produit et
             dans la section Promotions de votre site.
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          Fin de la promotion (optionnel)
+          <PromotionDeadlineField defaultValueIso={product.promotionEndsAt} />
+          <span className="text-xs text-slate-500">
+            {product.isPromotionExpired
+              ? "Cette échéance est dépassée : le compte à rebours et le prix barré ne sont plus affichés publiquement. Fixez une nouvelle date pour relancer la promotion, ou videz ce champ pour une promotion sans date de fin."
+              : "Affiche un compte à rebours sur votre site tant que la promotion n'est pas terminée. Laissez vide pour une promotion sans date de fin."}
           </span>
         </label>
 
@@ -405,6 +459,70 @@ export default async function EditProductPage({
             Ajouter cette photo
           </SubmitButton>
         </form>
+      </div>
+
+      {/* Informations complémentaires — catalogue V2 (0056), même principe que la galerie ci-dessus. */}
+      <div className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4">
+        <div>
+          <p className="text-sm font-medium">Informations complémentaires</p>
+          <p className="text-xs text-slate-500">
+            Affichées en tableau sur la fiche produit publique — matière, garantie, dimensions, composition...
+            (12 lignes maximum).
+          </p>
+        </div>
+
+        {product.specifications.length === 0 ? (
+          <p className="text-sm text-slate-500">Aucune information complémentaire pour l&apos;instant.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {product.specifications.map((spec, index) => (
+              <li
+                key={`${spec.label}-${index}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-navy-900/10 p-2 text-sm"
+              >
+                <span className="min-w-0 truncate">
+                  <span className="font-medium">{spec.label}</span> — {spec.value}
+                </span>
+                <form action={removeProductSpecificationAction}>
+                  <input type="hidden" name="organizationId" value={organizationId} />
+                  <input type="hidden" name="productId" value={product.id} />
+                  <input type="hidden" name="index" value={index} />
+                  <SubmitButton pendingLabel="..." className="shrink-0 text-xs text-danger-600 hover:underline disabled:opacity-60">
+                    Supprimer
+                  </SubmitButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {product.specifications.length >= 12 ? (
+          <p className="text-xs text-slate-500">
+            Limite de 12 informations atteinte — supprimez-en une pour en ajouter une autre.
+          </p>
+        ) : (
+          <form action={addProductSpecificationAction} className="flex flex-col gap-2 border-t border-navy-900/10 pt-3 sm:flex-row">
+            <input type="hidden" name="organizationId" value={organizationId} />
+            <input type="hidden" name="productId" value={product.id} />
+            <input
+              name="label"
+              placeholder="Ex : Matière"
+              maxLength={40}
+              required
+              className="flex-1 rounded-xl border border-navy-900/10 px-3 py-2 text-sm"
+            />
+            <input
+              name="value"
+              placeholder="Ex : Coton"
+              maxLength={160}
+              required
+              className="flex-1 rounded-xl border border-navy-900/10 px-3 py-2 text-sm"
+            />
+            <SubmitButton pendingLabel="Ajout..." className="shrink-0 rounded-xl bg-navy-900/5 px-4 py-2 text-sm font-medium text-navy-900 hover:bg-navy-900/10 disabled:opacity-60">
+              Ajouter
+            </SubmitButton>
+          </form>
+        )}
       </div>
     </div>
   );

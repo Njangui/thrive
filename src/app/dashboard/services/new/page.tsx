@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { requireMembership, requireCurrentOrganization } from "@/application/services/auth-service";
 import { createService } from "@/application/services/service-service";
 import { listCategories } from "@/application/services/catalog-service";
+import { resolveImageFromFormData } from "@/application/services/media-service";
 import { AppError } from "@/lib/errors";
+import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { CategorySelect } from "../../_components/category-select";
 
@@ -12,6 +14,13 @@ async function createServiceAction(formData: FormData) {
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
+    const imageUrl = await resolveImageFromFormData(formData, {
+      organizationId,
+      mediaType: "service",
+      fileField: "imageFile",
+      urlField: "imageUrl",
+    });
+
     await createService({
       organizationId,
       name: String(formData.get("name") ?? ""),
@@ -19,6 +28,7 @@ async function createServiceAction(formData: FormData) {
       categoryId: String(formData.get("categoryId") ?? ""),
       price: Number(formData.get("price") ?? 0),
       durationMinutes: formData.get("durationMinutes") ? Number(formData.get("durationMinutes")) : null,
+      imageUrl: imageUrl ?? undefined,
     });
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la création du service.";
@@ -67,6 +77,12 @@ export default async function NewServicePage({
           Description
           <textarea name="description" rows={3} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
+
+        <ImageUploadField
+          name="image"
+          label="Photo de la prestation"
+          helpText="Optionnel — vous pourrez en ajouter d'autres plus tard depuis la fiche de la prestation."
+        />
 
         <SubmitButton pendingLabel="Création en cours...">Créer le service</SubmitButton>
       </form>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
 import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { trackEvent } from "@/application/services/analytics-service";
 import { resolveOrganizationSeo, buildOrganizationJsonLd } from "@/lib/seo";
@@ -86,7 +87,23 @@ export default async function RootPage({
 
   if (!tenant) {
     const { waitlist_success, waitlist_error } = await searchParams;
-    return <MarketingLanding waitlistFeedback={{ success: waitlist_success, error: waitlist_error }} />;
+    // Lien "Tableau de bord" dans le header/CTA de la landing plutôt que
+    // Connexion/Inscription pour un visiteur déjà connecté (cookies de
+    // session présents) — évite de redemander un login à chaque retour
+    // sur la vitrine publique de CRESYVA. Simple lecture de session, PAS
+    // de résolution d'organisation ici (`/dashboard` s'en charge déjà,
+    // avec son propre repli vers `/onboarding` — voir sa note ; pas de
+    // raison de dupliquer cette logique sur une page publique).
+    const supabase = await getSupabaseServerSessionClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return (
+      <MarketingLanding
+        waitlistFeedback={{ success: waitlist_success, error: waitlist_error }}
+        isAuthenticated={Boolean(user)}
+      />
+    );
   }
 
   const { bookingSuccess, bookingError } = await searchParams;

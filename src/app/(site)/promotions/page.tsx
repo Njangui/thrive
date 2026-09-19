@@ -5,6 +5,7 @@ import {
 } from "@/application/services/catalog-service";
 import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
 import { ProductGrid } from "@/app/_components/storefront/product-card";
+import { CountdownTimer } from "@/app/_components/storefront/countdown-timer";
 import { Container, EmptyState, Pagination, PageHeader, Breadcrumbs } from "@/app/_components/storefront/storefront-ui";
 import { requireStorefront, buildStorefrontMetadata } from "../_lib/storefront-page";
 
@@ -36,6 +37,16 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
     countStorefrontProducts(tenant.organizationId, { promotionsOnly: true }),
   ]);
 
+  // Catalogue V2, itération 2 (0057) — échéance la plus proche parmi les
+  // promotions affichées, pour la bannière ci-dessous. `promotionEndsAt`
+  // est déjà `null` pour toute promotion expirée ou sans échéance (voir
+  // catalog-service.ts::isPromotionCurrentlyOn) : ce tri ne considère donc
+  // que des échéances réelles et encore actives.
+  const soonestDeadline = products
+    .map((p) => p.promotionEndsAt)
+    .filter((d): d is string => Boolean(d))
+    .sort()[0] ?? null;
+
   return (
     <>
       <PageHeader
@@ -47,6 +58,17 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
       </PageHeader>
 
       <Container className="py-8 sm:py-12">
+        {soonestDeadline && (
+          <div className="mb-8 flex flex-col items-center gap-4 rounded-brand border border-brand/20 bg-brand/5 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand">Offre à durée limitée</p>
+              <p className="mt-1 text-sm text-black/60">
+                Une promotion se termine bientôt — les articles concernés portent un compte à rebours ci-dessous.
+              </p>
+            </div>
+            <CountdownTimer endsAt={soonestDeadline} variant="full" />
+          </div>
+        )}
         {products.length === 0 ? (
           <EmptyState
             title="Aucune promotion en cours"

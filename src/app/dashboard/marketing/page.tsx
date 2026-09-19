@@ -1,134 +1,30 @@
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { listRecentPosts } from "@/application/services/marketing-service";
+import { listTelegramPublications } from "@/application/services/telegram-publication-service";
+import { listConnectedGroups } from "@/application/services/whatsapp-group-service";
 
-/**
- * Lot M, Partie 2 — écran des publications sociales.
- *
- * Ce projet n'avait jamais eu d'écran pour `social_posts` (Lot H a
- * construit `createCampaignFromProducts` côté service uniquement,
- * jamais de route/page — recherché dans tout `src/app`, confirmé absent).
- * Le périmètre de CE lot est la synchronisation des RÉSULTATS, pas le
- * constructeur de campagne (sélection de produits/comptes/planification),
- * qui reste une fonctionnalité à part entière hors du cahier "Groupes
- * WhatsApp + synchronisation des publications" — voir RAPPORT_LOT_M.md.
- * Cette page est donc volontairement une liste en lecture — mais une
- * liste RÉELLE, branchée sur les vraies données, pas un stub : c'est elle
- * qui affiche le statut réel par plateforme (publié/échoué/en attente)
- * une fois connu via `handlePostStatusWebhook`, critère d'acceptation
- * explicite de ce lot.
- */
+const POST_STATUS_LABELS: Record<string, string> = { draft: "Brouillon", scheduled: "Programmée", published: "Publiée", partial: "Partiellement publiée", failed: "Échouée", cancelled: "Annulée", paused: "En pause" };
+const POST_STATUS_STYLES: Record<string, string> = { draft: "bg-slate-100 text-slate-600", scheduled: "bg-slate-100 text-navy-900", published: "bg-success-50 text-success-700", partial: "bg-amber-500/10 text-amber-600", failed: "bg-danger-50 text-danger-700", cancelled: "bg-slate-100 text-slate-600", paused: "bg-slate-100 text-slate-600" };
+const TARGET_STATUS_LABELS: Record<string, string> = { pending: "En attente", published: "Publié", failed: "Échoué" };
+const TARGET_STATUS_STYLES: Record<string, string> = { pending: "bg-slate-100 text-slate-600", published: "bg-success-50 text-success-700", failed: "bg-danger-50 text-danger-700" };
 
-const POST_STATUS_LABELS: Record<string, string> = {
-  draft: "Brouillon",
-  scheduled: "Programmée",
-  published: "Publiée",
-  partial: "Partiellement publiée",
-  failed: "Échouée",
-  cancelled: "Annulée",
-  paused: "En pause",
-};
-
-const POST_STATUS_STYLES: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-600",
-  scheduled: "bg-slate-100 text-navy-900",
-  published: "bg-success-50 text-success-700",
-  partial: "bg-amber-500/10 text-amber-600",
-  failed: "bg-danger-50 text-danger-700",
-  cancelled: "bg-slate-100 text-slate-600",
-  paused: "bg-slate-100 text-slate-600",
-};
-
-const TARGET_STATUS_LABELS: Record<string, string> = {
-  pending: "En attente",
-  published: "Publié",
-  failed: "Échoué",
-};
-
-const TARGET_STATUS_STYLES: Record<string, string> = {
-  pending: "bg-slate-100 text-slate-600",
-  published: "bg-success-50 text-success-700",
-  failed: "bg-danger-50 text-danger-700",
-};
-
-export default async function MarketingPage() {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ success?: string; failed?: string; count?: string }> }) {
   const { organizationId } = await requireCurrentOrganization();
-  const posts = await listRecentPosts(organizationId);
+  const { success, failed = "0", count = "0" } = await searchParams;
+  const [posts, telegramPublications, whatsappGroups] = await Promise.all([listRecentPosts(organizationId), listTelegramPublications(organizationId), listConnectedGroups(organizationId)]);
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-        <p className="adm-eyebrow">Marketing social</p>
-        <h1 className="mt-1 font-jakarta text-2xl font-bold tracking-tight">Publications</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Statut réel de vos publications sociales, plateforme par plateforme — mis à jour automatiquement après confirmation de diffusion.
-        </p>
-        </div>
-        <a href="/dashboard/analytics" className="adm-btn-secondary w-fit">Voir les analytics</a>
-      </div>
+  return <div className="cresyva-page">
+    <header className="cresyva-page-hero"><div><p className="cresyva-eyebrow">Marketing · Publications</p><h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Publiez partout depuis CRESYVA.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Sélectionnez directement vos produits, choisissez les canaux connectés et diffusez maintenant ou à une date programmée.</p></div><a href="/dashboard/marketing/nouveau" className="inline-flex shrink-0 items-center rounded-xl bg-primary px-4 py-3 text-sm font-bold text-navy-900 hover:bg-primary-600">+ Nouvelle publication</a></header>
+    {success ? <div className="adm-alert-success">{success === "scheduled" ? `${count} diffusion(s) programmée(s).` : `${count} diffusion(s) lancée(s).`} {failed !== "0" ? `${failed} cible(s) ont rencontré une erreur.` : ""}</div> : null}
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] p-4">
-        {posts.length === 0 ? (
-          <p className="text-sm text-slate-500">Aucune publication pour l&apos;instant.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-navy-900/5">
-            {posts.map((post) => (
-              <li key={post.id} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm text-navy-900 line-clamp-2">{post.content}</p>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
-                      POST_STATUS_STYLES[post.status] ?? "bg-slate-100 text-navy-900"
-                    }`}
-                  >
-                    {POST_STATUS_LABELS[post.status] ?? post.status}
-                  </span>
-                </div>
+    <section className="grid gap-4 sm:grid-cols-3">
+      {[['Réseaux sociaux', posts.length, 'Facebook, Instagram, LinkedIn, TikTok, X et YouTube selon vos connexions.'], ['Telegram', telegramPublications.length, 'Bot commerçant direct, publication immédiate ou programmée.'], ['WhatsApp', whatsappGroups.filter((g) => g.isSendable).length, 'Groupes activés disponibles pour la diffusion.']].map(([title, value, body]) => <article key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-bold text-navy-900">{title}</p><p className="mt-2 font-jakarta text-2xl font-extrabold text-primary-700">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{body}</p></article>)}
+    </section>
 
-                <p className="text-xs text-slate-500">
-                  {post.scheduledFor
-                    ? `Programmée pour le ${new Date(post.scheduledFor).toLocaleString("fr-FR")}`
-                    : `Créée le ${new Date(post.createdAt).toLocaleString("fr-FR")}`}
-                </p>
+    <section className="cresyva-info-panel"><div><p className="cresyva-eyebrow">Catalogue → publication</p><h2 className="mt-1 font-jakarta text-lg font-extrabold text-navy-900">Un produit, plusieurs canaux.</h2><p className="mt-1 text-sm leading-6 text-slate-500">Le contenu est construit depuis votre catalogue. Vous pouvez ajouter une introduction, sélectionner plusieurs destinations et programmer toute la diffusion en une seule fois.</p></div><a href="/dashboard/marketing/nouveau" className="adm-btn-primary">Créer une publication</a></section>
 
-                {post.errorMessage && (
-                  <p className="rounded-xl border border-danger-600/20 bg-danger-50 px-3 py-2 text-xs text-danger-600">
-                    {post.errorMessage}
-                  </p>
-                )}
+    <section className="cresyva-product-card p-5 sm:p-6"><div className="flex items-end justify-between gap-3"><div><p className="cresyva-eyebrow">Réseaux sociaux</p><h2 className="mt-1 font-jakarta text-lg font-bold text-navy-900">Historique récent</h2></div><a href="/dashboard/analytics" className="text-sm font-semibold text-primary-700 hover:underline">Voir les analytics →</a></div><div className="mt-4 divide-y divide-slate-100">{posts.length === 0 ? <p className="py-6 text-sm text-slate-500">Aucune publication sociale pour l&apos;instant.</p> : posts.slice(0, 12).map((post) => <article key={post.id} className="py-4 first:pt-0 last:pb-0"><div className="flex flex-wrap items-center justify-between gap-2"><p className="line-clamp-2 text-sm font-semibold text-navy-900">{post.content}</p><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${POST_STATUS_STYLES[post.status] ?? "bg-slate-100 text-slate-600"}`}>{POST_STATUS_LABELS[post.status] ?? post.status}</span></div><p className="mt-1 text-xs text-slate-500">{post.scheduledFor ? `Programmée pour le ${new Date(post.scheduledFor).toLocaleString("fr-FR")}` : `Créée le ${new Date(post.createdAt).toLocaleString("fr-FR")}`}</p>{post.targets.length ? <div className="mt-2 flex flex-wrap gap-1.5">{post.targets.map((target) => <span key={`${post.id}-${target.platform}`} className={`rounded-full px-2 py-1 text-[11px] ${TARGET_STATUS_STYLES[target.status] ?? "bg-slate-100 text-slate-600"}`}>{target.platform} · {TARGET_STATUS_LABELS[target.status] ?? target.status}{target.platformPostUrl ? <a href={target.platformPostUrl} target="_blank" rel="noreferrer" className="ml-1 underline">Voir</a> : null}</span>)}</div> : null}</article>)}</div></section>
 
-                {post.targets.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {post.targets.map((target) => (
-                      <span
-                        key={target.platform}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                          TARGET_STATUS_STYLES[target.status] ?? "bg-slate-100 text-navy-900"
-                        }`}
-                        title={target.errorMessage ?? undefined}
-                      >
-                        <span className="font-medium capitalize">{target.platform}</span>
-                        <span>·</span>
-                        <span>{TARGET_STATUS_LABELS[target.status] ?? target.status}</span>
-                        {target.platformPostUrl && (
-                          <a
-                            href={target.platformPostUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline"
-                          >
-                            Voir
-                          </a>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
+    <section className="grid gap-4 lg:grid-cols-2"><article className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><p className="cresyva-eyebrow">Telegram</p><h2 className="mt-1 font-jakarta text-base font-bold">Publications récentes</h2></div><a href="/dashboard/channels" className="text-xs font-semibold text-primary-700">Configurer →</a></div><div className="mt-4 space-y-3">{telegramPublications.length ? telegramPublications.slice(0,5).map((p) => <div key={p.id} className="rounded-xl bg-slate-50 p-3"><div className="flex justify-between gap-2"><p className="line-clamp-2 text-sm font-medium">{p.content}</p><span className="text-[11px] font-semibold">{p.status}</span></div><p className="mt-1 text-[11px] text-slate-500">{p.targetLabel ?? p.targetChatId}</p></div>) : <p className="text-sm text-slate-500">Aucune publication Telegram.</p>}</div></article><article className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><p className="cresyva-eyebrow">WhatsApp</p><h2 className="mt-1 font-jakarta text-base font-bold">Groupes disponibles</h2></div><a href="/dashboard/groups" className="text-xs font-semibold text-primary-700">Gérer →</a></div><div className="mt-4 space-y-2">{whatsappGroups.length ? whatsappGroups.slice(0,6).map((g) => <div key={g.id} className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><span className="truncate text-sm font-medium">{g.name}</span><span className={`rounded-full px-2 py-1 text-[11px] ${g.isSendable ? "bg-success-50 text-success-700" : "bg-amber-50 text-amber-700"}`}>{g.isSendable ? "Prêt" : "À activer"}</span></div>) : <p className="text-sm text-slate-500">Aucun groupe connecté.</p>}</div></article></section>
+  </div>;
 }

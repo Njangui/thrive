@@ -8,6 +8,8 @@ import { STOREFRONT_PATHS, servicePath } from "@/application/config/storefront-r
 import { formatPrice } from "@/lib/format";
 import { TrackedCtaLink } from "@/app/_components/tracked-cta-link";
 import { ServiceCard } from "@/app/_components/landing-sections/services";
+import { StorefrontImage } from "@/app/_components/storefront/storefront-image";
+import { SpecificationsTable } from "@/app/_components/storefront/specifications-table";
 import { Container, Breadcrumbs, SectionHeading } from "@/app/_components/storefront/storefront-ui";
 import { IconClock } from "@/app/_components/storefront/storefront-icons";
 import { requireStorefront, buildStorefrontMetadata, buildBreadcrumbJsonLd } from "../../_lib/storefront-page";
@@ -102,51 +104,79 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
           ]}
         />
 
-        <div className="max-w-3xl">
-          {service.categoryName && (
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">{service.categoryName}</p>
-          )}
-          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{service.name}</h1>
-
-          <div className="mt-4 flex flex-wrap items-center gap-4">
-            <span className="font-display text-2xl font-bold text-brand">{formatPrice(service.price)}</span>
-            {service.durationMinutes ? (
-              <span className="inline-flex items-center gap-1.5 text-sm text-black/60">
-                <IconClock className="h-4 w-4" />
-                {formatDuration(service.durationMinutes)}
-              </span>
-            ) : null}
-            {!available && (
-              <span className="rounded-full bg-black/[0.07] px-3 py-1 text-xs font-semibold text-black/55">
-                Actuellement indisponible
-              </span>
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+          <div className="flex flex-col gap-3">
+            <div className="relative aspect-square w-full overflow-hidden rounded-brand border border-black/[0.08] bg-black/[0.03]">
+              <StorefrontImage
+                src={service.images[0]}
+                alt={service.name}
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                priority
+                fallbackLabel="Aucune photo pour cette prestation"
+              />
+            </div>
+            {service.images.length > 1 && (
+              <div className="grid grid-cols-4 gap-2">
+                {service.images.slice(1, 5).map((url) => (
+                  <div
+                    key={url}
+                    className="relative aspect-square overflow-hidden rounded-brand border border-black/[0.08] bg-black/[0.03]"
+                  >
+                    <StorefrontImage src={url} alt={service.name} sizes="120px" fallbackLabel="" />
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {service.description && (
-            <p className="mt-6 whitespace-pre-line text-base leading-8 text-black/70">{service.description}</p>
-          )}
+          <div className="flex flex-col gap-4">
+            {service.categoryName && (
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">{service.categoryName}</p>
+            )}
+            <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-4xl">{service.name}</h1>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            {bookingHref && (
-              <Link href={bookingHref} className="sf-btn-primary inline-flex h-12 items-center justify-center px-6 text-sm">
-                Demander ce rendez-vous
-              </Link>
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="font-display text-2xl font-bold text-brand">{formatPrice(service.price)}</span>
+              {service.durationMinutes ? (
+                <span className="inline-flex items-center gap-1.5 text-sm text-black/60">
+                  <IconClock className="h-4 w-4" />
+                  {formatDuration(service.durationMinutes)}
+                </span>
+              ) : null}
+              {!available && (
+                <span className="rounded-full bg-black/[0.07] px-3 py-1 text-xs font-semibold text-black/55">
+                  Actuellement indisponible
+                </span>
+              )}
+            </div>
+
+            {service.description && (
+              <p className="whitespace-pre-line text-base leading-8 text-black/70">{service.description}</p>
             )}
-            {whatsappHref && (
-              <TrackedCtaLink
-                href={whatsappHref}
-                organizationId={tenant.organizationId}
-                ctaId="whatsapp_service_detail"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="sf-btn-outline inline-flex h-12 items-center justify-center px-6 text-sm"
-              >
-                En parler sur WhatsApp
-              </TrackedCtaLink>
-            )}
+
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+              {bookingHref && (
+                <Link href={bookingHref} className="sf-btn-primary inline-flex h-12 items-center justify-center px-6 text-sm">
+                  Demander ce rendez-vous
+                </Link>
+              )}
+              {whatsappHref && (
+                <TrackedCtaLink
+                  href={whatsappHref}
+                  organizationId={tenant.organizationId}
+                  ctaId="whatsapp_service_detail"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sf-btn-outline inline-flex h-12 items-center justify-center px-6 text-sm"
+                >
+                  En parler sur WhatsApp
+                </TrackedCtaLink>
+              )}
+            </div>
           </div>
         </div>
+
+        <SpecificationsTable specifications={service.specifications} />
 
         {related.length > 0 && (
           <div className="mt-14 border-t border-black/[0.07] pt-10">

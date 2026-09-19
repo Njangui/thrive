@@ -6,6 +6,7 @@ import { getUnreadNotificationCount } from "@/application/services/notification-
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
 import { getEnabledModules } from "@/application/services/module-service";
 import { getCreditStatus } from "@/application/services/ai-credits-service";
+import { getPlatformAdminStatus } from "@/application/services/platform-admin-service";
 import { DashboardSidebar } from "./_components/dashboard-nav";
 import { DashboardTopbar } from "./_components/topbar";
 import { InstallAppBanner } from "./_components/install-app-banner";
@@ -49,12 +50,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const onboardingStatus = await getOnboardingStatus(currentOrg.organizationId);
   if (!onboardingStatus.completedAt) redirect("/onboarding");
 
-  const [unreadCount, enabledModules, credits, profile, organization] = await Promise.all([
+  const [unreadCount, enabledModules, credits, profile, organization, platformAdmin] = await Promise.all([
     getUnreadNotificationCount(currentOrg.organizationId, user.id),
     getEnabledModules(currentOrg.organizationId),
     getCreditStatus(currentOrg.organizationId),
     getSupabaseServiceClient().from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     getSupabaseServiceClient().from("organizations").select("industry").eq("id", currentOrg.organizationId).maybeSingle(),
+    // Lien "Console Admin" dans la nav (voir dashboard-nav.tsx) — n'affecte
+    // QUE l'affichage du lien, jamais la protection réelle de /admin/*
+    // (requirePlatformAdmin() dans admin/layout.tsx, appelée indépendamment
+    // à chaque entrée sur cette surface, lien cliqué ou non).
+    getPlatformAdminStatus(user.id),
   ]);
 
   // Aucun écran de ce projet n'écrit encore `profiles.full_name` (voir la
@@ -80,6 +86,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         roleLabel={roleLabel}
         initials={initials}
         industry={organization.data?.industry ?? null}
+        isPlatformAdmin={Boolean(platformAdmin)}
       />
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <DashboardTopbar
@@ -90,6 +97,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           roleLabel={roleLabel}
           initials={initials}
           industry={organization.data?.industry ?? null}
+          isPlatformAdmin={Boolean(platformAdmin)}
         />
         <InstallAppBanner />
         <DashboardHelp />

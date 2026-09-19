@@ -1,9 +1,10 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { canRequestPayout } from "@/domain/entities/affiliate";
-import { getAffiliateBalance, notifyPlatformOperators } from "./affiliate-service";
+import { getAffiliateBalance } from "./affiliate-service";
 import { getPlatformSettingNumber } from "./platform-settings-service";
 import { writeAdminAuditLog } from "./admin-organizations-service";
+import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 
 /**
  * Paiement de commission = virement MANUEL (mobile money/bancaire) —
@@ -101,12 +102,11 @@ export async function requestPayout(affiliateId: string): Promise<AffiliatePayou
   const result = Array.isArray(data) ? data[0] : data;
   if (!result) throw new Error("Réponse inattendue de request_affiliate_payout.");
 
-  await notifyPlatformOperators(
-    "Demande de paiement affilié",
-    `Une demande de paiement de ${result.amount_fcfa} ${result.currency_code} est en attente de validation.`,
-    "affiliate_payout",
-    result.payout_id,
-  );
+  await notifyPlatformAdminTelegram("AFFILIATE_PAYOUT_REQUESTED", {
+    entityType: "affiliate_payout",
+    entityId: result.payout_id,
+    details: { montant: `${result.amount_fcfa} ${result.currency_code}` },
+  });
 
   const { data: created, error: fetchError } = await supabase
     .from("affiliate_payouts")

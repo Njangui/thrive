@@ -52,6 +52,13 @@ export default async function AffiliateLinksPage({
         <p className="mt-1 text-sm text-muted">Créez un lien par canal (bio Instagram, vidéo YouTube...) pour suivre vos performances séparément.</p>
       </div>
 
+      <p className="rounded-brand border border-ink/10 bg-ink/[0.02] px-4 py-3 text-sm text-muted">
+        Le code de chaque lien (visible dans la colonne « Code promo » ci-dessous) fonctionne aussi tel quel : un
+        client peut le saisir directement à l&apos;inscription au lieu de cliquer votre lien. Dans ce cas il obtient
+        une réduction sur son 1er paiement, et votre commission est calculée à un taux différent — voir le détail
+        sur votre page de statistiques.
+      </p>
+
       {success && <p className="rounded-brand border border-leaf/30 bg-leaf/5 px-4 py-3 text-sm text-leaf">Lien créé.</p>}
       {error && <p className="rounded-brand border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">{error}</p>}
 
@@ -81,6 +88,7 @@ export default async function AffiliateLinksPage({
           <thead className="border-b border-ink/10 text-left text-xs uppercase text-muted">
             <tr>
               <th className="px-4 py-3">Lien</th>
+              <th className="px-4 py-3">Code promo</th>
               <th className="px-4 py-3">Étiquette</th>
               <th className="px-4 py-3">Clics</th>
               <th className="px-4 py-3">Conversions</th>
@@ -92,6 +100,7 @@ export default async function AffiliateLinksPage({
             {links.map((link) => (
               <tr key={link.id} className="border-b border-ink/5 last:border-0">
                 <td className="px-4 py-3 font-mono text-xs">{link.trackingUrl}</td>
+                <td className="px-4 py-3 font-mono text-xs font-semibold">{link.code}</td>
                 <td className="px-4 py-3">{link.label ?? "—"}</td>
                 <td className="px-4 py-3">{link.clickCount}</td>
                 <td className="px-4 py-3">{link.conversionCount}</td>
@@ -109,7 +118,7 @@ export default async function AffiliateLinksPage({
             ))}
             {links.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-muted">
+                <td colSpan={7} className="px-4 py-6 text-center text-muted">
                   Aucun lien pour le moment — créez-en un ci-dessus.
                 </td>
               </tr>

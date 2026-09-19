@@ -96,14 +96,15 @@ appelé par `telegram-channel-service.ts::connectTelegramChannel`).
   envoie (restriction de confidentialité Telegram).
 - Aucun accusé de lecture pour un bot en chat privé.
 
-## Ce qui n'est PAS implémenté (hors scope de ce lot)
+## Ce qui est désormais pris en charge
 
-- Pièces jointes (images, documents) sur le canal client — texte
-  uniquement pour l'instant.
-- Partage de contact (numéro de téléphone) côté Telegram.
-- Groupes/canaux Telegram comme canal client (chat privé uniquement).
-- Configuration du canal client par un Super Admin pour le compte d'un
-  tenant (self-service uniquement, `/dashboard/channels`) — délibéré :
-  la config admin générique (`configureTenantProviderCredential`) ne
-  déclenche pas `setWebhook`, ce qui laisserait une connexion "stockée"
-  mais non fonctionnelle.
+- Réception et réponse aux messages texte dans le pipeline de conversations.
+- Envoi sortant d'image, vidéo, audio ou fichier lorsqu'une URL publique est fournie.
+- Publication immédiate et programmation vers un groupe ou canal depuis `/dashboard/marketing/nouveau`.
+- Traitement des publications programmées via `/api/cron/process-telegram-publications`.
+
+## Limites restantes
+
+- Les pièces jointes ENTRANTES nécessitent encore un pipeline média dédié (récupération du `file_id`, téléchargement puis stockage CRESYVA).
+- Le partage de contact (numéro de téléphone) côté Telegram n'est pas encore intégré.
+- La configuration du canal client par un Super Admin reste volontairement hors du parcours : la connexion est self-service depuis `/dashboard/channels`.

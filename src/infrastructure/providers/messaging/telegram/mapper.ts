@@ -15,12 +15,13 @@ import type { TelegramUpdate } from "./types";
  * explicitement via un bouton "partager le contact" (non implémenté
  * dans ce lot) — jamais deviné.
  */
-export function mapTelegramUpdateToDomainEvent(raw: TelegramUpdate, organizationId: string): DomainEvent | null {
+export function mapTelegramUpdateToDomainEvent(
+  raw: TelegramUpdate,
+  organizationId: string,
+  attachment?: { url: string; type: "image" | "video" | "audio" | "file"; fileName?: string; mimeType?: string; fileId?: string },
+): DomainEvent | null {
   const message = raw.message;
-  if (!message?.text || !message.chat) {
-    // Update sans texte exploitable (photo/sticker/etc. sans légende,
-    // ou update d'un autre type que "message") — pas géré en V1, ignoré
-    // plutôt qu'on invente un contenu.
+  if (!message || (!message.text && !message.caption && !attachment) || !message.chat) {
     return null;
   }
 
@@ -39,9 +40,10 @@ export function mapTelegramUpdateToDomainEvent(raw: TelegramUpdate, organization
       externalContactId: chatId,
       externalThreadId: chatId,
       contactFullName,
-      content: message.text,
+      content: message.text ?? message.caption ?? `Le client a envoyé une pièce jointe Telegram${attachment?.fileName ? ` : ${attachment.fileName}` : "."}`,
       externalMessageId: String(message.message_id),
       channel: "telegram",
+      ...(attachment ? { attachment } : {}),
     },
   };
   return event;

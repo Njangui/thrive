@@ -10,6 +10,10 @@ import {
   createCategory,
   deleteCategory,
   seedDefaultCategories,
+  addProductSpecification,
+  removeProductSpecification,
+  getProductBySlug,
+  isPromotionCurrentlyOn,
 } from "./catalog-service";
 import type { CatalogProductSummary } from "./catalog-service";
 
@@ -150,5 +154,144 @@ describe("seedDefaultCategories", () => {
 
     const rows = insert.mock.calls[0]![0] as { name: string }[];
     expect(rows.map((r) => r.name)).toEqual(["Général", "Autres"]);
+  });
+});
+
+describe("addProductSpecification", () => {
+  it("ajoute une ligne à la fin de la liste existante", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { specifications: [{ label: "Matière", value: "Coton" }] },
+      error: null,
+    });
+    const update = vi.fn().mockReturnValue({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) });
+    mockFrom.mockReturnValue({
+      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle }) }) }),
+      update,
+    });
+
+    await addProductSpecification("org-1", "prod-1", "Garantie", "6 mois");
+
+    expect(update).toHaveBeenCalledWith({
+      specifications: [
+        { label: "Matière", value: "Coton" },
+        { label: "Garantie", value: "6 mois" },
+      ],
+    });
+  });
+
+  it("refuse un libellé vide plutôt que d'enregistrer une ligne invalide", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { specifications: [] }, error: null });
+    const update = vi.fn();
+    mockFrom.mockReturnValue({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle }) }) }), update });
+
+    await expect(addProductSpecification("org-1", "prod-1", "", "Coton")).rejects.toThrow(/Informations invalides/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("refuse une 13e ligne (limite de 12)", async () => {
+    const twelve = Array.from({ length: 12 }, (_, i) => ({ label: `Ligne ${i}`, value: "x" }));
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { specifications: twelve }, error: null });
+    const update = vi.fn();
+    mockFrom.mockReturnValue({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle }) }) }), update });
+
+    await expect(addProductSpecification("org-1", "prod-1", "Treizième", "x")).rejects.toThrow(/Informations invalides/);
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("removeProductSpecification", () => {
+  it("retire uniquement la ligne à l'index donné", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        specifications: [
+          { label: "Matière", value: "Coton" },
+          { label: "Garantie", value: "6 mois" },
+        ],
+      },
+      error: null,
+    });
+    const update = vi.fn().mockReturnValue({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) });
+    mockFrom.mockReturnValue({
+      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle }) }) }),
+      update,
+    });
+
+    await removeProductSpecification("org-1", "prod-1", 0);
+
+    expect(update).toHaveBeenCalledWith({ specifications: [{ label: "Garantie", value: "6 mois" }] });
+  });
+});
+
+describe("getProductBySlug — compte à rebours honnête (itération 2, 0057)", () => {
+  function mockProductRow(overrides: { compare_at_price: number | null; promotion_ends_at: string | null }) {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: "p1",
+        name: "Sneakers",
+        slug: "sneakers",
+        unit_price: 20000,
+        current_stock: 5,
+        status: "active",
+        description: null,
+        seo_title: null,
+        seo_description: null,
+        specifications: null,
+        categories: null,
+        product_images: [],
+        ...overrides,
+      },
+      error: null,
+    });
+    mockFrom.mockReturnValue({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle }) }) }) });
+  }
+
+  it("expose le prix barré et l'échéance quand la promotion est encore active", async () => {
+    const futureDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    mockProductRow({ compare_at_price: 25000, promotion_ends_at: futureDate });
+
+    const product = await getProductBySlug("org-1", "sneakers");
+    expect(product?.compareAtPrice).toBe(25000);
+    expect(product?.promotionEndsAt).toBe(futureDate);
+  });
+
+  it("masque le prix barré ET l'échéance une fois la promotion expirée — jamais un compte à rebours figé à zéro", async () => {
+    const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    mockProductRow({ compare_at_price: 25000, promotion_ends_at: pastDate });
+
+    const product = await getProductBySlug("org-1", "sneakers");
+    expect(product?.compareAtPrice).toBeNull();
+    expect(product?.promotionEndsAt).toBeNull();
+  });
+
+  it("garde le prix barré actif indéfiniment sans échéance configurée (comportement historique inchangé)", async () => {
+    mockProductRow({ compare_at_price: 25000, promotion_ends_at: null });
+
+    const product = await getProductBySlug("org-1", "sneakers");
+    expect(product?.compareAtPrice).toBe(25000);
+    expect(product?.promotionEndsAt).toBeNull();
+  });
+});
+
+describe("isPromotionCurrentlyOn — règle unique partagée (catalogue V2 + vitrine)", () => {
+  const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  it("faux sans prix barré, ou avec un prix barré inférieur ou égal au prix de vente (saisie erronée)", () => {
+    expect(isPromotionCurrentlyOn(null, 20000, null)).toBe(false);
+    expect(isPromotionCurrentlyOn(20000, 20000, null)).toBe(false);
+    expect(isPromotionCurrentlyOn(15000, 20000, future)).toBe(false);
+  });
+
+  it("vrai sans échéance (comportement historique) et avec une échéance future", () => {
+    expect(isPromotionCurrentlyOn(25000, 20000, null)).toBe(true);
+    expect(isPromotionCurrentlyOn(25000, 20000, future)).toBe(true);
+  });
+
+  it("faux une fois l'échéance dépassée", () => {
+    expect(isPromotionCurrentlyOn(25000, 20000, past)).toBe(false);
+  });
+
+  it("une échéance illisible ne désactive jamais silencieusement une promotion existante", () => {
+    expect(isPromotionCurrentlyOn(25000, 20000, "pas-une-date")).toBe(true);
   });
 });

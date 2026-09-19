@@ -1,5 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { notifyOrgAdmins } from "./notification-service";
+import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 
 /**
  * Lot 3 (audit master prompt §32/§44) — reflète un changement de statut
@@ -42,6 +43,12 @@ export async function handleAccountStatusChanged(
       body: "Votre connexion WhatsApp/réseaux sociaux a été déconnectée côté fournisseur. Reconnectez-la depuis Paramètres pour continuer à recevoir vos messages.",
       relatedEntityType: "provider_connection",
       relatedEntityId: accountId,
+    });
+    await notifyPlatformAdminTelegram("PROVIDER_CONNECTION_LOST", {
+      organizationId,
+      entityType: "provider_connection",
+      entityId: accountId,
+      details: { fournisseur: "canal connecté" },
     });
   }
 }

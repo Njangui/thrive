@@ -36,14 +36,16 @@ export function DashboardMobileNav({
   organizationName,
   enabledModules,
   industry,
+  isPlatformAdmin,
 }: {
   organizationName: string;
   enabledModules: ModuleKey[];
   industry?: string | null;
+  isPlatformAdmin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const groups = useVisibleNavGroups(enabledModules, industry);
+  const groups = useVisibleNavGroups(enabledModules, industry, isPlatformAdmin);
 
   useEffect(() => {
     if (!open) return;

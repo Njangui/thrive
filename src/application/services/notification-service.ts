@@ -1,6 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { sendPush } from "./push-service";
-import { getNotificationProvider } from "@/infrastructure/providers/registry";
 
 /**
  * Notifications admin in-app (Lot D, section 28), étendues Lot I, Partie 1
@@ -16,11 +15,13 @@ import { getNotificationProvider } from "@/infrastructure/providers/registry";
  * distinction reste valable, `push-service.ts` est délibérément un fichier
  * séparé, pas une implémentation de ce port.
  *
- * Préférences granulaires par type de notification : toujours hors scope,
- * tout owner/admin reçoit tout (in-app ET push, sans configuration fine) —
- * seul le canal push dans son ensemble est activable/désactivable, par
- * appareil (voir dashboard/notifications/push-toggle.tsx).
+ * Préférences par type : la priorité métier décide du canal. Tous les
+ * owner/admin reçoivent les événements persistés in-app ; les priorités
+ * important/critical ajoutent le push. Les événements normal restent
+ * in-app pour éviter le bruit (voir dashboard/notifications/push-toggle.tsx).
  */
+
+export type NotificationPriority = "normal" | "important" | "critical";
 
 export interface NotifyOrgAdminsInput {
   organizationId: string;
@@ -28,6 +29,8 @@ export interface NotifyOrgAdminsInput {
   body: string;
   relatedEntityType?: string;
   relatedEntityId?: string;
+  /** important/critical => push + in-app ; normal => in-app uniquement. */
+  priority?: NotificationPriority;
 }
 
 /**
@@ -45,6 +48,14 @@ export function buildRelatedEntityUrl(type: string | null, id: string | null): s
   // l'URL : on renvoie vers la liste, où la ligne concernée est visible
   // avec son statut à jour.
   if (type === "social_post") return `/dashboard/marketing`;
+  if (type === "telegram_publication") return `/dashboard/marketing`;
+  if (type === "product") return `/dashboard/products`;
+  if (type === "order") return `/dashboard/orders`;
+  if (type === "lead") return `/dashboard/leads`;
+  if (type === "domain_request") return `/dashboard/site`;
+  if (type === "provider_connection") return `/dashboard/channels`;
+  if (type === "organization_subscription" || type === "subscription_payment") return `/dashboard/subscription`;
+  if (type === "group_broadcast") return `/dashboard/groups`;
   return null;
 }
 
@@ -108,28 +119,17 @@ export async function notifyOrgAdmins(input: NotifyOrgAdminsInput): Promise<void
     // garantit réellement l'envoi, sans jamais faire échouer
     // `notifyOrgAdmins` elle-même si ça tourne mal.
     const url = buildRelatedEntityUrl(input.relatedEntityType ?? null, input.relatedEntityId ?? null);
-    await sendPush(input.organizationId, input.title, input.body, url ?? undefined).catch((err) =>
-      console.warn(`[notifications] échec canal push (org ${input.organizationId}):`, err),
-    );
-
-    // Alerte Telegram opérateur pour les événements commerciaux réellement
-    // importants. On garde une liste explicite afin de ne pas transformer
-    // Telegram en flux de logs.
-    const platformAlert = /nouveau prospect|nouvelle commande|paiement|rupture|demande de domaine|fraude|affiliation/i.test(input.title);
-    if (platformAlert) {
-      try {
-        const notifier = await getNotificationProvider();
-        await notifier.send({
-          title: `SME-OS · ${input.title}`,
-          body: `${input.body}\nOrganisation: ${input.organizationId}`,
-          channel: "telegram",
-          relatedEntityType: input.relatedEntityType,
-          relatedEntityId: input.relatedEntityId,
-        });
-      } catch (err) {
-        console.warn("[notifications] échec alerte Telegram opérateur:", err);
-      }
+    if ((input.priority ?? "important") !== "normal") {
+      await sendPush(input.organizationId, input.title, input.body, url ?? undefined).catch((err) =>
+        console.warn(`[notifications] échec canal push (org ${input.organizationId}):`, err),
+      );
     }
+
+    // Le bot Telegram opérateur n'est volontairement PAS déclenché ici.
+    // Cette fonction sert aux notifications internes du commerçant ; les
+    // alertes de supervision CRESYVA passent par
+    // telegram-admin-notification-service.ts avec des événements explicites.
+
   } catch (err) {
     console.warn(`[notifications] erreur inattendue notifyOrgAdmins (org ${input.organizationId}):`, err);
   }

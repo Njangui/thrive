@@ -31,7 +31,7 @@ export async function handlePlatformBotMessage(message: TelegramMessage): Promis
     if (!token) {
       await client.sendMessage({
         chat_id: chatId,
-        text: "👋 Bienvenue sur le bot SME-OS.\n\nPour connecter ce chat à votre compte affilié, utilisez le bouton \"Connecter Telegram\" depuis votre tableau de bord.",
+        text: "👋 Bienvenue sur le bot CRESYVA.\n\nPour connecter ce chat à votre compte affilié, utilisez le bouton \"Connecter Telegram\" depuis votre tableau de bord.",
       });
       return;
     }

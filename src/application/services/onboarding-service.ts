@@ -8,6 +8,7 @@ import { initializeCreditBalance } from "./ai-credits-service";
 import { validateCountryForSignup } from "./country-service";
 import { attributeReferral, attributeReferralByPromoCode, validatePromoCode } from "./affiliate-service";
 import { seedDefaultCategories } from "./catalog-service";
+import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 
 export interface CreateOrganizationInput {
   name: string;
@@ -167,6 +168,17 @@ export async function createOrganization(
   } else {
     await attributeReferral(org.id, user.id, referralCookieValue);
   }
+
+  await notifyPlatformAdminTelegram("ORGANIZATION_CREATED", {
+    organizationId: org.id,
+    entityType: "organization",
+    entityId: org.id,
+    details: {
+      nom: input.name.trim(),
+      pays: countryCode,
+      secteur: input.industry ?? "non précisé",
+    },
+  });
 
   return { organizationId: org.id };
 }

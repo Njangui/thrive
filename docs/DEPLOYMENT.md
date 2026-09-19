@@ -66,6 +66,32 @@ Pour les invitations d'équipe par email : `RESEND_API_KEY`/
 Pour la recherche de domaine en direct : `OPENPROVIDER_USERNAME`/
 `OPENPROVIDER_PASSWORD` (Lot N) — optionnel, repli manuel sinon.
 
+## 2bis. Connexion Google (OAuth)
+
+`/login` et `/signup` proposent un bouton "Continuer avec Google" (section
+95, sept. 2026). Le code applicatif ne suffit pas : le provider doit être
+activé côté Supabase, sinon `signInWithOAuth({ provider: "google" })`
+échoue immédiatement (aucune variable d'environnement supplémentaire côté
+app — tout se configure dans le dashboard Supabase).
+
+1. **Google Cloud Console** (console.cloud.google.com) → APIs & Services
+   → Credentials → Create Credentials → OAuth client ID → type
+   "Application Web". Dans "Authorized redirect URIs", ajouter EXACTEMENT
+   l'URL que Supabase affiche à l'étape suivante (`.../auth/v1/callback`)
+   — jamais l'URL `/auth/callback` de ce dépôt, qui est une étape
+   ultérieure et distincte du flux.
+2. **Supabase Dashboard** → Authentication → Providers → Google → activer,
+   coller le Client ID et le Client Secret obtenus à l'étape 1.
+3. **Supabase Dashboard** → Authentication → URL Configuration →
+   Redirect URLs : ajouter `https://votre-domaine.com/auth/callback` (et
+   `http://localhost:3000/auth/callback` en dev) — sans cette entrée,
+   Supabase refuse le `redirectTo` envoyé par l'app et le flux échoue
+   silencieusement après le consentement Google.
+
+Aucune autre modification nécessaire : `/auth/callback` (déjà existant,
+utilisé aussi par le magic link et la réinitialisation de mot de passe)
+gère l'échange du code de façon identique quel que soit le provider.
+
 ## 3. Webhook Zernio
 
 Configurer dans le dashboard Zernio une souscription webhook pointant
@@ -124,6 +150,16 @@ vers un groupe fraîchement connecté — voir `docs/ZERNIO_INTEGRATION.md`,
 section "Groupes WhatsApp", pour la limitation réelle et documentée de
 l'API Zernio (pas un bug de cette route).
 
+## 4ter. Publications Telegram programmées — cron externe
+
+`app/api/cron/process-telegram-publications/route.ts` envoie les publications Telegram dont `scheduled_for` est arrivé. Configurez le même `CRON_SECRET` que les autres routes cron.
+
+1. Appeler `GET` ou `POST` toutes les 1 à 5 minutes vers `/api/cron/process-telegram-publications`.
+2. Envoyer `Authorization: Bearer <CRON_SECRET>`.
+3. Vérifier la réponse JSON `{ ok, sent, failed, skipped }`.
+
+Une publication en échec est conservée avec son message d'erreur et déclenche une notification commerçant.
+
 ## 4ter. Réconciliation des paiements NotchPay (section 62, 07/09/2026) — cron externe
 
 `app/api/cron/process-payment-reconciliation/route.ts` reprend tout
@@ -169,6 +205,15 @@ via `requirePlatformAdmin()` côté serveur (voir
 `supabase/migrations/0015_platform_admins.sql`). Un utilisateur qui
 n'est pas dans cette table reçoit un 404 générique sur tout `/admin/*`
 (pas de page "Accès refusé" qui confirmerait l'existence de la console).
+
+Depuis la fusion #12 (sept. 2026), un utilisateur présent dans
+`platform_admins` voit en plus un lien "Console Admin" apparaître dans
+son propre dashboard marchand (`/dashboard`, groupe "Plateforme" en bas
+de la nav) — simple confort d'accès pour un compte à la fois marchand et
+admin plateforme, voir `getPlatformAdminStatus()` dans
+`platform-admin-service.ts`. La protection réelle ci-dessus reste
+strictement inchangée : ce lien n'est qu'un affichage conditionnel,
+jamais une vérification de sécurité.
 
 ## 7. Avant la vraie mise en production
 

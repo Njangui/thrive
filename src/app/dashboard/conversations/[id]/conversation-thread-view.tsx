@@ -44,6 +44,7 @@ export function ConversationThreadView({
               className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${SENDER_STYLES[m.sender] ?? ""}`}
             >
               {m.content}
+              {m.attachment?.url ? <a href={m.attachment.url} target="_blank" rel="noreferrer" className="mt-2 block rounded-lg border border-current/10 px-2.5 py-2 text-xs font-semibold underline underline-offset-2">📎 {m.attachment.fileName ?? `Pièce jointe ${m.attachment.type}`}</a> : null}
             </div>
           ))
         )}

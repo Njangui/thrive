@@ -25,12 +25,22 @@ export class TelegramMessagingAdapter implements MessagingProvider {
   constructor(private readonly client: TelegramMessagingClient) {}
 
   async sendMessage(_organizationId: string, message: OutboundMessage): Promise<SendMessageResult> {
-    // CONFIRMÉ (core.telegram.org/bots/api#sendmessage) : `chat_id` seul
-    // suffit à envoyer un message à un chat privé déjà initié par
-    // l'utilisateur (contrairement à Zernio, aucun conversationId séparé
-    // n'est requis) — `message.to` porte déjà ce chat_id (voir mapper.ts,
-    // externalContactId = externalThreadId = chat.id).
-    const sent = await this.client.sendMessage({ chat_id: message.to, text: message.content });
+    // Telegram reste le canal natif du tenant : un message texte part via
+    // sendMessage ; une pièce jointe publique peut être envoyée directement
+    // via l'API Telegram. Cela couvre les réponses humaines et les
+    // publications sans faire dépendre Telegram de Zernio.
+    let sent;
+    if (message.attachmentUrl && message.attachmentType === "video") {
+      sent = await this.client.sendVideo({ chat_id: message.to, video: message.attachmentUrl, caption: message.content || undefined });
+    } else if (message.attachmentUrl && message.attachmentType === "audio") {
+      sent = await this.client.sendAudio({ chat_id: message.to, audio: message.attachmentUrl, caption: message.content || undefined });
+    } else if (message.attachmentUrl && message.attachmentType === "file") {
+      sent = await this.client.sendDocument({ chat_id: message.to, document: message.attachmentUrl, caption: message.content || undefined });
+    } else if (message.attachmentUrl) {
+      sent = await this.client.sendPhoto({ chat_id: message.to, photo: message.attachmentUrl, caption: message.content || undefined });
+    } else {
+      sent = await this.client.sendMessage({ chat_id: message.to, text: message.content });
+    }
     return { providerMessageId: String(sent.message_id), status: "sent" };
   }
 
@@ -55,6 +65,14 @@ export class TelegramMessagingAdapter implements MessagingProvider {
   async markAsRead(_organizationId: string, _externalMessageId: string): Promise<void> {
     // CONFIRMÉ : aucun endpoint "accusé de lecture" pour un bot Telegram
     // en chat privé — non implémenté plutôt que deviné.
+  }
+
+  async downloadInboundAttachment(_organizationId: string, fileId: string): Promise<{ data: Uint8Array; contentType: string | null }> {
+    const file = await this.client.getFile(fileId);
+    const maxBytes = 20 * 1024 * 1024;
+    if (file.file_size && file.file_size > maxBytes) throw new Error("La pièce jointe Telegram dépasse la limite de 20 Mo prise en charge par CRESYVA.");
+    if (!file.file_path) throw new Error("Telegram n'a pas fourni le chemin du fichier.");
+    return this.client.downloadFile(file.file_path);
   }
 
   /** Utilisé par telegram-channel-service.ts pour valider un jeton avant de le stocker. */

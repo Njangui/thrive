@@ -47,6 +47,7 @@ export interface ConversationThreadMessage {
   sender: "contact" | "ai" | "human";
   content: string;
   createdAt: string;
+  attachment?: { url: string; type: string; fileName?: string | null; mimeType?: string | null };
 }
 
 export interface ConversationThread {
@@ -90,7 +91,7 @@ export async function getConversationThread(
 
   const { data: recentMessagesDesc, error: messagesError } = await supabase
     .from("messages")
-    .select("id, direction, sender, content, created_at")
+    .select("id, direction, sender, content, metadata, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(MESSAGES_PAGE_SIZE);
@@ -112,6 +113,7 @@ export async function getConversationThread(
       sender: m.sender,
       content: m.content,
       createdAt: m.created_at,
+      attachment: ((m.metadata as { attachment?: { url?: string; type?: string; fileName?: string | null; mimeType?: string | null } } | null)?.attachment?.url ? { url: String((m.metadata as { attachment: { url: string } }).attachment.url), type: String((m.metadata as { attachment?: { type?: string } }).attachment?.type ?? "file"), fileName: (m.metadata as { attachment?: { fileName?: string | null } }).attachment?.fileName ?? null, mimeType: (m.metadata as { attachment?: { mimeType?: string | null } }).attachment?.mimeType ?? null } : undefined),
     })),
   };
 }

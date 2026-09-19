@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
-import { getNotificationProvider } from "@/infrastructure/providers/registry";
+import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 import { TelegramClient } from "@/infrastructure/providers/telegram/client";
 import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { env } from "@/lib/env";
@@ -113,12 +113,11 @@ export async function applyForAffiliate(input: AffiliateApplicationInput): Promi
     throw new Error(`Impossible d'enregistrer la candidature d'affiliation: ${error?.message}`);
   }
 
-  await notifyPlatformOperators(
-    "Nouvelle candidature affilié",
-    `${displayName} (${contactEmail}) a candidaté au programme d'affiliation.`,
-    "affiliate",
-    created.id,
-  );
+  await notifyPlatformAdminTelegram("AFFILIATE_APPLICATION_CREATED", {
+    entityType: "affiliate",
+    entityId: created.id,
+    details: { nom: displayName, email: contactEmail },
+  });
 
   return { affiliateId: created.id };
 }
@@ -127,19 +126,7 @@ export async function applyForAffiliate(input: AffiliateApplicationInput): Promi
 // Notification opérateur plateforme (best-effort, jamais bloquant)
 // ------------------------------------------------------------
 
-export async function notifyPlatformOperators(
-  title: string,
-  body: string,
-  relatedEntityType?: string,
-  relatedEntityId?: string,
-): Promise<void> {
-  try {
-    const notifier = await getNotificationProvider();
-    await notifier.send({ title, body, channel: "telegram", relatedEntityType, relatedEntityId });
-  } catch (err) {
-    console.warn("[affiliate] notification opérateur plateforme échouée:", err);
-  }
-}
+
 
 /**
  * Envoie un message Telegram DIRECT à un affilié précis (pas une alerte
@@ -308,6 +295,23 @@ export interface RecordClickResult {
 export async function recordClick(input: RecordClickInput): Promise<RecordClickResult | null> {
   if (!isValidReferralCode(input.code)) return null;
 
+  // Route PUBLIQUE (/r/[code]) visitée par de vrais visiteurs, jamais
+  // authentifiée — son propre commentaire promet de toujours rediriger
+  // plutôt que d'afficher une erreur. Tout le reste de cette fonction
+  // renvoie déjà `null` sur échec ; ce try/catch englobant couvre aussi
+  // hashForFraudDetection()/signReferralToken() (affiliate-link-security.ts),
+  // qui LÈVENT si AFFILIATE_LINK_SECRET n'est pas configuré — sans quoi
+  // une variable d'environnement manquante plante ce lien pour tout
+  // visiteur au lieu de simplement désactiver l'attribution.
+  try {
+    return await recordClickUnsafe(input);
+  } catch (err) {
+    console.error(`recordClick: erreur inattendue (${input.code}):`, err);
+    return null;
+  }
+}
+
+async function recordClickUnsafe(input: RecordClickInput): Promise<RecordClickResult | null> {
   const supabase = getSupabaseServiceClient();
 
   const { data: link, error } = await supabase
@@ -419,12 +423,15 @@ export async function attributeReferral(
         severity: "high",
         details: { organizationId },
       });
-      await notifyPlatformOperators(
-        "Auto-référencement bloqué",
-        `Un affilié a tenté de s'auto-référencer via son propre lien (organisation ${organizationId}). Aucune commission ne sera générée.`,
-        "affiliate_fraud",
-        affiliate.id,
-      );
+      await notifyPlatformAdminTelegram("AFFILIATE_FRAUD_DETECTED", {
+        organizationId,
+        entityType: "affiliate_fraud",
+        entityId: affiliate.id,
+        details: {
+          motif: "Auto-référencement bloqué",
+          action: "Aucune commission générée",
+        },
+      });
       return; // bloqué à la source — aucune ligne affiliate_referrals créée.
     }
 

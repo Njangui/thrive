@@ -1,5 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { getNotificationProvider } from "@/infrastructure/providers/registry";
+import { notifyPlatformAdminTelegram, type PlatformTelegramEvent } from "./telegram-admin-notification-service";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { grantCredits, type CreditStatus } from "./ai-credits-service";
 import {
@@ -223,31 +223,30 @@ export async function writeAdminAuditLog(params: {
     throw new Error(`Erreur écriture audit_logs: ${error.message}`);
   }
 
-  // Telegram opérateur : uniquement les événements majeurs, jamais les
-  // secrets/états sensibles. Le canal est best-effort et ne doit jamais
-  // bloquer l'action métier qui vient d'être auditée.
-  const MAJOR_ACTIONS = new Set([
+  // Telegram opérateur : uniquement les événements majeurs. Le code
+  // événement est explicite : aucun regex sur le texte d'une notification
+  // tenant ne peut déclencher par accident une alerte plateforme.
+  const MAJOR_ACTIONS = new Set<PlatformTelegramEvent>([
     "ORGANIZATION_CREATED", "ORGANIZATION_SUSPENDED", "ORGANIZATION_ACTIVATED",
     "ORGANIZATION_PLAN_CHANGED", "SUBSCRIPTION_PAYMENT_COMPLETED", "SUBSCRIPTION_PAYMENT_FAILED",
     "TELEGRAM_CHANNEL_CONNECTED", "TELEGRAM_CHANNEL_DISCONNECTED", "AFFILIATE_APPLICATION_CREATED",
     "AFFILIATE_FRAUD_DETECTED", "AFFILIATE_PAYOUT_REQUESTED", "DOMAIN_REQUEST_RESOLVED",
-    "ADDON_CREATED", "ADDON_UPDATED", "AI_CREDITS_GRANTED",
-    "PHONE_NUMBER_ADDED", "PHONE_NUMBER_ASSIGNED",
-    "AFFILIATE_APPROVED", "AFFILIATE_REJECTED", "AFFILIATE_SUSPENDED", "AFFILIATE_PAYOUT_PAID",
+    "ADDON_CREATED", "ADDON_UPDATED", "AI_CREDITS_GRANTED", "AFFILIATE_APPROVED",
+    "AFFILIATE_REJECTED", "AFFILIATE_SUSPENDED", "AFFILIATE_PAYOUT_PAID", "AFFILIATE_PAYOUT_REJECTED",
   ]);
-  if (MAJOR_ACTIONS.has(params.action)) {
-    try {
-      const notifier = await getNotificationProvider();
-      await notifier.send({
-        title: `SME-OS · ${params.action.replaceAll("_", " ")}`,
-        body: `Organisation: ${params.organizationId ?? "plateforme"}\nType: ${params.entityType}${params.entityId ? `\nID: ${params.entityId}` : ""}`,
-        channel: "telegram",
-        relatedEntityType: params.entityType,
-        relatedEntityId: params.entityId ?? params.organizationId ?? undefined,
-      });
-    } catch (notificationError) {
-      console.warn("[admin-audit] notification Telegram non envoyée:", notificationError);
-    }
+  if (MAJOR_ACTIONS.has(params.action as PlatformTelegramEvent)) {
+    await notifyPlatformAdminTelegram(params.action as PlatformTelegramEvent, {
+      organizationId: params.organizationId,
+      entityType: params.entityType,
+      entityId: params.entityId ?? params.organizationId,
+      details: {
+        action: params.action.replaceAll("_", " "),
+        ...(typeof params.afterState?.amountFcfa === "number" ? { montantFcfa: params.afterState.amountFcfa } : {}),
+        ...(typeof params.afterState?.amount_fcfa === "number" ? { montantFcfa: params.afterState.amount_fcfa } : {}),
+        ...(typeof params.afterState?.planKey === "string" ? { forfait: params.afterState.planKey } : {}),
+        ...(typeof params.afterState?.paymentReference === "string" ? { reference: params.afterState.paymentReference } : {}),
+      },
+    });
   }
 }
 

@@ -1,6 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { findOrCreateCategory } from "./catalog-service";
-import { slugify } from "@/domain/entities/catalog";
+import { findOrCreateCategory, resolvePrimaryImageUrl } from "./catalog-service";
+import { slugify, CatalogSpecificationsSchema, type CatalogSpecification } from "@/domain/entities/catalog";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 
 /**
@@ -41,10 +41,14 @@ export interface ServiceListItem {
   status: string;
   categoryName: string | null;
   categoryId: string | null;
+  /** Catalogue V2 (0056) — photo de position la plus basse (service_images), ou null si aucune. Parité avec CatalogProductSummary.imageUrl. */
+  imageUrl: string | null;
 }
 
 export interface ServiceForEdit extends ServiceListItem {
   description: string | null;
+  /** Catalogue V2 (0056) — jamais undefined : [] si aucune configurée. */
+  specifications: CatalogSpecification[];
 }
 
 interface ServiceRow {
@@ -56,6 +60,8 @@ interface ServiceRow {
   status: string;
   category_id: string | null;
   categories?: { name?: string | null } | null;
+  service_images?: { url: string; position: number }[];
+  specifications?: CatalogSpecification[] | null;
 }
 
 function mapServiceRow(row: ServiceRow): ServiceForEdit {
@@ -68,6 +74,8 @@ function mapServiceRow(row: ServiceRow): ServiceForEdit {
     status: row.status,
     categoryName: row.categories?.name ?? null,
     categoryId: row.category_id,
+    imageUrl: resolvePrimaryImageUrl(row.service_images),
+    specifications: row.specifications ?? [],
   };
 }
 
@@ -75,7 +83,7 @@ export async function listServicesForOrg(organizationId: string): Promise<Servic
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, price, duration_minutes, status, category_id, categories(name)")
+    .select("id, name, price, duration_minutes, status, category_id, categories(name), service_images(url, position)")
     .eq("organization_id", organizationId)
     .order("name", { ascending: true });
 
@@ -87,7 +95,9 @@ export async function getServiceForEdit(organizationId: string, serviceId: strin
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, description, price, duration_minutes, status, category_id, categories(name)")
+    .select(
+      "id, name, description, price, duration_minutes, status, category_id, specifications, categories(name), service_images(url, position)",
+    )
     .eq("id", serviceId)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -111,6 +121,8 @@ export interface CreateServiceInput {
   price: number;
   durationMinutes?: number | null;
   status?: ServiceStatus;
+  /** Catalogue V2 (0056) — URL finale déjà résolue (upload ou lien direct, voir media-service.ts). Parité avec CreateProductInput.imageUrl. */
+  imageUrl?: string;
 }
 
 function assertValidServiceInput(name: string, price: number, durationMinutes?: number | null): void {
@@ -151,6 +163,11 @@ export async function createService(input: CreateServiceInput): Promise<{ servic
   if (error || !data) {
     throw new Error(`Impossible de créer le service: ${error?.message}`);
   }
+
+  if (input.imageUrl) {
+    await appendServiceImage(input.organizationId, data.id, input.imageUrl);
+  }
+
   return { serviceId: data.id };
 }
 
@@ -220,4 +237,193 @@ export async function toggleServiceStatus(
 
   if (error) throw new Error(`Impossible de changer le statut du service ${serviceId}: ${error.message}`);
   if (!data) throw new NotFoundError("Service introuvable.");
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue V2 (0056) — galerie multi-photos, en miroir exact de
+// catalog-service.ts (listProductImages/appendProductImage/
+// removeProductImage/moveProductImage/setPrimaryProductImage), table
+// `service_images` au lieu de `product_images`. Écart identifié par audit
+// du code réel (pas seulement du schéma) : `services` n'avait jusqu'ici
+// AUCUNE image, nulle part — ni table, ni champ de formulaire, ni galerie
+// côté dashboard, ni photo sur la fiche prestation publique — alors que
+// les produits en ont une depuis 0008_catalog_faq_business.sql. Un salon
+// de coiffure ou un cabinet de conseil ne pouvait illustrer aucune de ses
+// prestations, contrairement à un commerçant retail pour chaque produit.
+// ---------------------------------------------------------------------------
+
+export interface ServiceImageItem {
+  id: string;
+  url: string;
+  position: number;
+}
+
+/** Galerie complète d'un service, triée par position — position 0 = photo principale (site public, WhatsApp, publications). */
+export async function listServiceImages(organizationId: string, serviceId: string): Promise<ServiceImageItem[]> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("service_images")
+    .select("id, url, position")
+    .eq("organization_id", organizationId)
+    .eq("service_id", serviceId)
+    .order("position", { ascending: true });
+
+  if (error) throw new Error(`Erreur lecture des photos du service ${serviceId}: ${error.message}`);
+  return data ?? [];
+}
+
+/** Ajoute une photo à la FIN de la galerie (jamais en position 0 — n'écrase jamais la photo principale existante). */
+export async function appendServiceImage(organizationId: string, serviceId: string, url: string): Promise<void> {
+  const existing = await listServiceImages(organizationId, serviceId);
+  const nextPosition = existing.length > 0 ? Math.max(...existing.map((i) => i.position)) + 1 : 0;
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("service_images")
+    .insert({ organization_id: organizationId, service_id: serviceId, url, position: nextPosition });
+
+  if (error) throw new Error(`Impossible d'ajouter la photo: ${error.message}`);
+}
+
+/** Referme l'écart des positions (toujours 0,1,2... contigu) après une suppression — voir catalog-service.ts::renumberProductImages. */
+async function renumberServiceImages(organizationId: string, serviceId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const images = await listServiceImages(organizationId, serviceId);
+  const updates = images
+    .map((img, correctPosition) => ({ img, correctPosition }))
+    .filter(({ img, correctPosition }) => img.position !== correctPosition);
+
+  await Promise.all(
+    updates.map(({ img, correctPosition }) =>
+      supabase.from("service_images").update({ position: correctPosition }).eq("id", img.id),
+    ),
+  );
+}
+
+export async function removeServiceImage(organizationId: string, serviceId: string, imageId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("service_images")
+    .delete()
+    .eq("id", imageId)
+    .eq("organization_id", organizationId)
+    .eq("service_id", serviceId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(`Impossible de supprimer la photo: ${error.message}`);
+  if (!data) throw new NotFoundError("Photo introuvable.");
+
+  await renumberServiceImages(organizationId, serviceId);
+}
+
+/** Échange la position de deux photos adjacentes — voir catalog-service.ts::moveProductImage (même logique, jamais de drag-and-drop). */
+export async function moveServiceImage(
+  organizationId: string,
+  serviceId: string,
+  imageId: string,
+  direction: "up" | "down",
+): Promise<void> {
+  const images = await listServiceImages(organizationId, serviceId);
+  const index = images.findIndex((img) => img.id === imageId);
+  if (index === -1) throw new NotFoundError("Photo introuvable.");
+
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= images.length) return;
+
+  const current = images[index]!;
+  const swapWith = images[swapIndex]!;
+
+  const supabase = getSupabaseServiceClient();
+  await Promise.all([
+    supabase.from("service_images").update({ position: swapWith.position }).eq("id", current.id),
+    supabase.from("service_images").update({ position: current.position }).eq("id", swapWith.id),
+  ]);
+}
+
+/** Bascule une photo en position 0 (principale) en l'échangeant avec l'actuelle principale — jamais un delete+reinsert. */
+export async function setPrimaryServiceImage(
+  organizationId: string,
+  serviceId: string,
+  imageId: string,
+): Promise<void> {
+  const images = await listServiceImages(organizationId, serviceId);
+  const target = images.find((img) => img.id === imageId);
+  if (!target) throw new NotFoundError("Photo introuvable.");
+  if (target.position === 0) return;
+
+  const currentPrimary = images.find((img) => img.position === 0);
+  const supabase = getSupabaseServiceClient();
+
+  await supabase.from("service_images").update({ position: 0 }).eq("id", target.id);
+  if (currentPrimary) {
+    await supabase.from("service_images").update({ position: target.position }).eq("id", currentPrimary.id);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue V2 (0056) — "informations complémentaires", en miroir exact de
+// catalog-service.ts (listProductSpecifications/addProductSpecification/
+// removeProductSpecification). Voir le commentaire de la migration 0056
+// pour pourquoi c'est une liste libre plutôt que des colonnes par secteur.
+// ---------------------------------------------------------------------------
+
+async function readServiceSpecifications(organizationId: string, serviceId: string): Promise<CatalogSpecification[]> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("services")
+    .select("specifications")
+    .eq("id", serviceId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erreur lecture des informations complémentaires du service ${serviceId}: ${error.message}`);
+  if (!data) throw new NotFoundError("Service introuvable.");
+  return (data as unknown as { specifications?: CatalogSpecification[] | null }).specifications ?? [];
+}
+
+export async function listServiceSpecifications(organizationId: string, serviceId: string): Promise<CatalogSpecification[]> {
+  return readServiceSpecifications(organizationId, serviceId);
+}
+
+export async function addServiceSpecification(
+  organizationId: string,
+  serviceId: string,
+  label: string,
+  value: string,
+): Promise<void> {
+  const existing = await readServiceSpecifications(organizationId, serviceId);
+  const parsed = CatalogSpecificationsSchema.safeParse([...existing, { label, value }]);
+  if (!parsed.success) {
+    throw new ValidationError(
+      "Informations invalides : libellé et valeur obligatoires (12 lignes maximum au total).",
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("services")
+    .update({ specifications: parsed.data })
+    .eq("id", serviceId)
+    .eq("organization_id", organizationId);
+
+  if (error) throw new Error(`Impossible d'ajouter l'information: ${error.message}`);
+}
+
+export async function removeServiceSpecification(
+  organizationId: string,
+  serviceId: string,
+  index: number,
+): Promise<void> {
+  const existing = await readServiceSpecifications(organizationId, serviceId);
+  const next = existing.filter((_, i) => i !== index);
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("services")
+    .update({ specifications: next })
+    .eq("id", serviceId)
+    .eq("organization_id", organizationId);
+
+  if (error) throw new Error(`Impossible de supprimer l'information: ${error.message}`);
 }

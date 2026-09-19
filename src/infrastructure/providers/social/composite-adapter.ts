@@ -43,15 +43,15 @@ export class CompositeSocialAdapter implements SocialPublishingProvider {
 
   async createPost(request: Omit<CreateSocialPostRequest, "scheduledFor" | "publishNow">): Promise<SocialPostResult> {
     const results = await this.dispatch({ ...request, targets: request.targets }, "create");
-    return { providerPostId: this.encode(results.map((x) => ({ name: x.adapter.providerName, id: x.result.providerPostId }))), status: results.every((x) => x.result.status === "published") ? "published" : "draft" };
+    return { providerPostId: results.length === 1 ? results[0]!.result.providerPostId : this.encode(results.map((x) => ({ name: x.adapter.providerName, id: x.result.providerPostId }))), status: results.every((x) => x.result.status === "published") ? "published" : "draft" };
   }
   async schedulePost(request: CreateSocialPostRequest & { scheduledFor: string }): Promise<SocialPostResult> {
     const results = await this.dispatch(request, "schedule");
-    return { providerPostId: this.encode(results.map((x) => ({ name: x.adapter.providerName, id: x.result.providerPostId }))), status: results.some((x) => x.result.status === "failed") ? "partial" : "scheduled" };
+    return { providerPostId: results.length === 1 ? results[0]!.result.providerPostId : this.encode(results.map((x) => ({ name: x.adapter.providerName, id: x.result.providerPostId }))), status: results.some((x) => x.result.status === "failed") ? "partial" : "scheduled" };
   }
   async publishPost(request: CreateSocialPostRequest): Promise<SocialPostResult> {
     const results = await this.dispatch(request, "publish");
-    return { providerPostId: this.encode(results.map((x) => ({ name: x.adapter.providerName, id: x.result.providerPostId }))), status: results.every((x) => x.result.status === "published") ? "published" : "partial" };
+    return { providerPostId: results.length === 1 ? results[0]!.result.providerPostId : this.encode(results.map((x) => ({ name: x.adapter.providerName, id: x.result.providerPostId }))), status: results.every((x) => x.result.status === "published") ? "published" : "partial" };
   }
   async getPostStatus(providerPostId: string): Promise<SocialPostStatus> {
     const decoded = this.decode(providerPostId);

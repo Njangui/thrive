@@ -271,5 +271,6 @@ export async function confirmAddonPurchase(payment: {
     body: `${addon.name} × ${payment.addonQuantity} a été ajouté à votre compte.`,
     relatedEntityType: "organization_addon",
     relatedEntityId: payment.id,
+    priority: "normal",
   });
 }

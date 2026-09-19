@@ -44,6 +44,15 @@ et sont protégées par RLS (`is_member_of_org()` — voir migration 0002).
 | `0040_country_engine.sql` | Country Engine (expansion multi-pays) — `countries`, `payment_channels`, `plan_prices`, `country_waitlist`, `notchpay_sync_runs`. Seed : Cameroun `active`, prix `plan_prices` identiques à `plans.price_fcfa`. Voir `docs/country-engine.md` |
 | `0041_organizations_country_code.sql` | `organizations.country_code` (FK vers `countries`) — backfill `'CM'` pour toutes les organisations existantes |
 | `0042_subscription_payments_currency.sql` | `subscription_payments.currency_code` — corrige l'hypothèse implicite FCFA sur `amount_fcfa` (backfill `'XAF'` pour l'historique) |
+| `0056_service_images_and_specifications.sql` | `service_images` (galerie multi-photos des prestations, miroir exact de `product_images` : mêmes colonnes, même politique de position, RLS `is_member_of_org`), `products.specifications` / `services.specifications` (JSONB — « informations complémentaires » : liste ordonnée de paires libellé/valeur, max 12, jamais des colonnes figées par secteur). Chantier Catalogue V2, voir `RAPPORT_CATALOGUE_V2.md`. **Renumérotée de `0055` à `0056` à la fusion #14** : `0055` était déjà pris par `0055_telegram_publications.sql` (Telegram Omnichannel v3) ; contenu inchangé, seuls le nom de fichier et le commentaire d'en-tête ont été mis à jour |
+| `0057_promotion_deadline.sql` | `products.promotion_ends_at` (timestamptz, nullable) — échéance optionnelle d'une promotion, alimente le compte à rebours. NULL = promotion sans date de fin, comportement historique inchangé. Aucune tâche planifiée : l'expiration est calculée à la lecture (`catalog-service.ts::isPromotionCurrentlyOn`). **Renumérotée de `0056` à `0057` à la fusion #14** (même raison que ci-dessus) |
+
+> Note (fusion #14) : ce tableau s'arrête à `0042` alors que les
+> migrations `0043` à `0055` existent dans le dépôt — retard
+> préexistant, non traité par cette fusion (seules les deux migrations
+> qu'elle ajoute, `0056` et `0057`, sont documentées ci-dessus). Le
+> contenu réel de chacune est dans son propre fichier `.sql`, dont
+> l'en-tête décrit le raisonnement.
 
 > Note (mise à jour Lot 1) : cette table listait encore, avant cet audit,
 > les migrations jusqu'à `0033` seulement alors que `0035`-`0037`

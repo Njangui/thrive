@@ -26,20 +26,40 @@ export async function handleInboundMessage(
   const supabase = getSupabaseServiceClient();
   const { organizationId, payload } = event;
 
-  // 1. Contact : upsert par (organization_id, phone_e164)
-  const { data: contact, error: contactError } = await supabase
-    .from("contacts")
-    .upsert(
-      {
-        organization_id: organizationId,
-        phone_e164: payload.phoneE164 ?? null,
-        full_name: payload.contactFullName ?? null,
-        source_channel: payload.channel,
-      },
-      { onConflict: "organization_id,phone_e164" },
-    )
-    .select("id")
-    .single();
+  // 1. Contact : WhatsApp conserve sa clé phone_e164 historique. Les
+  // canaux sans téléphone (Telegram) utilisent external_channel_id, ajouté
+  // par migration 0046, afin de ne pas créer un contact à chaque message.
+  let contact;
+  let contactError: { message: string } | null = null;
+  const externalChannelId = !payload.phoneE164 ? `${payload.channel}:${payload.externalContactId}` : null;
+
+  if (externalChannelId) {
+    const existing = await supabase
+      .from("contacts")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("external_channel_id", externalChannelId)
+      .maybeSingle();
+    if (existing.error) contactError = existing.error;
+    else if (existing.data) {
+      const updated = await supabase.from("contacts").update({ full_name: payload.contactFullName ?? null, source_channel: payload.channel }).eq("id", existing.data.id).select("id").single();
+      contact = updated.data;
+      contactError = updated.error;
+    } else {
+      const inserted = await supabase.from("contacts").insert({ organization_id: organizationId, phone_e164: null, external_channel_id: externalChannelId, full_name: payload.contactFullName ?? null, source_channel: payload.channel }).select("id").single();
+      contact = inserted.data;
+      contactError = inserted.error;
+    }
+  } else {
+    const existing = await supabase
+      .from("contacts")
+      .upsert({ organization_id: organizationId, phone_e164: payload.phoneE164 ?? null, full_name: payload.contactFullName ?? null, source_channel: payload.channel }, { onConflict: "organization_id,phone_e164" })
+      .select("id")
+      .single();
+    contact = existing.data;
+    contactError = existing.error;
+  }
+
 
   if (contactError || !contact) {
     throw new Error(`Impossible d'upsert le contact: ${contactError?.message}`);
@@ -81,6 +101,7 @@ export async function handleInboundMessage(
       sender: "contact",
       content: payload.content,
       external_message_id: payload.externalMessageId,
+      metadata: payload.attachment ? { attachment: payload.attachment } : {},
     })
     .select("id")
     .single();

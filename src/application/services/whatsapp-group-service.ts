@@ -906,6 +906,7 @@ async function processOneBroadcast(
     body: `${sent} groupe(s) atteint(s), ${failed} échec(s) sur ${targets.length} groupe(s) ciblé(s).`,
     relatedEntityType: "group_broadcast",
     relatedEntityId: broadcastId,
+    priority: sent > 0 && failed === 0 ? "normal" : "important",
   });
 
   return { sent, failed };

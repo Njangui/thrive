@@ -7,6 +7,7 @@ import { listPlans, resolvePlanPriceForCountry, type PlanKey } from "./plans-rep
 import { DEFAULT_COUNTRY_CODE } from "./country-service";
 import { validateMoney } from "./currency-service";
 import { notifyOrgAdmins } from "./notification-service";
+import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 import { confirmAddonPurchase } from "./addons-service";
 import { recordAffiliateConversion, getPromoCodeDiscountBpsForNextPayment } from "./affiliate-service";
 import { computeDiscountedAmountFcfa } from "@/domain/entities/affiliate";
@@ -357,6 +358,15 @@ async function verifyAndReconcilePayment(payment: SubscriptionPaymentRow): Promi
       relatedEntityType: "subscription_payment",
       relatedEntityId: payment.id,
     });
+    await notifyPlatformAdminTelegram("SUBSCRIPTION_PAYMENT_FAILED", {
+      organizationId: payment.organization_id,
+      entityType: "subscription_payment",
+      entityId: payment.id,
+      details: {
+        forfait: payment.plan_key,
+        montantFcfa: payment.amount_fcfa,
+      },
+    });
     return "failed";
   }
 
@@ -575,6 +585,12 @@ export async function processSubscriptionRenewals(): Promise<{
         relatedEntityType: "organization_subscription",
         relatedEntityId: row.organization_id,
       });
+      await notifyPlatformAdminTelegram("SUBSCRIPTION_EXPIRED", {
+        organizationId: row.organization_id,
+        entityType: "organization_subscription",
+        entityId: row.organization_id,
+        details: { statut: row.status },
+      });
       markedPastDue++;
       continue;
     }
@@ -701,6 +717,12 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
       body: `Votre abonnement (forfait ${payment.plan_key}) est actif jusqu'au ${currentPeriodEnd.toLocaleDateString("fr-FR")}.`,
       relatedEntityType: "subscription_payment",
       relatedEntityId: payment.id,
+    });
+    await notifyPlatformAdminTelegram("SUBSCRIPTION_PAYMENT_COMPLETED", {
+      organizationId: payment.organization_id,
+      entityType: "subscription_payment",
+      entityId: payment.id,
+      details: { forfait: payment.plan_key, montantFcfa: payment.amount_fcfa },
     });
   }
 }

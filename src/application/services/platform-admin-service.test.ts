@@ -26,7 +26,7 @@ vi.mock("@/infrastructure/supabase/server-client", () => ({
   getSupabaseServiceClient: vi.fn(() => ({ from: mockFrom })),
 }));
 
-import { requirePlatformAdmin } from "./platform-admin-service";
+import { requirePlatformAdmin, getPlatformAdminStatus } from "./platform-admin-service";
 import { AuthenticationError, AuthorizationError } from "@/lib/errors";
 
 beforeEach(() => {
@@ -77,5 +77,32 @@ describe("requirePlatformAdmin", () => {
     const result = await requirePlatformAdmin();
 
     expect(result).toEqual({ userId: "user_1", role: "admin", email: null });
+  });
+});
+
+describe("getPlatformAdminStatus", () => {
+  it("retourne null (jamais une erreur) si absent de platform_admins", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+
+    await expect(getPlatformAdminStatus("user_1")).resolves.toBeNull();
+    expect(mockFrom).toHaveBeenCalledWith("platform_admins");
+    expect(mockEq).toHaveBeenCalledWith("user_id", "user_1");
+    // Jamais de session lue ici — userId est déjà fourni par l'appelant
+    // (voir dashboard/layout.tsx, qui l'a déjà via requireCurrentOrganization).
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("retourne null (jamais un accès par défaut) si la lecture DB échoue", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: { message: "connexion perdue" } });
+
+    await expect(getPlatformAdminStatus("user_1")).resolves.toBeNull();
+  });
+
+  it("retourne l'admin si présent dans platform_admins", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { role: "super_admin" }, error: null });
+
+    const result = await getPlatformAdminStatus("user_1", "admin@cresyva.test");
+
+    expect(result).toEqual({ userId: "user_1", role: "super_admin", email: "admin@cresyva.test" });
   });
 });

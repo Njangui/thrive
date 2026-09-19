@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./catalog-service", () => ({
-  findOrCreateCategory: vi.fn(async (_orgId: string, name: string) => `cat-${name}`),
-}));
+// `vi.importActual` plutôt qu'un mock complet : depuis le chantier
+// catalogue V2 (0056), service-service.ts importe aussi
+// `resolvePrimaryImageUrl` de ce module — un mock qui ne fournirait que
+// `findOrCreateCategory` le remplacerait par `undefined` et ferait
+// planter `mapServiceRow` sur le premier appel. Seul `findOrCreateCategory`
+// a besoin d'être remplacé (éviter un vrai accès `categories` en base).
+vi.mock("./catalog-service", async () => {
+  const actual = await vi.importActual<typeof import("./catalog-service")>("./catalog-service");
+  return {
+    ...actual,
+    findOrCreateCategory: vi.fn(async (_orgId: string, name: string) => `cat-${name}`),
+  };
+});
 
 const tableResults = new Map<string, { data: unknown; error: unknown }>();
 const insertCalls: { table: string; rows: unknown }[] = [];
@@ -42,6 +52,8 @@ import {
   createService,
   updateService,
   toggleServiceStatus,
+  addServiceSpecification,
+  removeServiceSpecification,
 } from "./service-service";
 
 beforeEach(() => {
@@ -60,7 +72,17 @@ describe("listServicesForOrg", () => {
 
     const services = await listServicesForOrg("org-1");
     expect(services).toEqual([
-      { id: "s1", name: "Coupe", price: 5000, durationMinutes: 30, status: "active", categoryName: "Coiffure", description: null },
+      {
+        id: "s1",
+        name: "Coupe",
+        price: 5000,
+        durationMinutes: 30,
+        status: "active",
+        categoryName: "Coiffure",
+        description: null,
+        imageUrl: null,
+        specifications: [],
+      },
     ]);
   });
 });
@@ -121,5 +143,49 @@ describe("toggleServiceStatus", () => {
 
     const update = updateCalls.find((c) => c.table === "services");
     expect(update!.patch).toEqual({ status: "inactive" });
+  });
+});
+
+describe("addServiceSpecification", () => {
+  it("ajoute une ligne à la fin de la liste existante", async () => {
+    tableResults.set("services", {
+      data: { specifications: [{ label: "Zone desservie", value: "Yaoundé" }] },
+      error: null,
+    });
+
+    await addServiceSpecification("org-1", "s-1", "Durée de validité", "30 jours");
+
+    const update = updateCalls.find((c) => c.table === "services");
+    expect(update!.patch).toEqual({
+      specifications: [
+        { label: "Zone desservie", value: "Yaoundé" },
+        { label: "Durée de validité", value: "30 jours" },
+      ],
+    });
+  });
+
+  it("refuse un libellé vide plutôt que d'enregistrer une ligne invalide", async () => {
+    tableResults.set("services", { data: { specifications: [] }, error: null });
+    await expect(addServiceSpecification("org-1", "s-1", "", "x")).rejects.toThrow(/Informations invalides/);
+    expect(updateCalls).toHaveLength(0);
+  });
+});
+
+describe("removeServiceSpecification", () => {
+  it("retire uniquement la ligne à l'index donné", async () => {
+    tableResults.set("services", {
+      data: {
+        specifications: [
+          { label: "A", value: "1" },
+          { label: "B", value: "2" },
+        ],
+      },
+      error: null,
+    });
+
+    await removeServiceSpecification("org-1", "s-1", 0);
+
+    const update = updateCalls.find((c) => c.table === "services");
+    expect(update!.patch).toEqual({ specifications: [{ label: "B", value: "2" }] });
   });
 });

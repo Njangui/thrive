@@ -50,21 +50,45 @@ export async function requirePlatformAdmin(): Promise<PlatformAdmin> {
     throw new AuthenticationError();
   }
 
+  const admin = await getPlatformAdminStatus(user.id, user.email ?? null);
+  if (!admin) {
+    throw new AuthorizationError();
+  }
+
+  return admin;
+}
+
+/**
+ * Variante non bloquante de `requirePlatformAdmin()` — pour un affichage
+ * conditionnel (ex : lien "Console Admin" dans la nav du dashboard
+ * marchand, visible uniquement pour un `platform_admins`, voir
+ * `dashboard/layout.tsx`) plutôt qu'une garde qui doit lever une erreur.
+ * Ne remplace `requirePlatformAdmin()` nulle part : la protection réelle
+ * de `/admin/*` reste cette dernière (et son appel dans chaque route),
+ * jamais une simple absence/présence de lien dans la nav (voir sa note :
+ * un lien masqué n'est qu'un confort UI, pas une barrière de sécurité).
+ *
+ * Retourne `null` — jamais une erreur — en cas d'absence de ligne
+ * `platform_admins` OU d'erreur DB inattendue, exactement le même parti
+ * pris que `requirePlatformAdmin()` : ne jamais transformer une erreur en
+ * accès admin par défaut sur la surface la plus sensible du projet.
+ */
+export async function getPlatformAdminStatus(userId: string, email: string | null = null): Promise<PlatformAdmin | null> {
   const serviceClient = getSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from("platform_admins")
     .select("role")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
-    console.error("requirePlatformAdmin: erreur lecture platform_admins:", error.message);
-    throw new AuthorizationError();
+    console.error("getPlatformAdminStatus: erreur lecture platform_admins:", error.message);
+    return null;
   }
 
   if (!data) {
-    throw new AuthorizationError();
+    return null;
   }
 
-  return { userId: user.id, role: data.role as string, email: user.email ?? null };
+  return { userId, role: data.role as string, email };
 }

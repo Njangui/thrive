@@ -198,6 +198,7 @@ export async function processDueFollowUps(now = new Date()): Promise<FollowUpRun
         body: `Une relance ${task.tier === "engaged_24h" ? "24 h" : "48 h"} a été envoyée automatiquement.`,
         relatedEntityType: "conversation",
         relatedEntityId: conversation.id,
+        priority: "normal",
       });
       result.sent++;
     } catch (sendError) {

@@ -87,6 +87,9 @@ export interface MessagingProvider {
 
   markAsRead(organizationId: string, externalMessageId: string): Promise<void>;
 
+  /** Télécharge une pièce jointe entrante quand le canal l'expose nativement. */
+  downloadInboundAttachment?(organizationId: string, fileId: string): Promise<{ data: Uint8Array; contentType: string | null }>;
+
   /**
    * Lot F (section 39/40 master prompt) — liste les groupes WhatsApp
    * visibles sur le compte connecté. Optionnelle : tous les

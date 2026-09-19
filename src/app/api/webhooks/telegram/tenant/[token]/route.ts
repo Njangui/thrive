@@ -10,7 +10,8 @@ import { resolveOrganizationIdByTelegramWebhookToken } from "@/infrastructure/pr
 import { handleInboundMessage } from "@/application/services/conversation-service";
 import { routeMessage } from "@/application/services/conversation-orchestrator";
 import { escalateToHuman, shouldAutoRespond } from "@/application/services/handoff-service";
-import { getMessagingProvider } from "@/infrastructure/providers/registry";
+import { getMessagingProvider, getStorageProvider } from "@/infrastructure/providers/registry";
+import { buildTenantObjectPath, type MediaType } from "@/application/services/media-service";
 
 /**
  * Pipeline (même schéma que app/api/webhooks/zernio/route.ts, section
@@ -69,7 +70,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
 
   try {
-    const domainEvent = mapTelegramUpdateToDomainEvent(update, organizationId);
+    const attachment = await downloadTelegramAttachmentIfPresent(organizationId, update);
+    const domainEvent = mapTelegramUpdateToDomainEvent(update, organizationId, attachment ?? undefined);
     if (!domainEvent) {
       await markWebhookEvent(externalEventId, "ignored_duplicate");
       return NextResponse.json({ ok: true });
@@ -123,6 +125,35 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
 
   return NextResponse.json({ ok: true });
+}
+
+async function downloadTelegramAttachmentIfPresent(organizationId: string, update: import("@/infrastructure/providers/messaging/telegram/types").TelegramUpdate) {
+  const message = update.message;
+  if (!message) return null;
+
+  const candidate = message.document
+    ? { fileId: message.document.file_id, fileName: message.document.file_name, mimeType: message.document.mime_type, type: "file" as const }
+    : message.video
+      ? { fileId: message.video.file_id, fileName: `telegram-${message.message_id}.mp4`, mimeType: message.video.mime_type, type: "video" as const }
+      : message.audio
+        ? { fileId: message.audio.file_id, fileName: `telegram-${message.message_id}.mp3`, mimeType: message.audio.mime_type, type: "audio" as const }
+        : message.voice
+          ? { fileId: message.voice.file_id, fileName: `telegram-${message.message_id}.ogg`, mimeType: message.voice.mime_type, type: "audio" as const }
+          : message.photo?.length
+            ? { fileId: message.photo[message.photo.length - 1]!.file_id, fileName: `telegram-${message.message_id}.jpg`, mimeType: "image/jpeg", type: "image" as const }
+            : null;
+  if (!candidate) return null;
+
+  const messaging = await getMessagingProvider(organizationId, "telegram");
+  if (!messaging.downloadInboundAttachment) throw new Error("Le canal Telegram connecté ne permet pas le téléchargement des pièces jointes.");
+  const downloaded = await messaging.downloadInboundAttachment(organizationId, candidate.fileId);
+  if (downloaded.data.byteLength > 20 * 1024 * 1024) throw new Error("La pièce jointe Telegram dépasse la limite de 20 Mo prise en charge par CRESYVA.");
+
+  const storage = await getStorageProvider(organizationId);
+  const contentType = downloaded.contentType?.split(";")[0] || candidate.mimeType || "application/octet-stream";
+  const path = buildTenantObjectPath("telegram-inbox" as MediaType, candidate.fileName || `telegram-${message.message_id}`);
+  const uploaded = await storage.upload({ organizationId, path, contentType, data: downloaded.data });
+  return { url: uploaded.url, type: candidate.type, fileName: candidate.fileName, mimeType: contentType, fileId: candidate.fileId };
 }
 
 async function markWebhookEvent(externalEventId: string, status: string, errorMessage?: string) {
