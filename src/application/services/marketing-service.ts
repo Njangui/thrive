@@ -49,24 +49,31 @@ export async function createCampaignFromProducts(
   // connectés (ci-dessous) et pour la publication effective plus loin.
   const socialProvider = await getSocialPublishingProvider(input.organizationId);
 
-  // CORRECTIF Lot 3 (audit master prompt §39) : la version précédente
-  // comptait les comptes DISTINCTS ciblés par CETTE campagne — un tenant
-  // pouvait rester sous la limite en créant plusieurs campagnes ciblant
-  // chacune 1 seul compte différent, sans jamais être bloqué même en
-  // connectant plus de comptes que son plan n'autorise. Compare
-  // maintenant le nombre RÉEL de comptes connectés (Zernio
-  // `GET /v1/accounts`, voir adapter.ts) à la limite du plan — cohérent
-  // avec "ne pas confondre nombre de publications et nombre de comptes
-  // connectés" (§39). Vérifié CÔTÉ SERVEUR, jamais seulement masqué au
-  // frontend. Absence de ligne `plan_entitlements` = illimité
-  // (canUseFeature), donc un tenant de démo créé avant ce lot n'est
-  // jamais cassé par cette vérification.
-  const connectedAccounts = await socialProvider.listAccounts();
-  const entitlement = await canUseFeature(input.organizationId, "social_accounts", connectedAccounts.length);
-  if (!entitlement.allowed) {
-    throw new QuotaExceededError(
-      "Vous avez atteint la limite de comptes sociaux connectés de votre offre. Déconnectez-en un ou passez à un forfait supérieur.",
-    );
+  // Garde-fou serveur par plateforme : le nombre de comptes autorisés est
+  // celui de la grille commerciale (Facebook/Instagram/LinkedIn/TikTok/YouTube),
+  // pas un plafond global artificiel qui empêcherait Discover d'utiliser son
+  // compte YouTube inclus.
+  const entitlementByPlatform: Record<string, string> = {
+    facebook: "facebook_pages",
+    instagram: "instagram_accounts",
+    linkedin: "linkedin_pages",
+    tiktok: "tiktok_accounts",
+    youtube: "youtube_accounts",
+    twitter: "twitter_accounts",
+  };
+  const accountsByPlatform = new Map<string, Set<string>>();
+  for (const target of input.targets) {
+    const entitlementKey = entitlementByPlatform[target.platform];
+    if (!entitlementKey) throw new QuotaExceededError(`Le canal ${target.platform} n'est pas disponible dans les offres CRESYVA actuelles.`);
+    const ids = accountsByPlatform.get(target.platform) ?? new Set<string>();
+    ids.add(target.accountId);
+    accountsByPlatform.set(target.platform, ids);
+  }
+  for (const [platform, accountIds] of accountsByPlatform) {
+    const entitlement = await canUseFeature(input.organizationId, entitlementByPlatform[platform]!, accountIds.size);
+    if (!entitlement.allowed) {
+      throw new QuotaExceededError(`La limite ${platform} de votre offre est atteinte.`);
+    }
   }
 
   const supabase = getSupabaseServiceClient();

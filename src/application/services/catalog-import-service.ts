@@ -3,7 +3,8 @@ import { z } from "zod";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { slugify, ProductStatusSchema, CatalogSpecificationSchema, type CatalogSpecification } from "@/domain/entities/catalog";
 import { findOrCreateCategory } from "./catalog-service";
-import { ValidationError } from "@/lib/errors";
+import { ValidationError, QuotaExceededError } from "@/lib/errors";
+import { canUseFeature } from "./entitlements-service";
 
 /**
  * Colonnes CSV attendues (section 11) : name, price, category, description,
@@ -150,6 +151,11 @@ export async function importProductsFromCsv(
     const data = validation.data;
 
     try {
+      const catalogEntitlement = await canUseFeature(organizationId, "catalog_products", 1);
+      if (!catalogEntitlement.allowed) {
+        throw new QuotaExceededError(`La limite de ${catalogEntitlement.limit.toLocaleString("fr-FR")} produits de votre offre est atteinte.`);
+      }
+
       const categoryId = data.category ? await resolveCategoryId(data.category) : null;
       const status = data.status ?? (data.stock > 0 ? "active" : "draft");
       const specifications = parseSpecifications(data.specifications);

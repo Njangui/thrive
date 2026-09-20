@@ -46,6 +46,9 @@ const CUMULATIVE_TABLE_BY_KEY: Record<string, CumulativeTableConfig> = {
   // whatsapp_groups.status ∈ {'connected','disconnected','error'} — seul
   // 'connected' doit peser sur le quota (Lot F, voir whatsapp-group-service.ts).
   whatsapp_groups: { table: "whatsapp_groups", activeStatuses: ["connected"] },
+  whatsapp: { table: "whatsapp_accounts", activeStatuses: ["connected"] },
+  catalog_products: { table: "products", activeStatuses: ["active", "draft", "out_of_stock", "inactive"] },
+  team_members: { table: "memberships" },
   // NB: 'social_accounts' n'est PAS traité ici en mode cumulatif : il
   // n'existe aujourd'hui aucune table "comptes sociaux connectés" dans le
   // code fourni (provider_connections est une ligne par (org, type,

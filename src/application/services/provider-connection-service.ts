@@ -35,6 +35,12 @@ export async function handleAccountStatusChanged(
     throw new Error(`handleAccountStatusChanged(${accountId}): échec mise à jour provider_connections: ${error.message}`);
   }
 
+  await supabase
+    .from("whatsapp_accounts")
+    .update({ status: status === "connected" ? "connected" : "error" })
+    .eq("organization_id", organizationId)
+    .eq("account_id", accountId);
+
   if (status === "error") {
     // Correspond littéralement à "connexion canal perdue" (section 32).
     await notifyOrgAdmins({

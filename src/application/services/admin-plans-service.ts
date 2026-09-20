@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from "@/lib/errors";
 import { writeAdminAuditLog } from "./admin-organizations-service";
 import { PLAN_KEYS, type PlanKey } from "./plans-repository";
 import { USAGE_GAUGES, FEATURE_FLAGS } from "./subscription-service";
+import { PRICING_FEATURES } from "@/application/config/pricing";
 
 /**
  * Lot 4 — voir RAPPORT_LOT_4.md. Comble le trou documenté dans
@@ -83,13 +84,17 @@ export async function getPlansOverviewForAdmin(): Promise<AdminPlansOverview> {
     });
   }
 
-  const entitlementCatalog = [...USAGE_GAUGES, ...FEATURE_FLAGS].map((entry) => ({ key: entry.key, label: entry.label }));
+  const entitlementCatalog = [
+    ...USAGE_GAUGES,
+    ...FEATURE_FLAGS,
+    ...PRICING_FEATURES.map((entry) => ({ key: entry.key, label: entry.label })),
+  ].filter((entry, index, all) => all.findIndex((candidate) => candidate.key === entry.key) === index);
 
   return {
     plans,
-    // Les jauges d'usage sont "-1 = illimité" par défaut si non configurées
-    // (même sémantique que getEntitlementLimit — voir plans-repository.ts).
-    entitlements: buildMatrix(entitlementCatalog, -1),
+    // Toutes les clés commerciales connues sont fail-closed : si une ligne
+    // manque en DB, elle est affichée comme non incluse jusqu'à seed/configuration.
+    entitlements: buildMatrix(entitlementCatalog, 0),
     // Un bonus non configuré n'a jamais de sens à "illimité" -> 0 par défaut.
     dedicatedBonuses: buildMatrix(DEDICATED_BONUS_CATALOG, 0),
   };

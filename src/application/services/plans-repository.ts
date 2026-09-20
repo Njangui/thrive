@@ -12,13 +12,27 @@ import { resolveCurrencyForCountry } from "./country-service";
  * les deux services s'importeraient l'un l'autre en cercle.
  *
  * Aucune fonction ici ne lève jamais pour une ligne absente : un tenant
- * mal configuré (créé avant ce lot, ou une clé d'entitlement pas encore
- * seedée) doit dégrader vers un comportement permissif ("starter" /
- * "illimité"), jamais planter une vérification de droits (critère
- * d'acceptation Lot B).
+ * mal configuré doit rester exploitable sans planter. Depuis le passage
+ * freemium, un plan absent retombe sur Discover et une clé commerciale
+ * connue mais absente de la DB est bloquée à 0 (fail-closed) ; une clé
+ * inconnue conserve le comportement historique illimité.
  */
 
 export const PLAN_KEYS = ["free", "starter", "pro"] as const;
+
+/** Entitlements commerciaux connus : une clé connue mais non seedée doit
+ * bloquer par défaut, jamais devenir accidentellement illimitée. */
+export const KNOWN_ENTITLEMENT_KEYS = new Set([
+  "catalog_products", "whatsapp", "whatsapp_groups", "whatsapp_groups_dedicated_bonus",
+  "telegram_bots", "telegram_groups", "youtube_accounts", "facebook_pages",
+  "linkedin_pages", "instagram_accounts", "tiktok_accounts", "facebook_auto_comments",
+  "twitter_accounts",
+  "instagram_auto_comments", "unified_comments", "ai_credits", "broadcast_contacts",
+  "team_members", "site_customization", "scheduled_publications", "immediate_publications",
+  "analytics", "push_notifications", "finance", "prospect_notes", "crm",
+  "semi_automatic_messaging", "automatic_messaging", "social_accounts",
+  "facebook_messenger", "instagram_messages", "linkedin", "tiktok",
+]);
 export type PlanKey = (typeof PLAN_KEYS)[number];
 
 export type OrganizationSubscriptionStatus = "trialing" | "active" | "past_due" | "cancelled";
@@ -50,9 +64,8 @@ function isPlanKey(value: unknown): value is PlanKey {
 
 /**
  * Résout le plan effectif d'une organisation. Retourne toujours une
- * valeur exploitable : "starter" si aucune ligne `organization_subscriptions`
- * n'existe (tenant créé avant ce lot) ou en cas d'erreur de lecture —
- * ne lève jamais.
+ * valeur exploitable : "free" si aucune ligne `organization_subscriptions`
+ * n'existe (tenant créé avant ce lot) ou en cas d'erreur de lecture — le mode freemium ne doit jamais accorder Starter par défaut.
  */
 export async function getOrganizationPlanKey(organizationId: string): Promise<PlanKey> {
   const supabase = getSupabaseServiceClient();
@@ -63,11 +76,11 @@ export async function getOrganizationPlanKey(organizationId: string): Promise<Pl
     .maybeSingle();
 
   if (error) {
-    console.error(`getOrganizationPlanKey(${organizationId}) erreur de lecture, plan "starter" par défaut:`, error.message);
-    return "starter";
+    console.error(`getOrganizationPlanKey(${organizationId}) erreur de lecture, plan "free" par défaut:`, error.message);
+    return "free";
   }
   if (!data || !isPlanKey(data.plan_key)) {
-    return "starter";
+    return "free";
   }
   return data.plan_key;
 }
@@ -92,8 +105,8 @@ export async function getOrganizationSubscription(organizationId: string): Promi
   if (!data) {
     return {
       organizationId,
-      planKey: "starter",
-      status: "trialing",
+      planKey: "free",
+      status: "active",
       trialStart: null,
       trialEnd: null,
       currentPeriodEnd: null,
@@ -102,8 +115,8 @@ export async function getOrganizationSubscription(organizationId: string): Promi
 
   return {
     organizationId,
-    planKey: isPlanKey(data.plan_key) ? data.plan_key : "starter",
-    status: (data.status as OrganizationSubscriptionStatus | null) ?? "trialing",
+    planKey: isPlanKey(data.plan_key) ? data.plan_key : "free",
+    status: (data.status as OrganizationSubscriptionStatus | null) ?? "active",
     trialStart: data.trial_start,
     trialEnd: data.trial_end,
     currentPeriodEnd: data.current_period_end,
@@ -184,12 +197,12 @@ export async function getEntitlementLimit(planKey: PlanKey, entitlementKey: stri
 
   if (error) {
     console.error(
-      `getEntitlementLimit(${planKey}, ${entitlementKey}) erreur de lecture, "illimité" par défaut:`,
+      `getEntitlementLimit(${planKey}, ${entitlementKey}) erreur de lecture, "0 pour clé connue / illimité pour clé inconnue":`,
       error.message,
     );
-    return -1;
+    return KNOWN_ENTITLEMENT_KEYS.has(entitlementKey) ? 0 : -1;
   }
-  if (!data) return -1;
+  if (!data) return KNOWN_ENTITLEMENT_KEYS.has(entitlementKey) ? 0 : -1;
   return data.limit_value;
 }
 

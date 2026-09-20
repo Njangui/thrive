@@ -136,7 +136,7 @@ export default async function RootPage({
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <StorefrontShell site={site}>
+      <StorefrontShell site={site} home>
         <TenantLanding site={site} bookingFeedback={{ success: bookingSuccess, error: bookingError }} />
       </StorefrontShell>
     </>

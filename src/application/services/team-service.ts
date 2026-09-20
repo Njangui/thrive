@@ -3,7 +3,8 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { getEmailProvider } from "@/infrastructure/providers/registry";
 import { resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import type { CurrentMembership, MemberRole } from "./auth-service";
-import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
+import { AuthorizationError, NotFoundError, ValidationError, QuotaExceededError } from "@/lib/errors";
+import { canUseFeature } from "./entitlements-service";
 
 /**
  * Lot L, Partie 1 — Gestion d'équipe. `requireMembership(organizationId,
@@ -102,6 +103,11 @@ export async function inviteMember(
   // élève en s'invitant lui-même comme Owner via un champ de formulaire.
   if (role === "owner") {
     throw new ValidationError("Le rôle Propriétaire ne peut pas être attribué par invitation.");
+  }
+
+  const teamEntitlement = await canUseFeature(organizationId, "team_members", 1);
+  if (!teamEntitlement.allowed) {
+    throw new QuotaExceededError(`Votre équipe a atteint la limite de ${teamEntitlement.limit.toLocaleString("fr-FR")} membre(s) de votre offre.`);
   }
 
   const supabase = getSupabaseServiceClient();
@@ -227,6 +233,21 @@ export async function acceptInvitation(
     throw new ValidationError(
       `Cette invitation est destinée à ${invitation.email}. Connectez-vous avec cette adresse pour l'accepter.`,
     );
+  }
+
+  // Défense en profondeur : même si une invitation a été créée avant que
+  // le quota soit atteint, son acceptation doit respecter la limite actuelle.
+  const { data: existingMembership } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("organization_id", invitation.organization_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!existingMembership) {
+    const teamEntitlement = await canUseFeature(invitation.organization_id, "team_members", 1);
+    if (!teamEntitlement.allowed) {
+      throw new QuotaExceededError(`Cette équipe a déjà atteint la limite de ${teamEntitlement.limit.toLocaleString("fr-FR")} membre(s) de son offre.`);
+    }
   }
 
   // Idempotent (double clic, lien rouvert après acceptation manuelle déjà

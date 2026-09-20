@@ -1,31 +1,89 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listPlans, listPlanEntitlements, type PlanKey } from "@/application/services/plans-repository";
+import { listPlans, type PlanSummary } from "@/application/services/plans-repository";
 import { PLAN_ORDER, PRICING_FEATURES } from "@/application/config/pricing";
 
 export const metadata: Metadata = {
   title: "Tarifs — CRESYVA",
-  description: "Des offres simples pour piloter votre entreprise avec CRESYVA.",
+  description: "Discover gratuit, Starter et Pro : des offres CRESYVA simples et progressives.",
 };
 
-function entitlementLabel(key: string, value: number): string | null {
-  if (key.endsWith("_dedicated_bonus")) return null;
-  if (key === "whatsapp_groups") return value === -1 ? "Illimité" : `${value} groupes`;
-  if (key === "broadcast_contacts") return value === -1 ? "Illimité" : `${value} contacts`;
-  if (key === "ai_credits") return value === -1 ? "Illimité" : `${value} crédits`;
-  if (key === "social_accounts") return value === -1 ? "Illimité" : `${value} comptes`;
-  return value > 0 ? "Inclus" : null;
+function planValue(value: string | boolean): { included: boolean; label: string } {
+  if (value === true) return { included: true, label: "Inclus" };
+  if (value === false) return { included: false, label: "Non inclus" };
+  return { included: true, label: value };
 }
 
 export default async function PricingPage() {
   const plans = await listPlans();
-  const matrix = await Promise.all(plans.map(async p => ({ ...p, entitlements: await listPlanEntitlements(p.key) })));
-  const byPlan = new Map(matrix.map(p => [p.key, new Map(p.entitlements.map(e => [e.entitlementKey, e.limitValue]))]));
-  const ordered = PLAN_ORDER.map(key => matrix.find(p => p.key === key)).filter(Boolean) as typeof matrix;
+  const ordered = PLAN_ORDER
+    .map((key) => plans.find((plan) => plan.key === key))
+    .filter((plan): plan is PlanSummary => Boolean(plan));
+  const groups = Array.from(new Set(PRICING_FEATURES.map((feature) => feature.group)));
 
-  return <main className="pricing-page"><header className="pricing-nav"><Link href="/" className="auth-logo"><span className="auth-logo-mark">S</span><span>CRESYVA</span></Link><nav><Link href="/">Accueil</Link><Link href="/devenir-affilie">Devenir affilié</Link><Link href="/login">Connexion</Link></nav><Link href="/signup" className="mkt-btn-primary !px-5 !py-2.5">Commencer</Link></header>
-    <section className="pricing-hero"><span className="mkt-badge-pill">Tarification transparente</span><h1>Un plan qui grandit avec votre entreprise.</h1><p>Commencez simplement. Montez en puissance quand vos ventes, vos canaux et votre équipe grandissent. Les modules métier affichés dans votre espace s’adaptent aussi à votre secteur.</p></section>
-    <section className="pricing-grid">{ordered.map((plan) => { const isPopular = plan.key === "starter"; const ent = byPlan.get(plan.key)!; return <article key={plan.key} className={`pricing-card ${isPopular ? "popular" : ""}`}>{isPopular && <span className="pricing-popular">Le plus choisi</span>}<p className="pricing-plan-name">{plan.name}</p><p className="pricing-description">{plan.description}</p><div className="pricing-price">{plan.priceFcfa.toLocaleString("fr-FR")} <small>FCFA / mois</small></div><Link href="/signup" className={isPopular ? "mkt-btn-primary w-full" : "mkt-btn-secondary w-full"}>{plan.key === "free" ? "Commencer gratuitement" : "Choisir cette offre"}</Link><div className="pricing-divider"/><ul>{PRICING_FEATURES.map(feature => { const value = feature.kind === "entitlement" ? ent.get(feature.key) : undefined; const included = feature.kind === "core" ? true : (value ?? 0) !== 0; const detail = value === undefined ? null : entitlementLabel(feature.key, value); return <li key={feature.key} className={!included ? "disabled" : ""}><span>{included ? "✓" : "—"}</span><div><b>{feature.label}</b>{detail && <small>{detail}</small>}</div></li>; })}</ul></article>; })}</section>
-    <section className="pricing-bottom"><div><span className="mkt-eyebrow">Besoin d’aide ?</span><h2>Choisissez selon votre volume, pas selon la complexité.</h2><p>Les fonctionnalités métier restent adaptées à votre secteur. Les quotas ci-dessus pilotent surtout les ressources qui génèrent des coûts variables.</p></div><div className="pricing-economics"><div><span>Discover</span><b>Pour démarrer sans risque</b><small>Testez les bases sans carte bancaire</small></div><div><span>Starter</span><b>Coûts variables maîtrisés</b><small>IA et canaux plafonnés</small></div><div><span>Pro</span><b>Volume élevé</b><small>Quotas supérieurs pour équipes actives</small></div></div></section>
-  </main>;
+  return (
+    <main className="pricing-page">
+      <header className="pricing-nav">
+        <Link href="/" className="auth-logo"><span className="auth-logo-mark">C</span><span>CRESYVA</span></Link>
+        <nav><Link href="/">Accueil</Link><Link href="/devenir-affilie">Devenir affilié</Link><Link href="/login">Connexion</Link></nav>
+        <Link href="/signup" className="mkt-btn-primary !px-5 !py-2.5">Commencer</Link>
+      </header>
+
+      <section className="pricing-hero">
+        <span className="mkt-badge-pill">Freemium CRESYVA</span>
+        <h1>Commencez gratuitement. Passez à Starter ou Pro quand votre activité grandit.</h1>
+        <p>Trois offres pour commencer : Discover, Starter et Pro. Le quatrième forfait sera ajouté plus tard, lorsque les fonctionnalités correspondantes seront finalisées.</p>
+      </section>
+
+      <section className="pricing-grid">
+        {ordered.map((plan) => {
+          const isStarter = plan.key === "starter";
+          return (
+            <article key={plan.key} className={`pricing-card ${isStarter ? "popular" : ""}`}>
+              {isStarter ? <span className="pricing-popular">Starter</span> : null}
+              <p className="pricing-plan-name">{plan.name}</p>
+              <p className="pricing-description">{plan.description}</p>
+              <div className="pricing-price">
+                {plan.priceFcfa.toLocaleString("fr-FR")} <small>FCFA / mois</small>
+              </div>
+              <Link href="/signup" className={`${isStarter ? "mkt-btn-primary" : "mkt-btn-secondary"} w-full`}>
+                {plan.key === "free" ? "Commencer gratuitement" : "Choisir cette offre"}
+              </Link>
+              <div className="pricing-divider" />
+
+              {groups.map((group) => (
+                <div key={group} className="mb-6 last:mb-0">
+                  <p className="mb-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">{group}</p>
+                  <ul>
+                    {PRICING_FEATURES.filter((feature) => feature.group === group).map((feature) => {
+                      const { included, label } = planValue(feature.values[plan.key]);
+                      return (
+                        <li key={feature.key} className={!included ? "disabled" : ""}>
+                          <span>{included ? "✓" : "—"}</span>
+                          <div><b>{feature.label}</b><small>{label}</small></div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="pricing-bottom">
+        <div>
+          <span className="mkt-eyebrow">Numéro WhatsApp dédié aux groupes</span>
+          <h2>Les groupes WhatsApp restent séparés de votre numéro de messagerie.</h2>
+          <p>Votre numéro WhatsApp Business existant peut rester utilisable dans l'application grâce à la coexistence. Les Groupes WhatsApp utilisent un numéro distinct connecté en Cloud API uniquement. Le numéro fourni par CRESYVA est facturé séparément.</p>
+        </div>
+        <div className="pricing-economics">
+          <div><span>Discover</span><b>0 FCFA / mois</b><small>100 produits, Telegram, YouTube et les fonctions métier de base.</small></div>
+          <div><span>Starter</span><b>15 000 FCFA / mois</b><small>WhatsApp, automatisation IA, CRM et davantage de canaux.</small></div>
+          <div><span>Pro</span><b>30 000 FCFA / mois</b><small>Plus de comptes, groupes, IA et membres d'équipe.</small></div>
+        </div>
+      </section>
+    </main>
+  );
 }

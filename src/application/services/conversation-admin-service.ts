@@ -148,7 +148,7 @@ export async function sendHumanReply(
 
   const { data: conversation, error } = await supabase
     .from("conversations")
-    .select("channel, external_thread_id, contacts(phone_e164)")
+    .select("channel, external_thread_id, provider_account_id, contacts(phone_e164)")
     .eq("organization_id", organizationId)
     .eq("id", conversationId)
     .single();
@@ -166,7 +166,7 @@ export async function sendHumanReply(
   // simultanés) et le canal à déclarer dans l'OutboundMessage — jamais
   // "whatsapp" supposé en dur, ce qui casserait une réponse manuelle sur
   // une conversation Telegram.
-  const messaging = await getMessagingProvider(organizationId, conversation.channel);
+  const messaging = await getMessagingProvider(organizationId, conversation.channel === "whatsapp" ? "zernio" : conversation.channel, (conversation as unknown as { provider_account_id?: string | null }).provider_account_id ?? undefined);
   await messaging.sendMessage(organizationId, {
     to: contactPhone ?? conversation.external_thread_id,
     channel: conversation.channel as "whatsapp" | "telegram",

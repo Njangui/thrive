@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireCurrentOrganization, requireMembership, getCurrentUserEmail } from "@/application/services/auth-service";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { SubmitButton } from "@/app/_components/submit-button";
-import { getZernioAccounts, getZernioConnectUrl, getZernioWhatsAppGroupsConnectUrl, getZernioWhatsAppGroupsAccount } from "@/application/services/zernio-channel-service";
+import { getZernioAccounts, getZernioConnectUrl, getZernioWhatsAppConnectUrl, getZernioWhatsAppAccounts, getZernioWhatsAppGroupsConnectUrl, getZernioWhatsAppGroupsAccount } from "@/application/services/zernio-channel-service";
 import { connectTelegramChannel, disconnectTelegramChannel, getTelegramChannelStatus } from "@/application/services/telegram-channel-service";
 import { createYouTubeConnectUrl, getYouTubeConnection } from "@/application/services/youtube-channel-service";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/application/services/phone-number-rental-service";
 import { AppError } from "@/lib/errors";
 import { SOCIAL_BRAND } from "@/app/_components/brand-icons";
+import { canUseFeature } from "@/application/services/entitlements-service";
 
 // Les vraies icônes/couleurs de marque (Instagram, Facebook, LinkedIn,
 // TikTok, X) vivent dans `SOCIAL_BRAND` (`brand-icons.tsx`, source unique
@@ -23,8 +24,7 @@ const SOCIAL_CHANNELS = [
   { id: "facebook", label: "Facebook", description: "Connectez votre Page Facebook et gérez vos publications.", mode: "managed" },
   { id: "linkedin", label: "LinkedIn", description: "Publiez pour votre entreprise ou profil professionnel.", mode: "managed" },
   { id: "tiktok", label: "TikTok", description: "Diffusez vos vidéos et campagnes de contenu.", mode: "managed" },
-  { id: "twitter", label: "X / Twitter", description: "Publiez et suivez votre présence sur X.", mode: "managed" },
-] as const;
+  ] as const;
 
 function flash(kind: "success" | "error", message: string): never {
   redirect(`/dashboard/channels?${kind}=${encodeURIComponent(message)}`);
@@ -47,6 +47,12 @@ async function connectSocialAction(formData: FormData) {
   const organizationId = String(formData.get("organizationId") ?? "");
   const platform = String(formData.get("platform") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  const platformEntitlement: Record<string, string> = { facebook: "facebook_pages", instagram: "instagram_accounts", linkedin: "linkedin_pages", tiktok: "tiktok_accounts" };
+  const entitlementKey = platformEntitlement[platform];
+  if (entitlementKey) {
+    const entitlement = await canUseFeature(organizationId, entitlementKey, 1);
+    if (!entitlement.allowed) flash("error", `Le canal ${platform} n'est pas inclus dans votre offre ou sa limite est atteinte.`);
+  }
   const supabase = getSupabaseServiceClient();
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
   let url: string;
@@ -62,11 +68,15 @@ async function connectWhatsAppAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  const whatsappEntitlement = await canUseFeature(organizationId, "whatsapp", 1);
+  if (!whatsappEntitlement.allowed) {
+    flash("error", "WhatsApp n'est pas inclus dans votre offre. Passez à Starter ou Pro pour connecter un numéro.");
+  }
   const supabase = getSupabaseServiceClient();
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
   let url: string;
   try {
-    url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA", "whatsapp");
+    url = await getZernioWhatsAppConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA");
   } catch (error) {
     flash("error", error instanceof Error ? error.message : "Impossible de démarrer WhatsApp.");
   }
@@ -78,6 +88,10 @@ async function connectWhatsAppGroupsAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  const groupEntitlement = await canUseFeature(organizationId, "whatsapp_groups", 1);
+  if (!groupEntitlement.allowed) {
+    flash("error", "Les Groupes WhatsApp ne sont pas inclus dans votre offre. Passez à Starter ou Pro.");
+  }
   const supabase = getSupabaseServiceClient();
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
   let url: string;
@@ -128,6 +142,8 @@ async function connectTelegramAction(formData: FormData) {
   const organizationId = String(formData.get("organizationId") ?? "");
   const botToken = String(formData.get("botToken") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  const telegramEntitlement = await canUseFeature(organizationId, "telegram_bots", 1);
+  if (!telegramEntitlement.allowed) flash("error", "La connexion Telegram n'est pas incluse dans votre offre.");
   let botUsername: string;
   try {
     const result = await connectTelegramChannel(organizationId, membership.userId, botToken);
@@ -154,6 +170,8 @@ async function connectYouTubeAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   await requireMembership(organizationId, ["owner", "admin"]);
+  const youtubeEntitlement = await canUseFeature(organizationId, "youtube_accounts", 1);
+  if (!youtubeEntitlement.allowed) flash("error", "YouTube n'est pas inclus dans votre offre ou sa limite est atteinte.");
   let url: string;
   try {
     url = createYouTubeConnectUrl(organizationId);
@@ -166,16 +184,18 @@ async function connectYouTubeAction(formData: FormData) {
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string }> }) {
   const { success, error } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
-  const [accounts, telegram, youtube, whatsappGroupsAccount, dedicatedNumber, dedicatedNumberPriceFcfa] = await Promise.all([
+  const [accounts, whatsappAccounts, telegram, youtube, whatsappGroupsAccount, dedicatedNumber, dedicatedNumberPriceFcfa] = await Promise.all([
     getZernioAccounts(organizationId).catch(() => []),
+    getZernioWhatsAppAccounts(organizationId).catch(() => []),
     getTelegramChannelStatus(organizationId).catch(() => ({ connected: false, botUsername: null })),
     getYouTubeConnection(organizationId).catch(() => ({ connected: false, metadata: {} as { channelId?: string; title?: string; username?: string }, credentialReference: null })),
     getZernioWhatsAppGroupsAccount(organizationId).catch(() => null),
     getOrganizationDedicatedNumberStatus(organizationId).catch(() => ({ pendingRequestId: null, assignedNumber: null })),
     getDedicatedNumberMonthlyPriceFcfa().catch(() => null),
   ]);
-  const byPlatform = new Map(accounts.filter((a) => a.platform !== "youtube").map((a) => [a.platform, a]));
-  const totalConnected = byPlatform.size + (youtube.connected ? 1 : 0) + (telegram.connected ? 1 : 0);
+  const whatsappEntitlement = await canUseFeature(organizationId, "whatsapp", 1).catch(() => ({ allowed: false, limit: 0, used: whatsappAccounts.length, remaining: 0 }));
+  const byPlatform = new Map(accounts.filter((a) => a.platform !== "youtube" && a.platform !== "whatsapp").map((a) => [a.platform, a]));
+  const totalConnected = byPlatform.size + whatsappAccounts.length + (youtube.connected ? 1 : 0) + (telegram.connected ? 1 : 0);
 
   return (
     <div className="space-y-7">
@@ -199,9 +219,9 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
 
       <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
         <div className="adm-card overflow-hidden p-0">
-          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={byPlatform.get("whatsapp") ? "adm-badge-success" : "adm-badge-neutral"}>{byPlatform.get("whatsapp") ? "Connecté" : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Connectez le numéro que vous utilisez déjà sur l&apos;app WhatsApp Business : vous continuez à discuter normalement depuis votre téléphone, et vos conversations arrivent en plus dans votre boîte CRESYVA. Aucun numéro n&apos;est retiré ni remplacé.</p></div>
-          <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">{[["01","Compte","Sélectionnez votre compte WhatsApp Business existant."],["02","Autorisation","Validez les accès demandés (votre app continue de fonctionner)."],["03","Test","Revenez ici et envoyez votre premier message."]].map(([n,t,d])=><div key={n} className="rounded-2xl bg-[#F8FAFC] p-4"><span className="text-xs font-bold text-violet-600">{n}</span><p className="mt-2 text-sm font-semibold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}</div>
-          <div className="border-t border-navy-900/[0.06] p-5 sm:p-6"><form action={connectWhatsAppAction}><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" className="adm-btn-primary w-full sm:w-auto">{byPlatform.get("whatsapp") ? "Reconnecter WhatsApp" : "Connecter WhatsApp"}</SubmitButton></form></div>
+          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={whatsappAccounts.length ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappAccounts.length ? `${whatsappAccounts.length} numéro${whatsappAccounts.length > 1 ? "s" : ""}` : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Chaque numéro de messagerie WhatsApp utilise son propre profil Cloud API/Zernio. Pour un numéro déjà utilisé dans WhatsApp Business, CRESYVA utilise la <strong>coexistence</strong> : vous gardez l&apos;application sur le téléphone et les conversations remontent aussi dans CRESYVA.</p></div>
+          <div className="space-y-3 p-5 sm:p-6">{whatsappAccounts.length ? whatsappAccounts.map((account, index) => <div key={account.accountId} className="flex items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4"><div className="min-w-0"><p className="text-sm font-semibold">{account.phoneNumber || account.username || `Numéro WhatsApp ${index + 1}`}</p><p className="mt-1 text-xs text-slate-500">{account.isPrimary ? "Numéro principal" : `Numéro ${index + 1}`} · {account.status === "connected" ? "Connecté" : "Connexion à vérifier"}</p></div><span className={account.status === "connected" ? "adm-badge-success" : "adm-badge-neutral"}>{account.status === "connected" ? "Actif" : "À vérifier"}</span></div>) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Aucun numéro WhatsApp de messagerie n&apos;est encore connecté.</div>}</div>
+          <div className="border-t border-navy-900/[0.06] p-5 sm:p-6"><form action={connectWhatsAppAction}><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" disabled={!whatsappEntitlement.allowed} className="adm-btn-primary w-full sm:w-auto">{whatsappAccounts.length ? "Ajouter un numéro WhatsApp" : "Connecter mon WhatsApp"}</SubmitButton></form><p className="mt-2 text-xs text-slate-500">{whatsappEntitlement.limit === -1 ? "Numéros selon les capacités de votre offre." : `${whatsappAccounts.length}/${whatsappEntitlement.limit} numéro${whatsappEntitlement.limit > 1 ? "s" : ""} utilisé${whatsappEntitlement.limit > 1 ? "s" : ""}.`}</p></div>
         </div>
         <div className="adm-card bg-gradient-to-br from-violet-50 via-white to-indigo-50"><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">Une boîte pour vendre</h2><div className="mt-5 space-y-3">{[['●','WhatsApp','Demandes et suivi clients'],['◎','Instagram','Conversations sociales'],['◈','Facebook','Messenger et commentaires'],['✦','Assistant','Réponse automatique puis transfert humain']].map(([i,t,d])=><div key={t} className="flex items-center gap-3 rounded-2xl bg-white/80 p-3 shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-700">{i}</span><div><p className="text-sm font-semibold">{t}</p><p className="text-xs text-slate-500">{d}</p></div></div>)}</div><a href="/dashboard/conversations" className="mt-5 inline-flex text-sm font-semibold text-violet-700 hover:underline">Ouvrir la boîte de réception →</a></div>
       </section>
@@ -210,7 +230,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
         <div className="border-b border-navy-900/[0.06] p-5 sm:p-6">
           <div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Groupes</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Groupes</h2></div><span className={whatsappGroupsAccount ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappGroupsAccount ? "Connecté" : "Non connecté"}</span></div>
           <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            Diffuser dans des groupes WhatsApp demande un <strong>second numéro, différent de celui de votre messagerie</strong> ci-dessus — WhatsApp ne permet pas les groupes sur un numéro qui reste utilisable sur votre téléphone. Ce numéro dédié ne sert qu&apos;aux Groupes, jamais à discuter normalement.
+            Diffuser dans des groupes WhatsApp demande un <strong>second numéro, différent de celui de votre messagerie</strong> ci-dessus. Ce second numéro est connecté en <strong>Cloud API uniquement</strong> avec Meta/Zernio : ne choisissez pas « Connecter un compte WhatsApp Business existant » pour ce numéro, car le mode coexistence ne permet pas l&apos;API Groupes. Le numéro dédié ne sert qu&apos;aux Groupes.
           </p>
         </div>
 

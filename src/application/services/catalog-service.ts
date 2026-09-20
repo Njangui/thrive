@@ -1,8 +1,9 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { canUseFeature } from "./entitlements-service";
 import { pauseScheduledPostsForProduct } from "./marketing-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { slugify, CatalogSpecificationsSchema, type CatalogSpecification } from "@/domain/entities/catalog";
-import { NotFoundError, ValidationError } from "@/lib/errors";
+import { NotFoundError, ValidationError, QuotaExceededError } from "@/lib/errors";
 
 export interface CatalogProductSummary {
   id: string;
@@ -636,6 +637,11 @@ export interface CreateProductInput {
 
 /** Création manuelle depuis le dashboard (section 50) — même chemin de données que l'import CSV. */
 export async function createProduct(input: CreateProductInput): Promise<{ productId: string; slug: string }> {
+  const entitlement = await canUseFeature(input.organizationId, "catalog_products", 1);
+  if (!entitlement.allowed) {
+    throw new QuotaExceededError(`Votre catalogue a atteint la limite de ${entitlement.limit.toLocaleString("fr-FR")} produits de votre offre.`);
+  }
+
   const supabase = getSupabaseServiceClient();
 
   const categoryId =

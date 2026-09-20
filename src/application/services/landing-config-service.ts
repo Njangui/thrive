@@ -288,6 +288,24 @@ export interface UpdateLandingConfigInput {
  * appelante, voir `dashboard/site/page.tsx`), cette fonction ne fait que
  * la validation métier des données elles-mêmes.
  */
+/**
+ * Supprime la personnalisation de la vitrine sans toucher aux données du
+ * tenant (logo, bannière, catalogue, témoignages, domaine, SEO, etc.).
+ * La prochaine lecture de getLandingConfig() retombe donc naturellement
+ * sur le blueprint par défaut du secteur.
+ */
+export async function resetLandingConfig(organizationId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("organization_landing_config")
+    .delete()
+    .eq("organization_id", organizationId);
+
+  if (error) {
+    throw new Error(`Impossible de réinitialiser la vitrine : ${error.message}`);
+  }
+}
+
 export async function updateLandingConfig(organizationId: string, input: UpdateLandingConfigInput): Promise<void> {
   if (input.sections.length === 0) {
     throw new ValidationError("Votre page doit contenir au moins une section.");

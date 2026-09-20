@@ -54,6 +54,8 @@ export interface SubscriptionOverview {
  */
 export const USAGE_GAUGES: { key: string; label: string; mode: "cumulative" | "capped" }[] = [
   { key: "ai_credits", label: "Crédits IA", mode: "cumulative" },
+  { key: "catalog_products", label: "Produits du catalogue", mode: "cumulative" },
+  { key: "team_members", label: "Membres de l’équipe", mode: "cumulative" },
   { key: "whatsapp_groups", label: "Groupes WhatsApp", mode: "cumulative" },
   { key: "broadcast_contacts", label: "Contacts par campagne de diffusion", mode: "capped" },
   { key: "social_accounts", label: "Comptes réseaux sociaux par publication", mode: "capped" },

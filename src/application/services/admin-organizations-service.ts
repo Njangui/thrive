@@ -141,7 +141,7 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
   return (orgs ?? []).map((o) => {
     const subRow = subscriptionByOrg.get(o.id);
     // Même repli que getOrganizationSubscription() : pas de ligne = starter/trialing.
-    const planKey = isPlanKey(subRow?.plan_key) ? subRow.plan_key : "starter";
+    const planKey = isPlanKey(subRow?.plan_key) ? subRow.plan_key : "free";
     const subscriptionStatus: OrganizationSubscriptionStatus = subRow?.status ?? "trialing";
     const trialEnd = subRow?.trial_end ?? null;
     const currentPeriodEnd = subRow?.current_period_end ?? null;

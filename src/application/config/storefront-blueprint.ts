@@ -203,12 +203,12 @@ const RESTAURANT: StorefrontBlueprint = {
     categories: "Entrées, plats, accompagnements, boissons.",
     promotions: "Formules et prix doux, le temps qu'elles durent.",
   },
-  heroTitle: () => "Une cuisine qu'on partage",
-  heroSubtitle: (name) => `Commandez, réservez ou passez nous voir : ${name} vous accueille tous les jours d'ouverture.`,
-  primaryCtaLabel: "Voir la carte",
-  primaryCtaTarget: "catalog",
-  secondaryCtaLabel: "Commander sur WhatsApp",
-  secondaryCtaTarget: "contact",
+  heroTitle: () => "Une expérience culinaire unique",
+  heroSubtitle: (name) => `${name} vous accueille autour d'une cuisine généreuse, préparée avec soin. Réservez une table, découvrez la carte ou commandez selon vos possibilités.`,
+  primaryCtaLabel: "Réserver une table",
+  primaryCtaTarget: "booking",
+  secondaryCtaLabel: "Découvrir notre menu",
+  secondaryCtaTarget: "catalog",
   defaultAccent: { primary: "#C1562C", secondary: "#178A4C" },
   highlights: [
     { icon: "chef", title: "Préparé à la commande", subtitle: "Rien qui attend sous la lampe" },
@@ -216,7 +216,10 @@ const RESTAURANT: StorefrontBlueprint = {
     { icon: "clock", title: "Horaires clairs", subtitle: "Affichés plus bas", requires: "openingHours" },
     { icon: "leaf", title: "Produits frais", subtitle: "Approvisionnement quotidien" },
   ],
-  sections: ["hero", "categories", "products", "promotions", "gallery", "testimonials", "location", "contact"],
+  // Page d'accueil par défaut : composition inspirée de la maquette restaurant
+  // fournie (hero immersif → carte/catégories → histoire → avis → footer).
+  // Le catalogue complet reste accessible via « Notre carte » dans la navigation.
+  sections: ["hero", "categories", "about", "testimonials"],
   newBadgeLabel: "Nouveauté",
   emptyCatalogMessage: "La carte est en cours de mise à jour — appelez-nous pour connaître les plats du jour.",
 };

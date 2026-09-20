@@ -158,7 +158,7 @@ export async function getNotificationProvider(_organizationId?: string): Promise
  * inchangé pour eux, ambiguïté simplement rendue impossible plutôt que
  * silencieusement supposée.
  */
-export async function getMessagingProvider(organizationId: string, providerName?: string): Promise<MessagingProvider> {
+export async function getMessagingProvider(organizationId: string, providerName?: string, providerAccountId?: string): Promise<MessagingProvider> {
   const supabase = getSupabaseServiceClient();
 
   let query = supabase
@@ -173,6 +173,25 @@ export async function getMessagingProvider(organizationId: string, providerName?
   const { data: connection, error } = await query.maybeSingle();
 
   if (error) throw new Error(`Erreur lecture provider_connections: ${error.message}`);
+
+  // WhatsApp peut avoir plusieurs numéros de messagerie. Le compte précis
+  // est résolu depuis whatsapp_accounts quand l'appelant connaît l'accountId
+  // reçu au webhook / enregistré sur la conversation.
+  if (providerName === "zernio" && providerAccountId) {
+    const { data: whatsappAccount, error: whatsappError } = await supabase
+      .from("whatsapp_accounts")
+      .select("profile_id, account_id, status")
+      .eq("organization_id", organizationId)
+      .eq("account_id", providerAccountId)
+      .maybeSingle();
+    if (whatsappError) throw new Error(`Erreur lecture du compte WhatsApp: ${whatsappError.message}`);
+    if (whatsappAccount?.status !== "connected") {
+      throw new Error(`Le numéro WhatsApp ${providerAccountId} n'est plus connecté.`);
+    }
+    const apiKey = await resolveCredential(organizationId, "messaging", "zernio");
+    return new ZernioAdapter(new ZernioClient(apiKey), whatsappAccount.profile_id, whatsappAccount.account_id);
+  }
+
   if (!connection) {
     throw new Error(
       `Aucun MessagingProvider${providerName ? ` "${providerName}"` : ""} connecté pour l'organization ${organizationId}. ` +

@@ -27,6 +27,7 @@ export function StorefrontHeader({
   searchEnabled,
   catalogHref,
   ctaLabel,
+  homeOverlay = false,
 }: {
   businessName: string;
   logoUrl: string | null;
@@ -35,6 +36,7 @@ export function StorefrontHeader({
   searchEnabled: boolean;
   catalogHref: string;
   ctaLabel: string;
+  homeOverlay?: boolean;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -57,7 +59,7 @@ export function StorefrontHeader({
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
-    <header className="sf-header sticky top-0 z-40 border-b border-black/[0.07] bg-white/95 backdrop-blur">
+    <header className={`sf-header ${homeOverlay ? "sf-header-overlay" : "sticky top-0"} z-40 border-b border-black/[0.07] bg-white/95 backdrop-blur`}>
       <Container className="flex h-16 items-center gap-3 sm:h-[72px] sm:gap-6">
         <Link href="/" className="flex shrink-0 items-center gap-2" aria-label={`${businessName} — accueil`}>
           {logoUrl ? (

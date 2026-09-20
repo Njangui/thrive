@@ -60,8 +60,15 @@ export async function TenantLanding({
   // résolu (hero, about, contact, location, social_links, cta) ne
   // déclenchent aucune requête supplémentaire.
   const dbBackedSections = enabledSections.filter((type) => DB_BACKED_SECTION_TYPES.has(type));
+  // Le template restaurant utilise aussi une photo de plat réelle comme
+  // fallback du hero lorsqu'aucune bannière n'a encore été configurée.
+  // On charge donc le catalogue même si la section « produits » n'est pas
+  // affichée sur la home par défaut.
+  const dataTypes = site.sector === "restaurant" && !dbBackedSections.includes("products")
+    ? [...dbBackedSections, "products" as LandingSectionType]
+    : dbBackedSections;
   const dataEntries = await Promise.all(
-    dbBackedSections.map(
+    dataTypes.map(
       async (type) => [type, await getLandingSectionData(tenant.organizationId, type)] as const,
     ),
   );
@@ -80,13 +87,16 @@ export async function TenantLanding({
       {enabledSections.map((type) => {
         const section = (() => {
         switch (type) {
-          case "hero":
+          case "hero": {
+            const productData = dataByType.get("products");
+            const heroFallbackImage = productData?.type === "products" ? productData.products[0]?.imageUrl ?? null : null;
             return (
               <div key="hero">
-                <HeroSection site={site} />
-                <StatsBand site={site} />
+                <HeroSection site={site} fallbackMediaUrl={heroFallbackImage} />
+                {site.sector !== "restaurant" && <StatsBand site={site} />}
               </div>
             );
+          }
           case "about":
             return <AboutSection key="about" site={site} compact />;
           case "contact":

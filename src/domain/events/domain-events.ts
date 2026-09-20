@@ -43,6 +43,8 @@ export interface MessageReceivedEvent extends DomainEventBase {
     content: string;
     externalMessageId: string;
     channel: string;
+    /** Compte provider précis ayant reçu le message (ex. compte WhatsApp Zernio). */
+    providerAccountId?: string;
     attachment?: {
       url: string;
       type: "image" | "video" | "audio" | "file";

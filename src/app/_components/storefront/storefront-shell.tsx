@@ -21,7 +21,7 @@ import { Container } from "./storefront-ui";
  * WhatsApp flottant. Les variables de marque et la police sont posées une
  * seule fois, sur le conteneur racine, et héritées par tout le sous-arbre.
  */
-export function StorefrontShell({ site, children }: { site: StorefrontSite; children: ReactNode }) {
+export function StorefrontShell({ site, children, home = false }: { site: StorefrontSite; children: ReactNode; home?: boolean }) {
   const { tenant, config, blueprint, capabilities, announcement, whatsappHref, accent } = site;
 
   const brandingStyle = getTenantBrandingStyle(config, {
@@ -53,7 +53,8 @@ export function StorefrontShell({ site, children }: { site: StorefrontSite; chil
         // creuse (et le formulaire mènerait à une page de résultats vide).
         searchEnabled={capabilities.hasProducts}
         catalogHref="/produits"
-        ctaLabel={blueprint.primaryCtaTarget === "booking" ? "Prendre RDV" : "Nous écrire"}
+        ctaLabel={site.sector === "restaurant" ? "Réserver une table" : blueprint.primaryCtaTarget === "booking" ? "Prendre RDV" : "Nous écrire"}
+        homeOverlay={home && site.sector === "restaurant"}
       />
 
       <main id="contenu" className="flex-1">

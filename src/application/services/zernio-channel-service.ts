@@ -2,6 +2,8 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { resolveCredential } from "@/infrastructure/providers/secrets-resolver";
 import { ZernioSocialClient } from "@/infrastructure/providers/social/zernio/client";
 import { env } from "@/lib/env";
+import { canUseFeature } from "./entitlements-service";
+import { QuotaExceededError } from "@/lib/errors";
 
 export type ZernioPlatform =
   | "facebook" | "instagram" | "linkedin" | "twitter" | "tiktok" | "youtube"
@@ -33,6 +35,48 @@ async function getExistingProfileId(organizationId: string): Promise<string | nu
     if (profileId) return profileId;
   }
   return null;
+}
+
+/** Liste des numéros WhatsApp de messagerie 1:1 de l'organisation. */
+export interface WhatsAppMessagingAccount extends ZernioChannelAccount {
+  profileId: string;
+  phoneNumber: string | null;
+  isPrimary: boolean;
+}
+
+export async function getZernioWhatsAppAccounts(organizationId: string): Promise<WhatsAppMessagingAccount[]> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("whatsapp_accounts")
+    .select("profile_id, account_id, phone_number, username, status, is_primary")
+    .eq("organization_id", organizationId)
+    .order("is_primary", { ascending: false })
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`Lecture des numéros WhatsApp impossible: ${error.message}`);
+  return (data ?? []).map((row: { profile_id: string; account_id: string; phone_number: string | null; username: string | null; status: string; is_primary: boolean }) => ({
+    accountId: row.account_id,
+    platform: "whatsapp",
+    username: row.username ?? null,
+    status: row.status === "connected" ? "connected" : row.status === "error" ? "unknown" : "disconnected",
+    profileId: row.profile_id,
+    phoneNumber: row.phone_number ?? null,
+    isPrimary: Boolean(row.is_primary),
+  }));
+}
+
+/** Crée un profil Zernio dédié à un nouveau numéro WhatsApp de messagerie. */
+async function ensureZernioWhatsAppMessagingProfile(organizationId: string, organizationName: string): Promise<string> {
+  const accounts = await getZernioWhatsAppAccounts(organizationId);
+  const legacy = await getExistingProfileId(organizationId);
+  if (!accounts.length && legacy) return legacy;
+
+  const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
+  const created = await client.createProfile({
+    name: `${organizationName.trim().slice(0, 55) || "Entreprise CRESYVA"} — WhatsApp ${accounts.length + 1}`,
+    description: `Numéro WhatsApp de messagerie ${accounts.length + 1} — ${organizationName}`,
+    color: "#009979",
+  });
+  return created.profile._id;
 }
 
 /**
@@ -117,23 +161,39 @@ export async function getZernioAccounts(organizationId: string): Promise<ZernioC
   if (!profileId) return [];
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
   const response = await client.listAccounts(profileId);
-  return response.accounts.map((account) => ({
-    accountId: account._id,
-    platform: account.platform,
-    username: account.username ?? null,
-    status: "connected",
-  }));
+  const socialAccounts = response.accounts
+    .filter((account) => account.platform !== "whatsapp")
+    .map((account) => ({
+      accountId: account._id,
+      platform: account.platform,
+      username: account.username ?? null,
+      status: "connected" as const,
+    }));
+  const whatsappAccounts = await getZernioWhatsAppAccounts(organizationId);
+  return [...socialAccounts, ...whatsappAccounts];
 }
 
 export async function getZernioConnectUrl(
   organizationId: string,
   organizationName: string,
   platform: ZernioPlatform,
+  options?: { onboarding?: "api" | "business_app" },
 ): Promise<string> {
   const profileId = await ensureZernioProfile(organizationId, organizationName);
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
   const redirectUrl = `${env.NEXT_PUBLIC_APP_URL}/dashboard/channels/callback`;
-  const response = await client.getConnectUrl(platform, profileId, redirectUrl);
+  const response = await client.getConnectUrl(platform, profileId, redirectUrl, options);
+  return response.authUrl;
+}
+
+/** Connexion d'un nouveau numéro WhatsApp de messagerie 1:1 en Coexistence. */
+export async function getZernioWhatsAppConnectUrl(organizationId: string, organizationName: string): Promise<string> {
+  const entitlement = await canUseFeature(organizationId, "whatsapp", 1);
+  if (!entitlement.allowed) throw new QuotaExceededError(`La limite de numéros WhatsApp de votre offre est atteinte (${entitlement.limit}).`);
+  const profileId = await ensureZernioWhatsAppMessagingProfile(organizationId, organizationName);
+  const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
+  const redirectUrl = `${env.NEXT_PUBLIC_APP_URL}/dashboard/channels/callback`;
+  const response = await client.getConnectUrl("whatsapp", profileId, redirectUrl, { onboarding: "business_app" });
   return response.authUrl;
 }
 
@@ -213,10 +273,82 @@ export async function persistZernioOAuthConnection(
   let providerType: string;
   if (platform === "whatsapp" && groupsProfileId && groupsProfileId === profileId) {
     providerType = "whatsapp_groups";
+  } else if (platform === "whatsapp") {
+    providerType = "messaging";
   } else if (mainProfileId && mainProfileId === profileId) {
-    providerType = platform === "whatsapp" ? "messaging" : "social";
+    providerType = "social";
   } else {
     throw new Error("Connexion Zernio invalide ou expirée. Relancez la connexion depuis Canaux.");
+  }
+
+  // Garde-fou serveur : la limite WhatsApp est cumulée sur la table dédiée.
+  if (platform === "whatsapp" && providerType === "messaging") {
+    const entitlement = await canUseFeature(organizationId, "whatsapp", 1);
+    if (!entitlement.allowed) throw new QuotaExceededError(`La limite de numéros WhatsApp de votre offre est atteinte (${entitlement.limit}).`);
+
+    const supabase = getSupabaseServiceClient();
+    const [{ count: existingCount, error: countError }, { data: existingAccount, error: existingError }] = await Promise.all([
+      supabase
+        .from("whatsapp_accounts")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("status", "connected"),
+      supabase
+        .from("whatsapp_accounts")
+        .select("is_primary")
+        .eq("organization_id", organizationId)
+        .eq("account_id", accountId)
+        .maybeSingle(),
+    ]);
+    if (countError) throw new Error(`Impossible de vérifier les numéros WhatsApp existants: ${countError.message}`);
+    if (existingError) throw new Error(`Impossible de vérifier ce numéro WhatsApp: ${existingError.message}`);
+    const isPrimary = existingAccount?.is_primary ?? ((existingCount ?? 0) === 0);
+
+    const { error } = await supabase.from("whatsapp_accounts").upsert({
+      organization_id: organizationId,
+      profile_id: profileId,
+      account_id: accountId,
+      phone_number: username ?? null,
+      username: username ?? null,
+      status: "connected",
+      is_primary: isPrimary,
+    }, { onConflict: "organization_id,account_id" });
+    if (error) throw new Error(`Connexion WhatsApp enregistrée mais impossible de finaliser le numéro: ${error.message}`);
+
+    // Le premier numéro reste aussi reflété dans provider_connections pour
+    // compatibilité avec les anciennes versions du code.
+    if (isPrimary) {
+      await supabase.from("provider_connections").upsert({
+        organization_id: organizationId,
+        provider_type: "messaging",
+        provider_name: "zernio",
+        status: "connected",
+        metadata: { profileId, accountId, platform, username: username ?? null },
+      }, { onConflict: "organization_id,provider_type,provider_name" });
+    }
+    return;
+  }
+
+  const platformEntitlement: Record<string, string> = {
+    facebook: "facebook_pages",
+    instagram: "instagram_accounts",
+    linkedin: "linkedin_pages",
+    tiktok: "tiktok_accounts",
+  };
+  const entitlementKey = platformEntitlement[platform];
+  if (entitlementKey) {
+    const entitlement = await canUseFeature(organizationId, entitlementKey, 1);
+    if (!entitlement.allowed) throw new QuotaExceededError(`La limite de ${platform} de votre offre est atteinte.`);
+
+    // Compte les comptes réellement connectés sur ce profil Zernio, en
+    // excluant celui qui vient d'être renvoyé par OAuth pour permettre une
+    // reconnexion propre du même compte.
+    const zernio = new ZernioSocialClient(await getZernioApiKey(organizationId));
+    const existingAccounts = await zernio.listAccounts(profileId);
+    const samePlatformOtherAccounts = existingAccounts.accounts.filter((account) => account.platform === platform && account._id !== accountId).length;
+    if (samePlatformOtherAccounts + 1 > entitlement.limit && entitlement.limit !== -1) {
+      throw new QuotaExceededError(`La limite de ${platform} de votre offre est atteinte (${entitlement.limit}).`);
+    }
   }
 
   const supabase = getSupabaseServiceClient();

@@ -81,6 +81,7 @@ export async function handleInboundMessage(
         contact_id: contact.id,
         channel: payload.channel,
         external_thread_id: payload.externalThreadId,
+        provider_account_id: payload.providerAccountId ?? null,
         last_message_at: event.occurredAt,
       },
       { onConflict: "organization_id,channel,external_thread_id" },

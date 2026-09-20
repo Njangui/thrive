@@ -7,6 +7,7 @@ import {
   getLandingConfig,
   getOrganizationIndustry,
   updateLandingConfig,
+  resetLandingConfig,
   listTestimonials,
   createTestimonial,
   deleteTestimonial,
@@ -28,12 +29,14 @@ import {
   type PaymentMethodKey,
 } from "@/domain/entities/landing";
 import { FONT_CHOICE_LABELS } from "@/app/fonts";
-import { AppError, ValidationError } from "@/lib/errors";
 import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { ResetSiteButton } from "./reset-site-button";
 import { HighlightIcon } from "@/app/_components/storefront/storefront-icons";
 import { DomainSearchField } from "./domain-search-field";
 import { env } from "@/lib/env";
+import { canUseFeature } from "@/application/services/entitlements-service";
+import { AppError, ValidationError, QuotaExceededError } from "@/lib/errors";
 
 /** Libellés FR des icônes de la bande de confiance, pour le sélecteur du formulaire (voir updateHighlightsAction plus bas). Purement de l'affichage dashboard — la clé technique reste celle de storefront-blueprint.ts. */
 const HIGHLIGHT_ICON_LABELS: Record<HighlightIconKey, string> = {
@@ -59,6 +62,13 @@ const HIGHLIGHT_ICON_LABELS: Record<HighlightIconKey, string> = {
 
 const HIGHLIGHT_SLOTS = 4;
 
+async function requireSiteCustomization(organizationId: string): Promise<void> {
+  const entitlement = await canUseFeature(organizationId, "site_customization", 1);
+  if (!entitlement.allowed) {
+    throw new QuotaExceededError("La personnalisation de la vitrine est disponible à partir de Starter.");
+  }
+}
+
 /**
  * NOTE DE PORTÉE (voir RAPPORT_LOT_E.md) : cette page n'existait pas dans
  * le projet fourni, alors que le cahier Lot E la décrit comme "existante".
@@ -71,6 +81,7 @@ async function updateSiteAction(formData: FormData) {
   "use server";
 
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin"]);
 
   try {
@@ -153,6 +164,7 @@ async function updateSiteAction(formData: FormData) {
 async function requestDomainAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   const domainName = String(formData.get("domainName") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
 
@@ -173,6 +185,7 @@ async function requestDomainAction(formData: FormData) {
 async function toggleSectionAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -213,6 +226,7 @@ async function toggleSectionAction(formData: FormData) {
 async function moveSectionAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -261,6 +275,7 @@ async function moveSectionAction(formData: FormData) {
 async function applyPresetAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
   const preset = String(formData.get("preset") ?? "default") as (typeof LANDING_PRESET_KEYS)[number];
   if (!LANDING_PRESET_KEYS.includes(preset)) redirect("/dashboard/site?error=Preset%20invalide");
@@ -277,6 +292,7 @@ async function applyPresetAction(formData: FormData) {
 async function updateHeroAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
   try {
     const config = await getLandingConfig(organizationId);
@@ -336,6 +352,7 @@ async function updateHeroAction(formData: FormData) {
 async function updateHighlightsAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -363,9 +380,26 @@ async function updateHighlightsAction(formData: FormData) {
 }
 
 /** Revient aux promesses par défaut du secteur — distinct d'un tableau vide (« aucune »), voir le commentaire ci-dessus. */
+async function resetSiteDesignAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
+
+  try {
+    await resetLandingConfig(organizationId);
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Impossible de réinitialiser votre vitrine.";
+    redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
+  }
+
+  redirect("/dashboard/site?success=" + encodeURIComponent("Votre vitrine est revenue au design de base de votre secteur. Vos données et votre identité restent conservées."));
+}
+
 async function resetHighlightsAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -389,6 +423,7 @@ async function resetHighlightsAction(formData: FormData) {
 async function updatePaymentMethodsAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -406,6 +441,7 @@ async function updatePaymentMethodsAction(formData: FormData) {
 async function updateBrandingAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -432,6 +468,7 @@ async function updateBrandingAction(formData: FormData) {
 async function createTestimonialAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -453,6 +490,7 @@ async function createTestimonialAction(formData: FormData) {
 async function deleteTestimonialAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  await requireSiteCustomization(organizationId);
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
@@ -480,6 +518,24 @@ export default async function SitePage({
 }) {
   const { error, success } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
+  const customization = await canUseFeature(organizationId, "site_customization", 1);
+  if (!customization.allowed) {
+    return (
+      <div className="cresyva-page">
+        <section className="cresyva-page-hero">
+          <div>
+            <p className="cresyva-eyebrow">Ma vitrine</p>
+            <h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Votre site professionnel est déjà prêt.</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">Discover utilise le design professionnel de base de votre secteur. La personnalisation complète est disponible à partir de Starter.</p>
+          </div>
+          <a href="/dashboard/subscription" className="adm-btn-primary bg-white text-navy-900 hover:bg-white/90">Voir Starter</a>
+        </section>
+        <section className="cresyva-info-panel mt-5">
+          <div><p className="font-semibold text-navy-900">Design de base actif</p><p className="mt-1 text-sm text-slate-500">Votre catalogue, vos informations, votre identité publique et vos contenus restent disponibles. Seuls les réglages de personnalisation sont verrouillés sur Discover.</p></div>
+        </section>
+      </div>
+    );
+  }
   const [media, tldPricing, domainRequests, landingConfig, testimonials, industry] = await Promise.all([
     getSiteMedia(organizationId),
     listActiveTldPricing(),
@@ -931,7 +987,23 @@ export default async function SitePage({
             </select>
           </label>
           <SubmitButton pendingLabel="Enregistrement...">Enregistrer l&apos;apparence</SubmitButton>
-        </form></div>
+        </form>
+
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-amber-950">Revenir au design de base</p>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-amber-900/70">
+                Annule les personnalisations de la vitrine et remet la structure, les couleurs, le hero, les boutons et les éléments par défaut de votre secteur. Votre catalogue, logo, bannière, SEO, domaine et autres données ne sont pas supprimés.
+              </p>
+            </div>
+            <form action={resetSiteDesignAction} className="shrink-0">
+              <input type="hidden" name="organizationId" value={organizationId} />
+              <ResetSiteButton />
+            </form>
+          </div>
+        </div>
+      </div>
 
         {env.NEXT_PUBLIC_ROOT_DOMAIN === "localhost:3000" ? (
           <p className="adm-muted text-sm">

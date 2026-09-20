@@ -41,7 +41,7 @@ function resolveCtaTarget(
   }
 }
 
-export function HeroSection({ site }: { site: StorefrontSite }) {
+export function HeroSection({ site, fallbackMediaUrl = null }: { site: StorefrontSite; fallbackMediaUrl?: string | null }) {
   const { tenant, config, blueprint, heroLayout, heroMediaUrl, whatsappHref, highlights } = site;
 
   const title = config.heroTitle?.trim() || blueprint.heroTitle(tenant.name);
@@ -59,7 +59,65 @@ export function HeroSection({ site }: { site: StorefrontSite }) {
     toSafeHref(config.secondaryCtaUrl) ?? resolveCtaTarget(blueprint.secondaryCtaTarget, site) ?? null;
   const secondaryLabel = config.secondaryCtaLabel?.trim() || blueprint.secondaryCtaLabel;
 
-  const showMedia = heroLayout !== "centered" && Boolean(heroMediaUrl);
+  const effectiveMediaUrl = heroMediaUrl ?? (site.sector === "restaurant" ? fallbackMediaUrl : null);
+  const showMedia = heroLayout !== "centered" && Boolean(effectiveMediaUrl);
+
+  if (site.sector === "restaurant") {
+    return (
+      <section className="restaurant-hero">
+        <div className="restaurant-hero-media" aria-hidden>
+          {effectiveMediaUrl ? (
+            <StorefrontImage
+              src={effectiveMediaUrl}
+              alt=""
+              sizes="100vw"
+              priority
+              fallbackLabel=""
+            />
+          ) : (
+            <div className="restaurant-hero-fallback" />
+          )}
+        </div>
+        <div className="restaurant-hero-overlay" aria-hidden />
+        <Container className="restaurant-hero-content">
+          <div className="restaurant-hero-copy">
+            <p className="restaurant-kicker restaurant-kicker-dark">{blueprint.eyebrow} · {tenant.name}</p>
+            <h1 className="font-display">{title}</h1>
+            <p className="restaurant-hero-subtitle">{subtitle}</p>
+            {(primaryHref || secondaryHref) && (
+              <div className="restaurant-hero-actions">
+                {primaryHref && (primaryIsExternal ? (
+                  <TrackedCtaLink href={primaryHref} organizationId={tenant.organizationId} ctaId="hero_primary" target="_blank" rel="noopener noreferrer" className="restaurant-primary-btn">{primaryLabel} <span aria-hidden>→</span></TrackedCtaLink>
+                ) : (
+                  <Link href={primaryHref} className="restaurant-primary-btn">{primaryLabel} <span aria-hidden>→</span></Link>
+                ))}
+                {secondaryHref && secondaryHref !== primaryHref && (
+                  <Link href={secondaryHref} className="restaurant-secondary-btn">{secondaryLabel} <span aria-hidden>→</span></Link>
+                )}
+              </div>
+            )}
+            {highlights.length > 0 && (
+              <div className="restaurant-hero-highlights">
+                {highlights.slice(0, 3).map((highlight) => (
+                  <div key={highlight.title} className="restaurant-hero-highlight">
+                    <span className="restaurant-highlight-icon"><HighlightIcon name={highlight.icon} className="h-4 w-4" /></span>
+                    <span><strong>{highlight.title}</strong><small>{highlight.subtitle}</small></span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Container>
+        {site.stats.find((stat) => stat.key === "rating") && (
+          <div className="restaurant-hero-rating" aria-label="Avis clients">
+            <span className="restaurant-rating-stars">★★★★★</span>
+            <strong>{site.stats.find((stat) => stat.key === "rating")?.value}</strong>
+            <small>{site.stats.find((stat) => stat.key === "rating")?.label}</small>
+          </div>
+        )}
+      </section>
+    );
+  }
 
   const copy = (
     <div className={`flex flex-col gap-5 ${heroLayout === "centered" ? "mx-auto max-w-3xl text-center items-center" : ""}`}>
@@ -104,7 +162,7 @@ export function HeroSection({ site }: { site: StorefrontSite }) {
             {copy}
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-brand bg-black/[0.03] lg:aspect-[5/4]">
               <StorefrontImage
-                src={heroMediaUrl}
+                src={effectiveMediaUrl}
                 alt=""
                 sizes="(min-width: 1024px) 50vw, 100vw"
                 priority

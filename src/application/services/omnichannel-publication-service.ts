@@ -6,8 +6,18 @@ import { listConnectedGroups, createBroadcast } from "./whatsapp-group-service";
 import { getProductsByIds, type CatalogProductSummary } from "./catalog-service";
 import { env } from "@/lib/env";
 import { ValidationError } from "@/lib/errors";
+import { canUseFeature } from "./entitlements-service";
 
 export type PublicationTargetType = "social" | "telegram" | "whatsapp_group";
+
+const SOCIAL_ENTITLEMENT_BY_PLATFORM: Record<string, string> = {
+  facebook: "facebook_pages",
+  instagram: "instagram_accounts",
+  linkedin: "linkedin_pages",
+  tiktok: "tiktok_accounts",
+  youtube: "youtube_accounts",
+  twitter: "twitter_accounts",
+};
 export interface PublicationTarget { id: string; type: PublicationTargetType; platform: string; label: string; accountId: string; available: boolean; reason?: string; }
 export interface PublicationInput {
   organizationId: string;
@@ -41,7 +51,20 @@ export async function listOmnichannelPublicationTargets(organizationId: string):
   try {
     const social = await getSocialPublishingProvider(organizationId);
     const accounts = await social.listAccounts();
-    for (const account of accounts) targets.push({ id: `social:${account.accountId}`, type: "social", platform: account.platform, label: account.username ? `@${account.username}` : account.platform, accountId: account.accountId, available: true });
+    for (const account of accounts) {
+      if (account.platform === "whatsapp") continue; // WhatsApp de messagerie se gère dans la boîte, pas comme cible de publication sociale.
+      const entitlementKey = SOCIAL_ENTITLEMENT_BY_PLATFORM[account.platform];
+      const entitlement = entitlementKey ? await canUseFeature(organizationId, entitlementKey, 1) : { allowed: false, limit: 0, used: 0, remaining: 0 };
+      targets.push({
+        id: `social:${account.accountId}`,
+        type: "social",
+        platform: account.platform,
+        label: account.username ? `@${account.username}` : account.platform,
+        accountId: account.accountId,
+        available: entitlement.allowed,
+        reason: entitlement.allowed ? undefined : `Canal non inclus dans votre offre (${account.platform}).`,
+      });
+    }
   } catch { /* aucun réseau social connecté */ }
 
   try {
@@ -100,6 +123,28 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
 
   const socialTargets = targets.filter((t) => t.type === "social");
   if (socialTargets.length) {
+    const uniquePlatformAccounts = new Map<string, Set<string>>();
+    for (const target of socialTargets) {
+      const set = uniquePlatformAccounts.get(target.platform) ?? new Set<string>();
+      set.add(target.accountId);
+      uniquePlatformAccounts.set(target.platform, set);
+    }
+    const blockedSocialTargets = new Set<string>();
+    for (const [platform, accountIds] of uniquePlatformAccounts) {
+      const entitlementKey = SOCIAL_ENTITLEMENT_BY_PLATFORM[platform];
+      if (!entitlementKey) {
+        for (const target of socialTargets.filter((item) => item.platform === platform)) blockedSocialTargets.add(target.id);
+        continue;
+      }
+      const entitlement = await canUseFeature(input.organizationId, entitlementKey, accountIds.size);
+      if (!entitlement.allowed) {
+        for (const target of socialTargets.filter((item) => item.platform === platform)) {
+          blockedSocialTargets.add(target.id);
+          result.failed.push({ target: target.label, error: `La limite ${platform} de votre offre est atteinte.` });
+        }
+      }
+    }
+    const publishableSocialTargets = socialTargets.filter((target) => !blockedSocialTargets.has(target.id));
     let provider;
     try { provider = await getSocialPublishingProvider(input.organizationId); } catch (error) { provider = null; const message = error instanceof Error ? error.message : String(error); for (const target of socialTargets) result.failed.push({ target: target.label, error: message }); }
     if (provider) {
@@ -107,7 +152,7 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
       // doit jamais transformer une publication Instagram/Facebook réussie
       // en échec global. Le provider composite reste responsable de choisir
       // le connecteur concret derrière chaque plateforme.
-      for (const target of socialTargets) {
+      for (const target of publishableSocialTargets) {
         if (scheduledDate && target.platform !== "youtube") {
           try {
             await assertPublicationMediaAvailable(input.organizationId, mediaUrls, scheduledDate);
@@ -135,7 +180,18 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
     }
   }
 
-  for (const target of targets.filter((t) => t.type === "telegram")) {
+  const telegramTargets = targets.filter((t) => t.type === "telegram");
+  if (telegramTargets.length > 0) {
+    const telegramQuota = await canUseFeature(input.organizationId, "telegram_groups", telegramTargets.length);
+    if (!telegramQuota.allowed) {
+      for (const target of telegramTargets) {
+        result.failed.push({ target: target.label, error: `La limite de ${telegramQuota.limit} groupes/canaux Telegram de votre offre est atteinte.` });
+      }
+    }
+  }
+
+  for (const target of telegramTargets) {
+    if (result.failed.some((failure) => failure.target === target.label && failure.error.includes("groupes/canaux Telegram"))) continue;
     try {
       if (!target.accountId) throw new ValidationError("Renseignez le @canal ou l'identifiant du groupe Telegram.");
       // Telegram : la vidéo est relue chez Zernio AU JOUR de la publication.

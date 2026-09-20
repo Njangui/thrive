@@ -39,6 +39,7 @@ export function mapZernioEventToDomainEvent(
           content: raw.message.text,
           externalMessageId: raw.message.id ?? raw.id,
           channel: raw.conversation.platform ?? raw.account.platform ?? "whatsapp",
+          providerAccountId: raw.account.id,
         },
       };
       return event;

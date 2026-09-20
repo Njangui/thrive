@@ -752,3 +752,195 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .site-preview-frame { min-height: 650px; background: #F8FAFC; }
   .site-editor-page > .mt-2, .site-editor-page > .mt-4 { grid-column: 1 / -1; }
 }
+
+/* ========================================================================
+   RESTAURANT — template par défaut inspiré de la maquette fournie
+   ------------------------------------------------------------------------
+   Ces règles ne s'appliquent qu'au storefront restaurant. Elles ne modifient
+   ni les autres secteurs ni les données du tenant.
+   ======================================================================== */
+@layer components {
+  .sf-site[data-sector="restaurant"] {
+    --restaurant-ink: #0b1d19;
+    --restaurant-green: var(--brand-secondary, #0d2922);
+    --restaurant-orange: var(--brand-primary, #e8892e);
+    --restaurant-cream: #fbf8f2;
+    --restaurant-line: #eadfd2;
+    background: var(--restaurant-cream);
+  }
+
+  .sf-site[data-sector="restaurant"] .sf-header-overlay {
+    position: absolute;
+    inset: 0 0 auto 0;
+    width: 100%;
+    border-bottom-color: rgb(255 255 255 / .12);
+    background: rgb(6 25 21 / .48) !important;
+    backdrop-filter: blur(10px);
+    color: white;
+  }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay nav a { color: rgb(255 255 255 / .78); }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay nav a:hover,
+  .sf-site[data-sector="restaurant"] .sf-header-overlay nav a[aria-current="page"] { color: #fff; }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay input {
+    border-color: rgb(255 255 255 / .16);
+    background: rgb(255 255 255 / .08);
+    color: white;
+  }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay input::placeholder { color: rgb(255 255 255 / .55); }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay .sf-btn-primary {
+    background: var(--restaurant-orange);
+    color: #fff;
+  }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay button {
+    border-color: rgb(255 255 255 / .18);
+    color: white;
+  }
+
+  .restaurant-hero {
+    position: relative;
+    min-height: 610px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    background: var(--restaurant-green);
+    color: #fff;
+  }
+  .restaurant-hero-media,
+  .restaurant-hero-overlay {
+    position: absolute;
+    inset: 0;
+  }
+  .restaurant-hero-media { z-index: 0; }
+  .restaurant-hero-media img { filter: saturate(.94) contrast(1.04); }
+  .restaurant-hero-overlay {
+    z-index: 1;
+    background:
+      linear-gradient(90deg, rgb(5 25 21 / .96) 0%, rgb(5 25 21 / .82) 38%, rgb(5 25 21 / .35) 72%, rgb(5 25 21 / .15) 100%),
+      linear-gradient(0deg, rgb(5 25 21 / .52), transparent 35%);
+  }
+  .restaurant-hero-fallback {
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(circle at 78% 35%, rgb(232 137 46 / .32), transparent 22rem),
+      linear-gradient(135deg, #071d18 0%, #0d3027 52%, #173c2e 100%);
+  }
+  .restaurant-hero-content { position: relative; z-index: 2; padding-top: 150px; padding-bottom: 120px; }
+  .restaurant-hero-copy { max-width: 700px; }
+  .restaurant-kicker {
+    color: var(--restaurant-orange);
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+  }
+  .restaurant-kicker-dark { color: #f2a14f; }
+  .restaurant-hero h1 {
+    max-width: 700px;
+    margin-top: .85rem;
+    font-size: clamp(2.65rem, 5vw, 4.7rem);
+    line-height: 1.02;
+    letter-spacing: -.045em;
+    color: #fff;
+  }
+  .restaurant-hero h1::first-line { text-shadow: 0 2px 18px rgb(0 0 0 / .16); }
+  .restaurant-hero-subtitle { max-width: 610px; margin-top: 1.2rem; color: rgb(255 255 255 / .76); font-size: 1rem; line-height: 1.85; }
+  .restaurant-hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.7rem; }
+  .restaurant-primary-btn,
+  .restaurant-secondary-btn {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    gap: .55rem;
+    border-radius: 999px;
+    padding: 0 1.2rem;
+    font-size: .86rem;
+    font-weight: 800;
+    transition: transform .18s ease, opacity .18s ease, background .18s ease;
+  }
+  .restaurant-primary-btn { background: var(--restaurant-orange); color: white; box-shadow: 0 12px 28px rgb(0 0 0 / .18); }
+  .restaurant-secondary-btn { border: 1px solid rgb(255 255 255 / .3); color: white; background: rgb(255 255 255 / .06); }
+  .restaurant-primary-btn:hover,
+  .restaurant-secondary-btn:hover { transform: translateY(-1px); }
+  .restaurant-hero-highlights { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1.1rem; max-width: 680px; margin-top: 2.25rem; }
+  .restaurant-hero-highlight { display: flex; gap: .65rem; align-items: flex-start; }
+  .restaurant-highlight-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid rgb(232 137 46 / .4); border-radius: 50%; color: #f2a14f; }
+  .restaurant-hero-highlight strong { display: block; font-size: .72rem; line-height: 1.35; }
+  .restaurant-hero-highlight small { display: block; margin-top: .2rem; color: rgb(255 255 255 / .58); font-size: .66rem; line-height: 1.45; }
+  .restaurant-hero-rating {
+    position: absolute;
+    z-index: 3;
+    right: max(1rem, calc((100vw - 72rem) / 2));
+    bottom: 2.3rem;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: .1rem .55rem;
+    align-items: center;
+    border-radius: 1rem;
+    padding: .8rem 1rem;
+    background: rgb(255 255 255 / .95);
+    color: var(--restaurant-ink);
+    box-shadow: 0 14px 35px rgb(0 0 0 / .18);
+  }
+  .restaurant-rating-stars { grid-column: 1 / -1; color: var(--restaurant-orange); font-size: .72rem; letter-spacing: .12em; }
+  .restaurant-hero-rating strong { font-size: .78rem; }
+  .restaurant-hero-rating small { color: #66736f; font-size: .62rem; }
+
+  .restaurant-menu-section { background: var(--restaurant-cream); }
+  .restaurant-menu-section > .mx-auto { display: grid; grid-template-columns: .7fr 1.65fr; gap: 3rem; align-items: center; }
+  .restaurant-menu-intro h2 { color: var(--restaurant-ink); }
+  .restaurant-outline-btn { gap: .55rem; border: 1px solid rgb(13 41 34 / .18); border-radius: 999px; padding: .72rem 1rem; color: var(--restaurant-ink); font-size: .78rem; font-weight: 800; }
+  .restaurant-outline-btn:hover { border-color: var(--restaurant-orange); color: var(--restaurant-orange); }
+  .restaurant-category-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .8rem; }
+  .restaurant-category-card { overflow: hidden; border: 1px solid var(--restaurant-line); border-radius: .9rem; background: #fff; box-shadow: 0 8px 22px rgb(27 38 34 / .05); }
+  .restaurant-category-image { aspect-ratio: 1.05; overflow: hidden; background: #eee8df; }
+  .restaurant-category-copy { display: flex; align-items: flex-end; justify-content: space-between; gap: .5rem; padding: .8rem; }
+  .restaurant-category-copy h3 { font-size: .8rem; font-weight: 800; color: var(--restaurant-ink); }
+  .restaurant-category-copy p { margin-top: .2rem; color: #7a817d; font-size: .65rem; }
+  .restaurant-category-copy > span { white-space: nowrap; color: var(--restaurant-orange); font-size: .64rem; font-weight: 800; }
+
+  .restaurant-story-section { background: #fff; }
+  .restaurant-story-media { background: #ece7de; box-shadow: 0 18px 40px rgb(26 40 35 / .08); }
+  .restaurant-story-badge { position: absolute; right: 1.2rem; bottom: 1rem; max-width: 150px; color: #fff; font-family: Georgia,serif; font-size: 1.25rem; line-height: 1.05; font-style: italic; text-align: right; text-shadow: 0 2px 14px rgb(0 0 0 / .35); }
+  .restaurant-story-point { display: flex; align-items: center; gap: .45rem; color: var(--restaurant-ink); font-size: .67rem; }
+  .restaurant-story-point span { color: var(--restaurant-orange); }
+
+  .restaurant-testimonials-section { background: #f7f3ec; }
+  .restaurant-testimonials-heading { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-bottom: 1.7rem; }
+  .restaurant-testimonial-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .85rem; }
+  .restaurant-testimonial-card { min-height: 190px; padding: 1.1rem; border: 1px solid var(--restaurant-line); border-radius: .9rem; background: #fff; box-shadow: 0 8px 24px rgb(27 38 34 / .04); }
+  .restaurant-avatar { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: #dfe8df; color: var(--restaurant-green); font-size: .7rem; font-weight: 800; }
+  .sf-site[data-sector="restaurant"] .restaurant-testimonial-card .text-brand { color: var(--restaurant-orange); }
+
+  .sf-site[data-sector="restaurant"] .sf-footer { border-top: 0; background: var(--restaurant-green); color: rgb(255 255 255 / .8); }
+  .sf-site[data-sector="restaurant"] .sf-footer h2 { color: #fff; }
+  .sf-site[data-sector="restaurant"] .sf-footer p,
+  .sf-site[data-sector="restaurant"] .sf-footer li,
+  .sf-site[data-sector="restaurant"] .sf-footer a { color: rgb(255 255 255 / .66); }
+  .sf-site[data-sector="restaurant"] .sf-footer a:hover { color: #fff; }
+  .sf-site[data-sector="restaurant"] .sf-footer .border-t { border-color: rgb(255 255 255 / .1); }
+  .sf-site[data-sector="restaurant"] .sf-footer .text-brand { color: #f2a14f; }
+
+  @media (max-width: 900px) {
+    .restaurant-menu-section > .mx-auto { grid-template-columns: 1fr; gap: 1.5rem; }
+    .restaurant-category-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .restaurant-hero { min-height: 680px; }
+    .restaurant-hero-highlights { grid-template-columns: 1fr; max-width: 360px; }
+    .restaurant-testimonial-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .restaurant-hero-content { padding-top: 130px; padding-bottom: 110px; }
+    .restaurant-hero h1 { font-size: 2.6rem; }
+    .restaurant-hero-rating { left: 1rem; right: auto; bottom: 1rem; }
+    .restaurant-category-grid { gap: .6rem; }
+    .restaurant-category-copy { display: block; }
+    .restaurant-category-copy > span { display: block; margin-top: .4rem; }
+  }
+}
+
+@layer components {
+  .sf-site[data-sector="restaurant"] .sf-header-overlay > div > a { color: #fff; }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay .text-black\/40 { color: rgb(255 255 255 / .5); }
+  .sf-site[data-sector="restaurant"] .sf-header-overlay .sf-mobile-menu,
+  .sf-site[data-sector="restaurant"] .sf-header-overlay [id="sf-mobile-menu"] { color: var(--restaurant-ink); }
+}

@@ -189,7 +189,7 @@ export async function POST(request: Request) {
           }
 
           if (routing.replyText) {
-            const messaging = await getMessagingProvider(organizationId, "zernio");
+            const messaging = await getMessagingProvider(organizationId, "zernio", domainEvent.payload.providerAccountId);
             await messaging.sendMessage(organizationId, {
               to: domainEvent.payload.phoneE164 ?? domainEvent.payload.externalContactId,
               channel: "whatsapp",
