@@ -76,12 +76,12 @@ export default async function PricingPage() {
         <div>
           <span className="mkt-eyebrow">Numéro WhatsApp dédié aux groupes</span>
           <h2>Les groupes WhatsApp restent séparés de votre numéro de messagerie.</h2>
-          <p>Votre numéro WhatsApp Business existant peut rester utilisable dans l'application grâce à la coexistence. Les Groupes WhatsApp utilisent un numéro distinct connecté en Cloud API uniquement. Le numéro fourni par CRESYVA est facturé séparément.</p>
+          <p>Votre numéro WhatsApp Business existant peut rester utilisable dans l&apos;application grâce à la coexistence. Les Groupes WhatsApp utilisent un numéro distinct connecté en Cloud API uniquement. Le numéro fourni par CRESYVA est facturé séparément.</p>
         </div>
         <div className="pricing-economics">
           <div><span>Discover</span><b>0 FCFA / mois</b><small>100 produits, Telegram, YouTube et les fonctions métier de base.</small></div>
           <div><span>Starter</span><b>15 000 FCFA / mois</b><small>WhatsApp, automatisation IA, CRM et davantage de canaux.</small></div>
-          <div><span>Pro</span><b>30 000 FCFA / mois</b><small>Plus de comptes, groupes, IA et membres d'équipe.</small></div>
+          <div><span>Pro</span><b>30 000 FCFA / mois</b><small>Plus de comptes, groupes, IA et membres d&apos;équipe.</small></div>
         </div>
       </section>
     </main>
