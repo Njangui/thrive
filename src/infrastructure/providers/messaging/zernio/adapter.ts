@@ -36,14 +36,37 @@ export class ZernioAdapter implements MessagingProvider {
       );
     }
 
-    const response = await this.client.sendInboxMessage(message.externalThreadId, {
-      accountId: this.accountId,
-      // `message` est optionnel dans l'API : pour une pièce jointe seule
-      // (ou un vocal), on l'omet plutôt que d'envoyer une chaîne vide.
-      message: message.content || undefined,
-      attachmentUrl: message.attachmentUrl,
-      attachmentType: message.attachmentType,
-    });
+    // UN SEUL bouton CTA URL par message WhatsApp (contrainte réelle du
+    // type `cta_url`, voir ZernioInteractiveCtaUrl) : avec 0 ou 2+ boutons
+    // demandés, on ne peut pas représenter ça fidèlement en interactif —
+    // repli sur le message texte tel quel (l'appelant garde alors ses
+    // liens dans le texte).
+    // ⚠️ Conversations 1:1 uniquement : ne jamais passer `buttons` pour un
+    // groupe WhatsApp (messages interactifs non pris en charge par l'API
+    // Groupes — voir ZernioInteractiveCtaUrl et OutboundMessage.buttons).
+    const singleButton = message.buttons?.length === 1 ? message.buttons[0] : undefined;
+
+    // Pas de combinaison interactive + pièce jointe : `header` (image/
+    // vidéo/document) est la seule façon confirmée d'attacher un média à
+    // un message `cta_url` (doc Meta), pas le champ `attachmentUrl` du
+    // flux texte simple — jamais mélangé les deux sans confirmation.
+    const response = await this.client.sendInboxMessage(message.externalThreadId, singleButton
+      ? {
+          accountId: this.accountId,
+          interactive: {
+            type: "cta_url",
+            body: { text: message.content },
+            action: { name: "cta_url", parameters: { display_text: singleButton.text, url: singleButton.url } },
+          },
+        }
+      : {
+          accountId: this.accountId,
+          // `message` est optionnel dans l'API : pour une pièce jointe seule
+          // (ou un vocal), on l'omet plutôt que d'envoyer une chaîne vide.
+          message: message.content || undefined,
+          attachmentUrl: message.attachmentUrl,
+          attachmentType: message.attachmentType,
+        });
 
     return {
       providerMessageId: response.id,

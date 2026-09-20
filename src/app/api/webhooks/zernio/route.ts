@@ -9,12 +9,14 @@ import {
 import {
   mapZernioEventToDomainEvent,
   mapZernioPostEventToDomainEvent,
+  mapZernioExternalPostEventToDomainEvent,
 } from "@/infrastructure/providers/messaging/zernio/mapper";
-import { isZernioPostEvent } from "@/infrastructure/providers/messaging/zernio/types";
+import { isZernioPostEvent, isZernioExternalPostEvent } from "@/infrastructure/providers/messaging/zernio/types";
 import {
   resolveOrganizationIdByZernioAccount,
   resolveOrganizationIdByZernioAccountAnyStatus,
   resolveOrganizationIdByProviderPostId,
+  resolveOrganizationIdBySocialProfile,
 } from "@/infrastructure/providers/messaging/zernio/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
 import { routeMessage } from "@/application/services/conversation-orchestrator";
@@ -24,6 +26,7 @@ import { activateGroupFromInboundConversation } from "@/application/services/wha
 import { handlePostStatusWebhook } from "@/application/services/marketing-service";
 import { handleAccountStatusChanged } from "@/application/services/provider-connection-service";
 import { notifyOrgAdmins } from "@/application/services/notification-service";
+import { trackExternalPost, handleIncomingComment } from "@/application/services/social-post-tracking-service";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -94,16 +97,32 @@ export async function POST(request: Request) {
       continue;
     }
 
+    // Lot 5 : `post.external.*` et `comment.received` doivent router par
+    // `account.profileId`, PAS `account.id` — voir resolve-organization.ts
+    // ::resolveOrganizationIdBySocialProfile pour pourquoi (lu dans
+    // zernio-channel-service.ts avant d'écrire ceci : la ligne
+    // provider_connections 'social' d'un tenant est unique et son
+    // metadata.accountId est réécrit à chaque nouvelle connexion — un
+    // routage par account.id y résoudrait silencieusement le MAUVAIS
+    // tenant dès qu'un deuxième compte social est connecté quelque part).
+    // Pas de repli sur account.id ici : un profileId absent du payload
+    // doit rester non-résolu (null), jamais deviné.
+    const isSocialAccountEvent = isZernioExternalPostEvent(rawEvent) || rawEvent.event === "comment.received";
+
     const organizationId = isZernioPostEvent(rawEvent)
       ? await resolveOrganizationIdByProviderPostId(
           rawEvent.post?._id ?? rawEvent.post?.id ?? rawEvent.postId ?? "",
         )
-      : // CORRECTIF Lot 3 : account.connected/disconnected doivent rester
-        // routables quel que soit le statut ACTUEL de la ligne (c'est
-        // justement ce que l'event change) — voir resolve-organization.ts.
-        rawEvent.event === "account.connected" || rawEvent.event === "account.disconnected"
-        ? await resolveOrganizationIdByZernioAccountAnyStatus(rawEvent.account.id)
-        : await resolveOrganizationIdByZernioAccount(rawEvent.account.id);
+      : isSocialAccountEvent
+        ? rawEvent.account.profileId
+          ? await resolveOrganizationIdBySocialProfile(rawEvent.account.profileId)
+          : null
+        : // CORRECTIF Lot 3 : account.connected/disconnected doivent rester
+          // routables quel que soit le statut ACTUEL de la ligne (c'est
+          // justement ce que l'event change) — voir resolve-organization.ts.
+          rawEvent.event === "account.connected" || rawEvent.event === "account.disconnected"
+          ? await resolveOrganizationIdByZernioAccountAnyStatus(rawEvent.account.id)
+          : await resolveOrganizationIdByZernioAccount(rawEvent.account.id);
 
     if (!organizationId) {
       console.warn(`Zernio webhook: aucun tenant résolu pour l'événement ${rawEvent.event} (${externalEventId}), ignoré.`);
@@ -136,6 +155,19 @@ export async function POST(request: Request) {
         const postEvent = mapZernioPostEventToDomainEvent(rawEvent, organizationId);
         if (postEvent) {
           await handlePostStatusWebhook(postEvent);
+        }
+        await markWebhookEvent(externalEventId, "processed");
+        continue;
+      }
+
+      // Lot 5 — post détecté nativement sur la plateforme (hors CRESYVA),
+      // voir social-post-tracking-service.ts. Catégorie séparée du bloc
+      // ci-dessus : forme de payload différente (ZernioExternalPostWebhookPost,
+      // pas ZernioPostResource), jamais notre propre pipeline de publication.
+      if (isZernioExternalPostEvent(rawEvent)) {
+        const externalPostEvent = mapZernioExternalPostEventToDomainEvent(rawEvent, organizationId);
+        if (externalPostEvent) {
+          await trackExternalPost(externalPostEvent);
         }
         await markWebhookEvent(externalEventId, "processed");
         continue;
@@ -229,6 +261,18 @@ export async function POST(request: Request) {
             Boolean(domainEvent.payload.attachment),
           );
         }
+      }
+
+      // Lot 5 — synchronisation temps réel des commentaires (ferme le
+      // TODO "un webhook temps réel dédié reste à construire" laissé par
+      // le Lot M/I, voir docs/ZERNIO_INTEGRATION.md). Fonctionne quel que
+      // soit l'endroit où le post a été publié : trackExternalPost
+      // (ci-dessus) fait exister la ligne locale nécessaire pour un post
+      // publié hors CRESYVA, handleIncomingComment recrée cette ligne à
+      // la volée en filet de sécurité si besoin (voir social-post-
+      // tracking-service.ts).
+      if (domainEvent.type === "COMMENT_RECEIVED") {
+        await handleIncomingComment(domainEvent);
       }
 
       // CORRECTIF Lot 3 (audit master prompt §44) : message.failed

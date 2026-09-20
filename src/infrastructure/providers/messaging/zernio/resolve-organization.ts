@@ -66,6 +66,57 @@ export async function resolveOrganizationIdByZernioAccountAnyStatus(accountId: s
 }
 
 /**
+ * Lot 5 (20/09/2026) — routage tenant pour les events `comment.received`
+ * et `post.external.*`, PAR `profileId` — PAS par `account.id`, à la
+ * différence de `resolveOrganizationIdByZernioAccount` ci-dessus.
+ *
+ * VÉRIFIÉ EN LISANT LE CODE (zernio-channel-service.ts) avant d'écrire
+ * cette fonction, plutôt que de réutiliser par réflexe le même schéma
+ * que le resolver `messaging` : la ligne `provider_connections` d'une
+ * organisation pour `provider_type = 'social'` est UNIQUE
+ * (`onConflict: "organization_id,provider_type,provider_name"`,
+ * `persistZernioOAuthConnection`) et son `metadata.accountId` est
+ * RÉÉCRIT à chaque nouvelle connexion (Facebook, puis Instagram, puis
+ * LinkedIn...) — un tenant avec plusieurs comptes sociaux connectés n'a
+ * donc, à un instant donné, QUE le dernier `accountId` connecté dans
+ * cette ligne ; router par `account.id` webhook y résoudrait le mauvais
+ * compte silencieusement dès qu'un deuxième compte social est connecté
+ * (risque de commentaire attribué au mauvais post, pas juste un event
+ * perdu). `metadata.profileId`, lui, est stable : posé une fois par
+ * `ensureZernioProfile` et jamais réécrit avec une autre valeur (un seul
+ * profil Zernio par organisation pour `provider_type = 'social'`).
+ * `profileId` est CONFIRMÉ présent sur le bloc `account` de tout event
+ * inbox (docs.zernio.com/webhooks/inbox : "Message payloads carry an
+ * `account` block with `accountId` and `profileId`, so one endpoint can
+ * serve many profiles") — voir `ZernioInboxWebhookAccount`/
+ * `ZernioExternalPostWebhookAccount` (types.ts).
+ *
+ * Ne retombe JAMAIS sur un lookup par `account.id` en repli : un mauvais
+ * match (compte social d'un AUTRE tenant) est pire qu'un event ignoré —
+ * si `profileId` est absent du payload, l'appelant doit logger et
+ * ignorer plutôt que deviner.
+ */
+export async function resolveOrganizationIdBySocialProfile(profileId: string): Promise<string | null> {
+  const supabase = getSupabaseServiceClient();
+
+  const { data, error } = await supabase
+    .from("provider_connections")
+    .select("organization_id")
+    .eq("provider_type", "social")
+    .eq("provider_name", "zernio")
+    .eq("status", "connected")
+    .eq("metadata->>profileId", profileId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`resolveOrganizationIdBySocialProfile(${profileId}) error:`, error.message);
+    return null;
+  }
+
+  return data?.organization_id ?? null;
+}
+
+/**
  * Lot M, Partie 2 — routage tenant pour les webhooks `post.*`.
  *
  * Contrairement aux events inbox, un post peut cibler PLUSIEURS comptes

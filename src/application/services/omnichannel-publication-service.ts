@@ -3,8 +3,8 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { getMessagingProvider, getSocialPublishingProvider, getWhatsAppGroupsProvider } from "@/infrastructure/providers/registry";
 import { getTelegramChannelStatus } from "./telegram-channel-service";
 import { listConnectedGroups, createBroadcast } from "./whatsapp-group-service";
-import { getProductsByIds, type CatalogProductSummary } from "./catalog-service";
-import { env } from "@/lib/env";
+import { getProductsByIds, buildProductButtons, type CatalogProductSummary } from "./catalog-service";
+import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { ValidationError } from "@/lib/errors";
 import { canUseFeature } from "./entitlements-service";
 
@@ -31,7 +31,26 @@ export interface PublicationInput {
 }
 export interface PublicationResult { published: number; scheduled: number; failed: Array<{ target: string; error: string }>; }
 
-export function buildCatalogPublicationContent(products: CatalogProductSummary[], customContent?: string | null): string {
+/**
+ * `origin` = domaine public RÉEL du tenant (getTenantPublicOrigin, jamais
+ * env.NEXT_PUBLIC_APP_URL — corrigé le 19/09/2026, un lien produit
+ * partagé sur le canal Telegram d'un tenant pointait vers le domaine
+ * générique de la plateforme au lieu du sien, 404 pour le client final).
+ *
+ * `includeLinks` (def. true) : Telegram affiche un bouton "Voir
+ * plus"/"Voir : {produit}" sous le message (voir buildProductButtons +
+ * OutboundMessage.buttons) — dans ce cas l'appelant passe `false` pour ne
+ * pas aussi répéter le lien en clair dans le texte. Les réseaux sociaux et
+ * les groupes WhatsApp n'ont pas de bouton équivalent (groupes : messages
+ * interactifs non pris en charge, voir OutboundMessage.buttons) : le lien
+ * en texte y reste le seul moyen d'atteindre la fiche produit.
+ */
+export function buildCatalogPublicationContent(
+  products: CatalogProductSummary[],
+  origin: string,
+  customContent?: string | null,
+  includeLinks = true,
+): string {
   const prefix = customContent?.trim();
   const lines: string[] = [];
   if (prefix) lines.push(prefix, "");
@@ -40,7 +59,7 @@ export function buildCatalogPublicationContent(products: CatalogProductSummary[]
     lines.push(`💰 ${product.unitPrice.toLocaleString("fr-FR")} FCFA`);
     if (product.categoryName) lines.push(`🏷️ ${product.categoryName}`);
     if (product.description) lines.push(product.description);
-    if (product.slug) lines.push(`${env.NEXT_PUBLIC_APP_URL}/produits/${product.slug}`);
+    if (includeLinks && product.slug) lines.push(`${origin}/produits/${product.slug}`);
     lines.push("");
   }
   return lines.join("\n").trim();
@@ -107,7 +126,14 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
   if (!productIds.length) throw new ValidationError("Sélectionnez au moins un produit du catalogue.");
   const products = await getProductsByIds(input.organizationId, productIds);
   if (products.length !== productIds.length) throw new ValidationError("Un ou plusieurs produits sont introuvables.");
-  const content = buildCatalogPublicationContent(products, input.content);
+  const tenantOrigin = await getTenantPublicOrigin(input.organizationId);
+  const content = buildCatalogPublicationContent(products, tenantOrigin, input.content);
+  // Telegram affiche un bouton "Voir plus" par produit (reply_markup) —
+  // le lien en clair n'y est donc pas répété dans le texte (includeLinks=false),
+  // contrairement au texte envoyé aux réseaux sociaux/groupes WhatsApp
+  // ci-dessous, qui n'ont pas d'équivalent (voir buildProductButtons).
+  const telegramContent = buildCatalogPublicationContent(products, tenantOrigin, input.content, false);
+  const telegramButtons = buildProductButtons(products, tenantOrigin);
   const mediaUrls = input.mediaUrls?.filter(Boolean) ?? products.map((p) => p.imageUrl).filter((url): url is string => Boolean(url));
   const scheduledDate = validateFutureDate(input.scheduledFor);
   // Garde-fou « 7 jours Zernio » (voir catalog-video-service.ts). Deux niveaux :
@@ -206,11 +232,11 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
       }
       if (scheduledDate) {
         const supabase = getSupabaseServiceClient();
-        const { error } = await supabase.from("telegram_publications").insert({ organization_id: input.organizationId, created_by: input.actorUserId, content, target_chat_id: target.accountId, target_label: target.label, status: "scheduled", scheduled_for: scheduledDate.toISOString(), attachment_url: attachmentUrl ?? null, attachment_type: attachmentUrl ? (input.mediaType ?? "image") : null });
+        const { error } = await supabase.from("telegram_publications").insert({ organization_id: input.organizationId, created_by: input.actorUserId, content: telegramContent, buttons: telegramButtons.length ? telegramButtons : null, target_chat_id: target.accountId, target_label: target.label, status: "scheduled", scheduled_for: scheduledDate.toISOString(), attachment_url: attachmentUrl ?? null, attachment_type: attachmentUrl ? (input.mediaType ?? "image") : null });
         if (error) throw new Error(error.message);
         result.scheduled++;
       } else {
-        await provider.sendMessage(input.organizationId, { to: target.accountId, channel: "telegram", content, attachmentUrl, attachmentType: attachmentUrl ? (input.mediaType ?? "image") : undefined, uploadBinary: Boolean(attachmentUrl && (input.mediaType ?? "image") !== "image") });
+        await provider.sendMessage(input.organizationId, { to: target.accountId, channel: "telegram", content: telegramContent, attachmentUrl, attachmentType: attachmentUrl ? (input.mediaType ?? "image") : undefined, uploadBinary: Boolean(attachmentUrl && (input.mediaType ?? "image") !== "image"), buttons: telegramButtons.length ? telegramButtons : undefined });
         result.published++;
       }
     } catch (error) { result.failed.push({ target: target.label, error: error instanceof Error ? error.message : String(error) }); }
@@ -233,8 +259,14 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
         const imageUrl = products.length === 1 ? products[0]?.imageUrl : undefined;
         for (const groupId of groupIds) {
           const group = byId.get(groupId);
-          if (!group?.isSendable) throw new ValidationError(`Le groupe ${group?.name ?? groupId} n'est pas encore activé.`);
-          await provider.sendMessage(input.organizationId, { to: group.externalId, channel: "whatsapp", content, externalThreadId: group.externalId, attachmentUrl: imageUrl ?? undefined, attachmentType: imageUrl ? "image" : undefined });
+          if (!group?.isSendable || !group.zernioConversationId) throw new ValidationError(`Le groupe ${group?.name ?? groupId} n'est pas encore activé.`);
+          // `externalThreadId` = la conversation Zernio du groupe (`zernioConversationId`),
+          // PAS l'identifiant du groupe WhatsApp (`externalId`) — corrigé fusion #17 : la
+          // diffusion programmée (whatsapp-group-service.ts) utilisait déjà la bonne valeur,
+          // seul cet envoi immédiat confondait les deux et échouait à chaque envoi.
+          // Liens produit gardés EN TEXTE (`content`), aucun bouton : les messages
+          // interactifs ne sont pas pris en charge dans les groupes (voir OutboundMessage.buttons).
+          await provider.sendMessage(input.organizationId, { to: group.externalId, channel: "whatsapp", content, externalThreadId: group.zernioConversationId, attachmentUrl: imageUrl ?? undefined, attachmentType: imageUrl ? "image" : undefined });
           result.published++;
         }
       }

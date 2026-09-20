@@ -11,6 +11,7 @@ import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-servi
 import { confirmAddonPurchase } from "./addons-service";
 import { recordAffiliateConversion, getPromoCodeDiscountBpsForNextPayment } from "./affiliate-service";
 import { computeDiscountedAmountFcfa } from "@/domain/entities/affiliate";
+import { resetCreditBalanceForPlan } from "./ai-credits-service";
 
 /**
  * Lot G, Partie 1 — Paiement d'abonnement. Flow : initiatePayment() crée
@@ -78,7 +79,7 @@ export interface AdminPaymentSummary extends SubscriptionPaymentSummary {
 }
 
 /**
- * Lot 4 (section 52 du master prompt — "Payments" dans la liste des
+ * Lot 5 (section 52 du master prompt — "Payments" dans la liste des
  * sections attendues du Super Admin). `listPaymentsForOrganization`
  * ci-dessus n'existait qu'à l'échelle d'un tenant (dashboard) ; jusqu'à
  * ce lot, l'opérateur CRESYVA n'avait aucune vue d'ensemble des paiements
@@ -727,6 +728,21 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
     if (subError) {
       throw new Error(`markPaymentCompleted: échec mise à jour organization_subscriptions: ${subError.message}`);
     }
+
+    // CORRECTIF (20/09/2026, audit suite signalement utilisateur) — voir
+    // ai-credits-service.ts::resetCreditBalanceForPlan pour le détail du
+    // bug corrigé (le plafond de crédits IA ne suivait jamais un
+    // changement RÉEL de palier). Best-effort délibéré, même principe que
+    // `recordAffiliateConversion` juste en dessous : un échec ici
+    // n'affecte JAMAIS la confirmation du paiement, déjà actée ci-dessus
+    // — au pire, le plafond de crédits reste à corriger manuellement,
+    // jamais le paiement du client.
+    await resetCreditBalanceForPlan(payment.organization_id, payment.plan_key as PlanKey).catch((err) => {
+      console.error(
+        `markPaymentCompleted: échec réinitialisation crédits IA (org ${payment.organization_id}, plan ${payment.plan_key}):`,
+        err,
+      );
+    });
 
     const { error: auditError } = await supabase.from("audit_logs").insert({
       organization_id: payment.organization_id,

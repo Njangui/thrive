@@ -5,6 +5,7 @@ import type {
   OutboundMessage,
   SendMessageResult,
 } from "@/domain/ports/messaging-provider";
+import type { TelegramInlineKeyboardMarkup } from "./types";
 import { TelegramMessagingClient } from "./client";
 import { downloadRemoteMedia, fileNameFromUrl, isAllowedRemoteMediaHost, TELEGRAM_UPLOAD_MAX_BYTES } from "@/lib/remote-media";
 
@@ -54,6 +55,9 @@ export class TelegramMessagingAdapter implements MessagingProvider {
     // sendMessage ; une pièce jointe publique peut être envoyée directement
     // via l'API Telegram. Cela couvre les réponses humaines et les
     // publications sans faire dépendre Telegram de Zernio.
+    const reply_markup: TelegramInlineKeyboardMarkup | undefined = message.buttons?.length
+      ? { inline_keyboard: message.buttons.map((b) => [b]) } // une ligne par bouton (voir OutboundMessage.buttons)
+      : undefined;
     let sent;
     if (message.uploadBinary && message.attachmentUrl && isAllowedRemoteMediaHost(message.attachmentUrl)) {
       // Le fichier est relu par NOTRE serveur (Zernio/Supabase) puis
@@ -66,21 +70,22 @@ export class TelegramMessagingAdapter implements MessagingProvider {
         message.to,
         { data, fileName: message.attachmentFileName ?? fileNameFromUrl(message.attachmentUrl), contentType: mimeType },
         message.content || undefined,
+        reply_markup,
       );
     } else if (message.attachmentUrl && message.attachmentType === "video") {
-      sent = await this.client.sendVideo({ chat_id: message.to, video: message.attachmentUrl, caption: message.content || undefined });
+      sent = await this.client.sendVideo({ chat_id: message.to, video: message.attachmentUrl, caption: message.content || undefined, reply_markup });
     } else if (message.attachmentUrl && message.attachmentType === "audio" && message.isVoiceNote) {
       // Vocal enregistré depuis la messagerie : rendu comme un vrai message
       // vocal Telegram (onde sonore) plutôt que comme un morceau de musique.
-      sent = await this.client.sendVoice({ chat_id: message.to, voice: message.attachmentUrl, caption: message.content || undefined });
+      sent = await this.client.sendVoice({ chat_id: message.to, voice: message.attachmentUrl, caption: message.content || undefined, reply_markup });
     } else if (message.attachmentUrl && message.attachmentType === "audio") {
-      sent = await this.client.sendAudio({ chat_id: message.to, audio: message.attachmentUrl, caption: message.content || undefined });
+      sent = await this.client.sendAudio({ chat_id: message.to, audio: message.attachmentUrl, caption: message.content || undefined, reply_markup });
     } else if (message.attachmentUrl && message.attachmentType === "file") {
-      sent = await this.client.sendDocument({ chat_id: message.to, document: message.attachmentUrl, caption: message.content || undefined });
+      sent = await this.client.sendDocument({ chat_id: message.to, document: message.attachmentUrl, caption: message.content || undefined, reply_markup });
     } else if (message.attachmentUrl) {
-      sent = await this.client.sendPhoto({ chat_id: message.to, photo: message.attachmentUrl, caption: message.content || undefined });
+      sent = await this.client.sendPhoto({ chat_id: message.to, photo: message.attachmentUrl, caption: message.content || undefined, reply_markup });
     } else {
-      sent = await this.client.sendMessage({ chat_id: message.to, text: message.content });
+      sent = await this.client.sendMessage({ chat_id: message.to, text: message.content, reply_markup });
     }
     return { providerMessageId: String(sent.message_id), status: "sent" };
   }

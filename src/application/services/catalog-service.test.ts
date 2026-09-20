@@ -14,6 +14,7 @@ import {
   removeProductSpecification,
   getProductBySlug,
   isPromotionCurrentlyOn,
+  buildProductButtons,
 } from "./catalog-service";
 import type { CatalogProductSummary } from "./catalog-service";
 
@@ -293,5 +294,34 @@ describe("isPromotionCurrentlyOn — règle unique partagée (catalogue V2 + vit
 
   it("une échéance illisible ne désactive jamais silencieusement une promotion existante", () => {
     expect(isPromotionCurrentlyOn(25000, 20000, "pas-une-date")).toBe(true);
+  });
+});
+
+describe("buildProductButtons", () => {
+  const ORIGIN = "https://monsalon.cresyva.app";
+
+  it("un seul produit -> un seul bouton \"Voir plus\" vers son lien", () => {
+    const buttons = buildProductButtons([PRODUCTS[0]!], ORIGIN);
+    expect(buttons).toEqual([{ text: "Voir plus", url: `${ORIGIN}/produits/sneakers-air-max` }]);
+  });
+
+  it("plusieurs produits -> un bouton par produit, libellé avec son nom, dans l'ordre", () => {
+    const buttons = buildProductButtons(PRODUCTS, ORIGIN);
+    expect(buttons[0]).toEqual({ text: "Voir : Sneakers Air Max", url: `${ORIGIN}/produits/sneakers-air-max` });
+    expect(buttons[1]).toEqual({ text: "Voir : T-shirt Premium", url: `${ORIGIN}/produits/t-shirt-premium` });
+  });
+
+  it("ignore les produits sans slug (aucune fiche publique à lier)", () => {
+    const buttons = buildProductButtons([{ ...PRODUCTS[0]!, slug: null }], ORIGIN);
+    expect(buttons).toEqual([]);
+  });
+
+  it("tronque un libellé trop long pour rester sous la limite de 64 caractères de l'API Bot Telegram", () => {
+    const longName = "Appartement meublé haut standing avec vue panoramique sur toute la ville et piscine privée";
+    const buttons = buildProductButtons([PRODUCTS[0]!, { ...PRODUCTS[1]!, name: longName }], ORIGIN);
+    const longButton = buttons[1];
+    expect(longButton).toBeDefined();
+    expect(longButton!.text.length).toBeLessThanOrEqual(64);
+    expect(longButton!.text.endsWith("…")).toBe(true);
   });
 });

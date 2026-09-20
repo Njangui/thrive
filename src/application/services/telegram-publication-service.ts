@@ -15,6 +15,8 @@ export interface CreateTelegramPublicationInput {
   scheduledFor?: string | null;
   attachmentUrl?: string | null;
   attachmentType?: "image" | "video" | "audio" | "file" | null;
+  /** Boutons inline (voir migration 0065) — optionnel, uniquement rempli par le chemin catalogue (omnichannel-publication-service.ts). */
+  buttons?: { text: string; url: string }[] | null;
 }
 
 export interface TelegramPublicationItem {
@@ -26,6 +28,7 @@ export interface TelegramPublicationItem {
   status: TelegramPublicationStatus;
   attachmentUrl: string | null;
   attachmentType: string | null;
+  buttons: { text: string; url: string }[] | null;
   telegramMessageId: number | null;
   errorMessage: string | null;
   createdAt: string;
@@ -55,6 +58,7 @@ function mapRow(row: Record<string, unknown>): TelegramPublicationItem {
     status: row.status as TelegramPublicationStatus,
     attachmentUrl: (row.attachment_url as string | null) ?? null,
     attachmentType: (row.attachment_type as string | null) ?? null,
+    buttons: (row.buttons as { text: string; url: string }[] | null) ?? null,
     telegramMessageId: typeof row.telegram_message_id === "number" ? row.telegram_message_id : null,
     errorMessage: (row.error_message as string | null) ?? null,
     createdAt: String(row.created_at),
@@ -63,7 +67,7 @@ function mapRow(row: Record<string, unknown>): TelegramPublicationItem {
 
 async function sendTelegramPublication(
   organizationId: string,
-  publication: Pick<TelegramPublicationItem, "targetChatId" | "content" | "attachmentUrl" | "attachmentType">,
+  publication: Pick<TelegramPublicationItem, "targetChatId" | "content" | "attachmentUrl" | "attachmentType" | "buttons">,
 ): Promise<number> {
   // Au JOUR de la publication : la vidéo est relue chez Zernio par notre
   // serveur puis envoyée à Telegram. Si le fichier a expiré (Zernio ne le
@@ -82,6 +86,7 @@ async function sendTelegramPublication(
     // Vidéos / audios / fichiers : téléversés depuis notre serveur (50 Mo,
     // tous formats) plutôt que donnés par URL (20 Mo). Les images restent par URL.
     uploadBinary: Boolean(publication.attachmentUrl && publication.attachmentType && publication.attachmentType !== "image"),
+    buttons: publication.buttons ?? undefined,
   });
   return Number(result.providerMessageId);
 }
@@ -109,6 +114,7 @@ export async function createTelegramPublication(input: CreateTelegramPublication
         content,
         attachmentUrl: input.attachmentUrl ?? null,
         attachmentType: input.attachmentType ?? null,
+        buttons: input.buttons ?? null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -123,6 +129,7 @@ export async function createTelegramPublication(input: CreateTelegramPublication
           status: "failed",
           attachment_url: input.attachmentUrl ?? null,
           attachment_type: input.attachmentType ?? null,
+          buttons: input.buttons ?? null,
           error_message: message,
         })
         .select("*")
@@ -151,6 +158,7 @@ export async function createTelegramPublication(input: CreateTelegramPublication
         telegram_message_id: telegramMessageId,
         attachment_url: input.attachmentUrl ?? null,
         attachment_type: input.attachmentType ?? null,
+        buttons: input.buttons ?? null,
       })
       .select("*")
       .single();
@@ -178,6 +186,7 @@ export async function createTelegramPublication(input: CreateTelegramPublication
       scheduled_for: scheduledFor.toISOString(),
       attachment_url: input.attachmentUrl ?? null,
       attachment_type: input.attachmentType ?? null,
+      buttons: input.buttons ?? null,
     })
     .select("*")
     .single();
@@ -261,6 +270,7 @@ export async function processScheduledTelegramPublications(now = new Date()): Pr
         content: row.content,
         attachmentUrl: row.attachment_url,
         attachmentType: row.attachment_type,
+        buttons: row.buttons ?? null,
       });
       await supabase.from("telegram_publications").update({ status: "published", telegram_message_id: telegramMessageId }).eq("id", row.id);
       await notifyOrgAdmins({

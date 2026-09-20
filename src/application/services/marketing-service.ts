@@ -2,7 +2,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { getSocialPublishingProvider } from "@/infrastructure/providers/registry";
 import type { SocialPostTarget } from "@/domain/ports/social-publishing-provider";
 import type { SocialPostStatusUpdatedEvent } from "@/domain/events/domain-events";
-import { env } from "@/lib/env";
+import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { canUseFeature } from "./entitlements-service";
 import { trackEvent } from "./analytics-service";
 import { notifyOrgAdmins } from "./notification-service";
@@ -120,6 +120,10 @@ export async function createCampaignFromProducts(
 
   const scheduled: string[] = [];
   const failed: { productId: string; error: string }[] = [];
+  // Lien PUBLIC du tenant (sous-domaine ou domaine custom vérifié) — jamais
+  // env.NEXT_PUBLIC_APP_URL (domaine générique de la plateforme), voir
+  // getTenantPublicOrigin(). Résolu une seule fois pour toute la campagne.
+  const tenantOrigin = await getTenantPublicOrigin(input.organizationId);
 
   for (const [i, product] of (products ?? []).entries()) {
     // Section 52 : un produit OUT_OF_STOCK/inactive ne doit pas être
@@ -134,7 +138,7 @@ export async function createCampaignFromProducts(
       .sort((a, b) => a.position - b.position)
       .map((img) => img.url);
 
-    const publicUrl = product.slug ? `${env.NEXT_PUBLIC_APP_URL}/produits/${product.slug}` : null;
+    const publicUrl = product.slug ? `${tenantOrigin}/produits/${product.slug}` : null;
     const content = [
       product.name,
       `${Number(product.unit_price).toLocaleString("fr-FR")} FCFA`,

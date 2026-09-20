@@ -49,28 +49,43 @@ export interface TelegramUpdate {
   message?: TelegramMessage;
 }
 
+/** Bouton URL inline (core.telegram.org/bots/api#inlinekeyboardbutton) — le seul type de bouton utilisé ici, un lien externe cliquable sous le message. */
+export interface TelegramInlineKeyboardButton {
+  text: string;
+  url: string;
+}
+
+/** core.telegram.org/bots/api#inlinekeyboardmarkup — grille de boutons, un tableau de lignes. */
+export interface TelegramInlineKeyboardMarkup {
+  inline_keyboard: TelegramInlineKeyboardButton[][];
+}
+
 export interface TelegramSendMessageParams {
   chat_id: number | string;
   text: string;
   parse_mode?: "Markdown" | "HTML";
+  reply_markup?: TelegramInlineKeyboardMarkup;
 }
 
 export interface TelegramSendPhotoParams {
   chat_id: number | string;
   photo: string;
   caption?: string;
+  reply_markup?: TelegramInlineKeyboardMarkup;
 }
 
 export interface TelegramSendVideoParams {
   chat_id: number | string;
   video: string;
   caption?: string;
+  reply_markup?: TelegramInlineKeyboardMarkup;
 }
 
 export interface TelegramSendAudioParams {
   chat_id: number | string;
   audio: string;
   caption?: string;
+  reply_markup?: TelegramInlineKeyboardMarkup;
 }
 
 export interface TelegramSendVoiceParams {
@@ -78,12 +93,14 @@ export interface TelegramSendVoiceParams {
   /** OGG/OPUS, MP3 ou M4A uniquement (contrainte Bot API) — un WebM est refusé. */
   voice: string;
   caption?: string;
+  reply_markup?: TelegramInlineKeyboardMarkup;
 }
 
 export interface TelegramSendDocumentParams {
   chat_id: number | string;
   document: string;
   caption?: string;
+  reply_markup?: TelegramInlineKeyboardMarkup;
 }
 
 export interface TelegramGetFileResponse { ok: boolean; result?: TelegramFile; description?: string; error_code?: number; }

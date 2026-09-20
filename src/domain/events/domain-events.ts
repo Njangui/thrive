@@ -22,7 +22,9 @@ export type DomainEventType =
   | "INVENTORY_LOW"
   | "RECEIVABLE_OVERDUE"
   | "SOCIAL_POST_STATUS_UPDATED"
-  | "PROVIDER_ACCOUNT_STATUS_UPDATED";
+  | "PROVIDER_ACCOUNT_STATUS_UPDATED"
+  | "COMMENT_RECEIVED"
+  | "EXTERNAL_POST_TRACKED";
 
 export interface DomainEventBase {
   type: DomainEventType;
@@ -139,6 +141,50 @@ export interface ProviderAccountStatusUpdatedEvent extends DomainEventBase {
 }
 
 /**
+ * Lot 5 (20/09/2026) — synchronisation temps réel des commentaires
+ * sociaux (webhook `comment.received`, remplace/complète le pull manuel
+ * `syncCommentsForPost`, voir social-comment-service.ts et
+ * social-post-tracking-service.ts). `providerPostId` est l'id sous
+ * lequel Zernio connaît le post commenté — id Zernio pour un post publié
+ * via CRESYVA, id natif plateforme pour un post détecté nativement (voir
+ * EXTERNAL_POST_TRACKED ci-dessous) — les deux cas sont indifférenciés
+ * ici, la résolution/création du post local est à la charge du
+ * consommateur.
+ */
+export interface CommentReceivedEvent extends DomainEventBase {
+  type: "COMMENT_RECEIVED";
+  payload: {
+    providerPostId: string;
+    providerAccountId: string;
+    platform?: string;
+    externalCommentId: string;
+    authorName?: string;
+    content: string;
+  };
+}
+
+/**
+ * Lot 5 — un post authored nativement sur la plateforme (hors pipeline
+ * de publication CRESYVA) a été détecté par la synchronisation
+ * arrière-plan de Zernio (webhook `post.external.created`/`updated`/
+ * `deleted`, ~horaire, pas temps réel — voir docs/ZERNIO_INTEGRATION.md).
+ * Sert uniquement à faire exister une ligne `social_posts`/
+ * `social_post_targets` locale pour que ce post devienne "syncable"
+ * (bouton manuel ET commentaires temps réel ensuite) — ne porte PAS le
+ * contenu du post (texte/media), dont le nom de champ exact côté webhook
+ * n'est pas confirmé (voir types.ts).
+ */
+export interface ExternalPostTrackedEvent extends DomainEventBase {
+  type: "EXTERNAL_POST_TRACKED";
+  payload: {
+    providerPostId: string;
+    providerAccountId: string;
+    platform?: string;
+    deleted: boolean;
+  };
+}
+
+/**
  * Union à étendre au fur et à mesure (Phase 7+). Volontairement pas
  * exhaustive dès Phase 0 — seuls les événements réellement câblés au
  * workflow central (section 64) ont un payload typé pour l'instant.
@@ -149,4 +195,6 @@ export type DomainEvent =
   | PaymentReceivedEvent
   | InventoryLowEvent
   | SocialPostStatusUpdatedEvent
-  | ProviderAccountStatusUpdatedEvent;
+  | ProviderAccountStatusUpdatedEvent
+  | CommentReceivedEvent
+  | ExternalPostTrackedEvent;

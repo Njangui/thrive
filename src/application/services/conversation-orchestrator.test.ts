@@ -34,12 +34,17 @@ vi.mock("./service-catalog-service", async (importOriginal) => {
   };
 });
 
+vi.mock("@/infrastructure/tenant/resolve-request-tenant", () => ({
+  getTenantPublicOrigin: vi.fn(),
+}));
+
 import { matchFaq } from "./faq-resolver";
 import { generateAIReply } from "./ai-response-service";
 import { getActiveProducts, searchProductsByName } from "./catalog-service";
 import { resolveBusinessInfo } from "./business-info-resolver";
 import { rememberMentionedProducts, getRecentlyMentionedProducts } from "./conversation-memory-service";
 import { searchServicesByName } from "./service-catalog-service";
+import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 
 const ORG_ID = "org_1";
 const CONVERSATION_ID = "conv_1";
@@ -53,6 +58,7 @@ beforeEach(() => {
   vi.mocked(resolveBusinessInfo).mockReset().mockResolvedValue(null);
   vi.mocked(rememberMentionedProducts).mockReset().mockResolvedValue(undefined);
   vi.mocked(getRecentlyMentionedProducts).mockReset().mockResolvedValue([]);
+  vi.mocked(getTenantPublicOrigin).mockReset().mockResolvedValue("https://monsalon.cresyva.app");
 });
 
 describe("routeMessage — ordre de résolution (section 45 : règles avant IA)", () => {

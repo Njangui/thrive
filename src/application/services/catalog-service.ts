@@ -1525,3 +1525,25 @@ export async function getStorefrontPriceRange(
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= 0) return null;
   return { min, max };
 }
+
+/**
+ * Boutons "Voir plus" : un par produit, utilisés aujourd'hui par Telegram
+ * uniquement (omnichannel-publication-service.ts). WhatsApp/Zernio n'accepte
+ * qu'UN bouton URL par message et seulement en conversation 1:1 (voir
+ * ZernioInteractiveCtaUrl) ; les GROUPES WhatsApp n'en reçoivent jamais
+ * (fusion #17 : messages interactifs non pris en charge par l'API Groupes).
+ * Ici plutôt que dans omnichannel-publication-service.ts ou
+ * whatsapp-group-service.ts pour éviter un import circulaire (omnichannel
+ * importe déjà whatsapp-group-service.ts). Libellé générique "Voir plus"
+ * pour un seul produit ; "Voir : {nom}" au pluriel, tronqué à la limite de
+ * 64 caractères de l'API Bot Telegram
+ * (core.telegram.org/bots/api#inlinekeyboardbutton).
+ */
+export function buildProductButtons(products: CatalogProductSummary[], origin: string): { text: string; url: string }[] {
+  const withSlug = products.filter((p): p is CatalogProductSummary & { slug: string } => Boolean(p.slug));
+  return withSlug.map((product) => {
+    const label = withSlug.length === 1 ? "Voir plus" : `Voir : ${product.name}`;
+    const text = label.length > 64 ? `${label.slice(0, 63)}…` : label;
+    return { text, url: `${origin}/produits/${product.slug}` };
+  });
+}

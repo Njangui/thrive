@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { env } from "@/lib/env";
 
 export interface TenantContext {
   organizationId: string;
@@ -148,6 +149,55 @@ export const resolveRequestOrigin = cache(async function resolveRequestOrigin():
   const protocol = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
   return `${protocol}://${host}`;
 });
+
+/**
+ * Équivalent de `resolveRequestOrigin()` pour les contextes SANS requête
+ * HTTP entrante d'un visiteur du tenant — cron (`process-telegram-publications`),
+ * webhook entrant d'un provider tiers (Zernio/Telegram, dont le `host` est
+ * celui de LA PLATEFORME qui reçoit le webhook, jamais celui du tenant),
+ * job de campagne planifiée. `headers()`/`resolveRequestOrigin()` n'y sont
+ * d'aucun secours : aucun visiteur n'est "sur" le domaine du tenant à ce
+ * moment-là. Repart donc de la DB plutôt que de la requête courante.
+ *
+ * Même mise en garde que `resolveRequestOrigin` ci-dessus, pour les mêmes
+ * raisons : `env.NEXT_PUBLIC_APP_URL` est le domaine générique de la
+ * plateforme, jamais celui, réel, du tenant — corrigé le 19/09/2026 après
+ * un lien produit partagé par un tenant sur son propre canal Telegram et
+ * pointant, une fois cliqué, vers le domaine générique au lieu du sien
+ * (404) ; voir `marketing-service.ts`, `omnichannel-publication-service.ts`,
+ * `whatsapp-group-service.ts`, `conversation-orchestrator.ts`, seuls
+ * autres endroits qui construisaient une URL publique tenant sans passer
+ * par l'une ou l'autre de ces deux fonctions.
+ *
+ * Priorité : domaine custom VÉRIFIÉ marqué principal (`is_primary`), sinon
+ * le premier domaine custom vérifié, sinon le sous-domaine plateforme
+ * (`{slug}.NEXT_PUBLIC_ROOT_DOMAIN`, toujours disponible — mêmes règles
+ * que `dashboard/site/page.tsx` pour l'aperçu du site). Ne lève jamais :
+ * une organisation introuvable retombe sur `NEXT_PUBLIC_APP_URL` plutôt
+ * que de faire échouer tout un envoi (le lien serait générique, mais
+ * l'envoi/la publication elle-même doit quand même partir).
+ */
+export async function getTenantPublicOrigin(organizationId: string): Promise<string> {
+  const supabase = getSupabaseServiceClient();
+
+  const [{ data: customDomain }, { data: org }] = await Promise.all([
+    supabase
+      .from("tenant_domains")
+      .select("domain")
+      .eq("organization_id", organizationId)
+      .eq("verified", true)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("organizations").select("slug").eq("id", organizationId).maybeSingle(),
+  ]);
+
+  if (customDomain?.domain) return `https://${customDomain.domain}`;
+  if (org?.slug) return `https://${org.slug}.${env.NEXT_PUBLIC_ROOT_DOMAIN}`;
+
+  console.warn(`getTenantPublicOrigin(${organizationId}): organisation introuvable, repli sur NEXT_PUBLIC_APP_URL.`);
+  return env.NEXT_PUBLIC_APP_URL;
+}
 
 // `buildWhatsAppLink` vit désormais dans src/lib/whatsapp.ts (fonction
 // pure, sans dépendance à next/headers ni à React `cache()`) — réexportée

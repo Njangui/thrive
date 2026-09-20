@@ -4,8 +4,10 @@ import type {
   MessageFailedEvent,
   ProviderAccountStatusUpdatedEvent,
   SocialPostStatusUpdatedEvent,
+  CommentReceivedEvent,
+  ExternalPostTrackedEvent,
 } from "@/domain/events/domain-events";
-import type { ZernioInboxWebhookEvent, ZernioPostWebhookEvent } from "./types";
+import type { ZernioInboxWebhookEvent, ZernioPostWebhookEvent, ZernioExternalPostWebhookEvent } from "./types";
 
 /**
  * Traduit un événement webhook Zernio (format confirmé, voir types.ts) en
@@ -89,15 +91,47 @@ export function mapZernioEventToDomainEvent(
       return event;
     }
 
+    // Lot 5 (20/09/2026) — ferme le TODO laissé par le Lot M/I ("un
+    // webhook temps réel dédié reste à construire") : synchronisation
+    // temps réel des commentaires, en complément (pas en remplacement)
+    // du pull manuel existant (social-comment-service.ts::
+    // syncCommentsForPost, conservé pour un rattrapage à la demande).
+    // `comment.message`/`comment.id` sont considérés requis (par analogie
+    // avec la ressource REST confirmée, voir types.ts) — un event sans
+    // l'un des deux est ignoré plutôt que de stocker un commentaire
+    // incomplet. `post.id` manquant = event inexploitable (on ne peut
+    // rattacher le commentaire à aucun post, même en créant une ligne à
+    // la volée) — jamais deviné.
+    case "comment.received": {
+      if (!raw.comment?.id || !raw.comment?.message || !raw.post?.id) {
+        return null;
+      }
+
+      const event: CommentReceivedEvent = {
+        type: "COMMENT_RECEIVED",
+        organizationId,
+        occurredAt: raw.timestamp,
+        externalEventId: raw.id,
+        sourceProvider: "zernio",
+        payload: {
+          providerPostId: raw.post.id,
+          providerAccountId: raw.account.id,
+          platform: raw.account.platform,
+          externalCommentId: raw.comment.id,
+          authorName: raw.comment.from?.name,
+          content: raw.comment.message,
+        },
+      };
+      return event;
+    }
+
     // Confirmés (types.ts) mais pas encore consommés par une fonctionnalité
     // CRESYVA dans ce lot : conversation.started, message.sent/edited/
-    // deleted/delivered/read, reaction.received, comment.received (couvert
-    // séparément par la synchronisation manuelle existante,
-    // social-comment-service.ts — un webhook temps réel dédié reste à
-    // construire), review.new/updated (aucune fonctionnalité "avis" dans
-    // CRESYVA à ce jour — voir RAPPORT_LOT_3.md, section Missing). Logué
-    // proprement plutôt que silencieusement ignoré (section 44 : "Les
-    // événements non supportés doivent être loggés proprement").
+    // deleted/delivered/read, reaction.received, review.new/updated
+    // (aucune fonctionnalité "avis" dans CRESYVA à ce jour — voir
+    // RAPPORT_LOT_3.md, section Missing). Logué proprement plutôt que
+    // silencieusement ignoré (section 44 : "Les événements non supportés
+    // doivent être loggés proprement").
     default:
       console.info(`Zernio webhook: événement "${raw.event}" reçu mais non traité par ce lot (id=${raw.id}).`);
       return null;
@@ -202,4 +236,33 @@ export function mapZernioPostEventToDomainEvent(
     default:
       return null;
   }
+}
+
+/**
+ * Lot 5 — traduit un événement `post.external.*` (post détecté
+ * nativement sur la plateforme, voir types.ts) en `EXTERNAL_POST_TRACKED`.
+ * Volontairement séparé de `mapZernioPostEventToDomainEvent` ci-dessus :
+ * forme de payload différente (`ZernioExternalPostWebhookPost`, pas
+ * `ZernioPostResource`) et sémantique différente (un post qui existe
+ * DÉJÀ sur la plateforme, jamais un statut de publication CRESYVA).
+ */
+export function mapZernioExternalPostEventToDomainEvent(
+  raw: ZernioExternalPostWebhookEvent,
+  organizationId: string,
+): ExternalPostTrackedEvent | null {
+  if (!raw.post?.id) return null;
+
+  return {
+    type: "EXTERNAL_POST_TRACKED",
+    organizationId,
+    occurredAt: raw.timestamp,
+    externalEventId: raw.id,
+    sourceProvider: "zernio",
+    payload: {
+      providerPostId: raw.post.id,
+      providerAccountId: raw.account.id,
+      platform: raw.post.platform ?? raw.account.platform,
+      deleted: raw.event === "post.external.deleted",
+    },
+  };
 }

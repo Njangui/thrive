@@ -1,6 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { ValidationError } from "@/lib/errors";
-import { getOrganizationPlanKey, getEntitlementLimit } from "./plans-repository";
+import { getOrganizationPlanKey, getEntitlementLimit, type PlanKey } from "./plans-repository";
 
 /**
  * ⚠️ Ce fichier n'existait PAS dans le code source fourni pour ce lot,
@@ -196,6 +196,41 @@ export async function initializeCreditBalance(organizationId: string, includedCr
 
   if (error) {
     throw new Error(`Impossible d'initialiser le solde de crédits IA: ${error.message}`);
+  }
+}
+
+/**
+ * BUG CORRIGÉ (20/09/2026, audit suite signalement utilisateur) —
+ * `ai_credit_balances` est un SNAPSHOT pris une seule fois par
+ * `initializeCreditBalance` à l'onboarding (`ignoreDuplicates: true` :
+ * n'écrase JAMAIS une ligne existante). Aucune fonction de ce fichier ne
+ * rafraîchissait `included_credits` quand une organisation changeait
+ * RÉELLEMENT de palier — y compris via le vrai parcours de paiement
+ * (`subscription-payment-service.ts::markPaymentCompleted`, cas
+ * `plan_subscription`) : un client qui upgrade Discover -> Pro voyait son
+ * `plan_key` changer, mais gardait le plafond de crédits IA de son ancien
+ * palier indéfiniment. Symptôme observé : suggestion de réponse IA aux
+ * commentaires qui échoue silencieusement (`consumeCredit` refuse, aucun
+ * message d'erreur ne remonte à l'écran — voir comment-actions.ts).
+ *
+ * Contrairement à `initializeCreditBalance`, ÉCRASE volontairement une
+ * ligne existante (pas de `ignoreDuplicates`) : un changement de palier
+ * RÉEL est un nouveau cycle de facturation, on repart sur `used_credits
+ * = 0` plutôt que de conserver une consommation partielle de l'ancien
+ * palier. À appeler UNIQUEMENT sur un changement de palier confirmé
+ * (paiement réussi) — jamais pour un simple rafraîchissement d'affichage.
+ */
+export async function resetCreditBalanceForPlan(organizationId: string, planKey: PlanKey): Promise<void> {
+  const includedCredits = await getEntitlementLimit(planKey, "ai_credits");
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase.from("ai_credit_balances").upsert(
+    { organization_id: organizationId, included_credits: includedCredits, used_credits: 0 },
+    { onConflict: "organization_id" },
+  );
+
+  if (error) {
+    throw new Error(`Impossible de réinitialiser le solde de crédits IA (changement de palier): ${error.message}`);
   }
 }
 

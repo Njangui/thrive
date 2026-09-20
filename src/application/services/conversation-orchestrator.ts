@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { matchFaq } from "./faq-resolver";
 import { detectBusinessInfoTopic, resolveBusinessInfo } from "./business-info-resolver";
 import { getActiveProducts, searchProductsByName, formatProductDiscoveryMessage } from "./catalog-service";
@@ -95,10 +95,11 @@ export async function routeMessage(
   const normalizedMessage = normalize(message);
   if (PRODUCT_DISCOVERY_KEYWORDS.some((k) => normalizedMessage.includes(normalize(k)))) {
     const products = await getActiveProducts(organizationId, 3);
+    const tenantOrigin = await getTenantPublicOrigin(organizationId);
     const reply = formatProductDiscoveryMessage(
       products,
-      env.NEXT_PUBLIC_APP_URL,
-      `${env.NEXT_PUBLIC_APP_URL}/produits`,
+      tenantOrigin,
+      `${tenantOrigin}/produits`,
     );
     // Lot D : mémorise les produits montrés pour qu'une référence comme
     // "celle à 25 000" soit compréhensible par l'IA au tour suivant.
@@ -114,10 +115,11 @@ export async function routeMessage(
   for (const word of candidateWords) {
     const matches = await searchProductsByName(organizationId, word, 3);
     if (matches.length > 0) {
+      const tenantOrigin = await getTenantPublicOrigin(organizationId);
       const reply = formatProductDiscoveryMessage(
         matches,
-        env.NEXT_PUBLIC_APP_URL,
-        `${env.NEXT_PUBLIC_APP_URL}/produits`,
+        tenantOrigin,
+        `${tenantOrigin}/produits`,
       );
       // Lot D : idem — mémorise les résultats montrés pour ce mot-clé.
       await rememberMentionedProducts(organizationId, conversationId, matches.map((p) => p.id));

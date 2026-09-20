@@ -95,6 +95,21 @@ activation automatique via le webhook inbox. Plus aucun "TODO" sur ce
 point : voir `RAPPORT_LOT_M.md` pour le détail. `RAPPORT_LOT_F.md` reste
 la référence historique de pourquoi ce trou existait au départ.
 
+## Boutons « Voir plus » (fusion #17, ex-FUSION_14 de la branche liens-tenant)
+
+Un lien produit affiché en clair peut être remplacé par un bouton. Le support
+réel dépend du canal — `OutboundMessage.buttons` est ignoré par les canaux qui
+ne le gèrent pas.
+
+| Canal | Bouton | Statut |
+|---|---|---|
+| Telegram | Oui, plusieurs (un par produit, un par ligne) — `reply_markup.inline_keyboard`, sur tous les types d'envoi, par URL comme par téléversement | CONFIRMÉ (core.telegram.org/bots/api) |
+| WhatsApp 1:1 via Zernio | Oui, **un seul** (`interactive.type = "cta_url"`), en fenêtre de session (24 h) | CONFIRMÉ (docs.zernio.com : la forme `interactive` reprend l'objet Cloud API de Meta ; SDK `zernio-dev/chat-sdk-adapter`). **Aucun appelant ne l'utilise aujourd'hui** |
+| **Groupes WhatsApp** | **Non — jamais de bouton** | Les messages interactifs sont listés comme NON pris en charge par l'API Groupes (docs 360dialog, guide Unipile, sept. 2026) ; docs.zernio.com ne dit rien de contraire. Un envoi de groupe rejeté ferait échouer toute la diffusion, le lien n'étant plus dans le texte. Les groupes gardent donc leurs liens en texte. **À re-tester avec un vrai groupe avant d'envisager de l'activer.** |
+
+Le stockage des boutons des publications Telegram *programmées* est la colonne
+`telegram_publications.buttons` (migration `0065`).
+
 ## Publications sociales — synchronisation des résultats (Lot M, Partie 2)
 
 Le Lot H avait laissé `docs/ZERNIO_INTEGRATION.md` avec un point
@@ -167,10 +182,12 @@ d'intégration. **Verdict : les deux sont CONFIRMÉES.**
 
 ### Limites documentées
 
-- Les réponses de lecture sont mises en cache jusqu'à 10 minutes côté
-  Zernio — ce n'est **pas un flux temps réel**. `syncCommentsForPost` est
-  donc un pull explicite (bouton "Vérifier les commentaires" dans le
-  dashboard), jamais un polling automatique en tâche de fond.
+- Les réponses de lecture (`GET /v1/inbox/comments/{postId}`) sont mises
+  en cache jusqu'à 10 minutes côté Zernio — un pull explicite via cette
+  route n'est donc jamais parfaitement temps réel. `syncCommentsForPost`
+  reste à ce titre un pull À LA DEMANDE (bouton "Forcer une vérification"
+  dans le dashboard), conservé comme filet de rattrapage — voir point
+  suivant pour le chemin réellement temps réel, câblé au Lot 5.
 - LinkedIn nécessite un compte "organisation" (page d'entreprise) côté
   Zernio — un profil LinkedIn personnel connecté n'expose pas de
   commentaires via cette API (limite de la plateforme LinkedIn elle-même,
@@ -179,11 +196,41 @@ d'intégration. **Verdict : les deux sont CONFIRMÉES.**
   string sur l'appel `DELETE .../hide` (démasquer) — déduit par symétrie
   avec `hide`, faute d'exemple de code officiel pour ce cas précis (voir
   commentaire dans `zernio/client.ts::unhideInboxComment`).
-- **Non exploité en V1** (existe, documenté, mais volontairement hors
-  périmètre du cahier Lot I qui ne demandait que lecture + réponse) : le
-  webhook `comment.received` permettrait une synchronisation temps réel
-  au lieu du pull actuel — piste V2 si le besoin réel se confirme, pas
-  construit préventivement (section 62 : ne pas sur-engineer).
+- **CÂBLÉ au Lot 5 (20/09/2026)**, contrairement à la note originale de ce
+  paragraphe qui le laissait "non exploité en V1" : le webhook
+  `comment.received` (docs.zernio.com/webhooks/inbox, CONFIRMÉ, "Fired
+  when a new comment arrived on a tracked post") pousse maintenant les
+  commentaires en temps réel vers `/api/webhooks/zernio` — voir
+  `zernio/mapper.ts::mapZernioEventToDomainEvent` (case `comment.received`)
+  et `social-post-tracking-service.ts::handleIncomingComment`. Combiné
+  avec `post.external.created`/`updated`/`deleted` (même page,
+  CONFIRMÉ : "Zernio's background sync detected a post authored natively
+  on the platform... `post.source` is always "external" and `post.id` is
+  the platform-native post id", ~horaire, PAS temps réel) via
+  `social-post-tracking-service.ts::trackExternalPost`, ceci couvre
+  maintenant aussi les commentaires sur un post publié DIRECTEMENT sur la
+  plateforme (hors CRESYVA) — jusque-là structurellement impossible
+  (`social_comments.social_post_id` référence `social_posts(id)` en NOT
+  NULL, et aucune ligne `social_posts` n'existe pour un post non publié
+  par CRESYVA — voir 0064_external_post_tracking.sql, qui ajoute
+  `social_posts.source` et l'index unique permettant cet upsert).
+  Limite honnête à communiquer au commerçant : un post fait directement
+  sur la plateforme peut mettre jusqu'à ~1h avant d'être "tracké" par
+  Zernio (premier passage de la synchro arrière-plan) — ses commentaires
+  ne deviennent temps réel qu'APRÈS ce premier passage ; le pull manuel
+  reste utile pour ce cas précis en attendant. **NON CONFIRMÉ** : forme
+  exacte des champs internes de `comment`/`post` sur le payload webhook
+  lui-même (la page consultée ne les énumère pas) — repris par analogie
+  avec la ressource `comment` confirmée côté REST
+  (`ZernioInboxComment` : id/message/from/createdTime), jamais deviné
+  au-delà (voir zernio/types.ts) ; à vérifier avec un vrai payload de
+  test ("Test webhook", dashboard Zernio) avant mise en prod, même
+  réserve que le reste de ce document. **ACTION REQUISE CÔTÉ ZERNIO,
+  PAS CODE** : `comment.received`, `post.external.created`,
+  `post.external.updated` et `post.external.deleted` doivent être ajoutés
+  aux événements souscrits du webhook de chaque tenant (dashboard Zernio
+  — ce projet n'appelle aucune API de gestion des webhooks, vérifié par
+  recherche exhaustive).
   `like`/`unlike`, suppression de commentaire, "réponse privée"
   (Facebook/Instagram uniquement) et comment-to-DM existent aussi côté
   Zernio mais ne sont ni demandés par le cahier ni utilisés ici.

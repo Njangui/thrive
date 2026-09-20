@@ -4,7 +4,7 @@ import type { WhatsAppGroupSummary } from "@/domain/ports/messaging-provider";
 import { canUseFeature } from "./entitlements-service";
 import { getProductsByIds, type CatalogProductSummary } from "./catalog-service";
 import { notifyOrgAdmins } from "./notification-service";
-import { env } from "@/lib/env";
+import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { NotFoundError, QuotaExceededError, ValidationError } from "@/lib/errors";
 
 /**
@@ -49,6 +49,15 @@ export interface ConnectedGroup {
    * recevoir, plutôt que de le découvrir après coup dans l'historique.
    */
   isSendable: boolean;
+  /**
+   * L'identifiant à passer en `externalThreadId` de MessagingProvider.sendMessage
+   * (PAS `externalId` ci-dessus, qui est l'identifiant du groupe WhatsApp
+   * lui-même, pas la conversation Zernio associée — corrigé le 19/09/2026,
+   * omnichannel-publication-service.ts confondait les deux, ce qui aurait
+   * fait échouer toute diffusion immédiate vers un groupe WhatsApp). `null`
+   * tant que `isSendable` est `false`.
+   */
+  zernioConversationId: string | null;
   connectedAt: string;
 }
 
@@ -125,6 +134,7 @@ function mapGroupRow(row: WhatsAppGroupRow): ConnectedGroup {
     participantCount: row.participant_count,
     status: row.status as ConnectedGroup["status"],
     isSendable: row.zernio_conversation_id !== null,
+    zernioConversationId: row.zernio_conversation_id,
     connectedAt: row.connected_at,
   };
 }
@@ -457,16 +467,22 @@ export async function syncGroupsFromZernio(organizationId: string): Promise<Sync
 /**
  * Construit le message groupé (un seul message, produits listés — voir
  * group_broadcast_targets, une ligne PAR GROUPE, pas par produit).
+ * `origin` = domaine public RÉEL du tenant (voir getTenantPublicOrigin,
+ * jamais env.NEXT_PUBLIC_APP_URL — corrigé le 19/09/2026, un lien pointait
+ * vers le domaine générique de la plateforme au lieu de celui du tenant).
+ * Les liens restent TOUJOURS en texte : aucun bouton pour les groupes
+ * WhatsApp (messages interactifs non pris en charge par l'API Groupes,
+ * voir OutboundMessage.buttons).
  * Exportée pour être testée sans dépendance DB.
  */
-export function formatGroupBroadcastMessage(products: CatalogProductSummary[]): string {
+export function formatGroupBroadcastMessage(products: CatalogProductSummary[], origin: string): string {
   if (products.length === 0) return "";
 
   const lines = ["📢 Nouveautés :", ""];
   for (const p of products) {
     lines.push(`• ${p.name} — ${p.unitPrice.toLocaleString("fr-FR")} FCFA`);
     if (p.description) lines.push(`  ${p.description}`);
-    if (p.slug) lines.push(`  ${env.NEXT_PUBLIC_APP_URL}/produits/${p.slug}`);
+    if (p.slug) lines.push(`  ${origin}/produits/${p.slug}`);
     lines.push("");
   }
   return lines.join("\n").trim();
@@ -819,7 +835,8 @@ async function processOneBroadcast(
   const orderedProducts = productIds
     .map((id) => productsById.get(id))
     .filter((p): p is CatalogProductSummary => Boolean(p));
-  const messageContent = formatGroupBroadcastMessage(orderedProducts);
+  const tenantOrigin = await getTenantPublicOrigin(organizationId);
+  const messageContent = formatGroupBroadcastMessage(orderedProducts, tenantOrigin);
   // Lot 3 (audit master prompt §35) : une seule pièce jointe possible par
   // message côté Zernio — jointe uniquement quand la diffusion ne porte
   // que sur UN SEUL produit (sinon le texte les liste tous, mais joindre

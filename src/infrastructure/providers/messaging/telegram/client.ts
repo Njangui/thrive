@@ -1,4 +1,4 @@
-import type { TelegramApiResponse, TelegramFile, TelegramMessage, TelegramSendAudioParams, TelegramSendDocumentParams, TelegramSendMessageParams, TelegramSendPhotoParams, TelegramSendVideoParams, TelegramSendVoiceParams, TelegramUser } from "./types";
+import type { TelegramApiResponse, TelegramFile, TelegramInlineKeyboardMarkup, TelegramMessage, TelegramSendAudioParams, TelegramSendDocumentParams, TelegramSendMessageParams, TelegramSendPhotoParams, TelegramSendVideoParams, TelegramSendVoiceParams, TelegramUser } from "./types";
 
 /**
  * Client bas niveau Bot API Telegram pour le canal CLIENT — un tenant
@@ -61,6 +61,8 @@ export class TelegramMessagingClient {
     chatId: number | string,
     file: { data: Uint8Array; fileName: string; contentType: string },
     caption?: string,
+    /** Boutons inline : en multipart, `reply_markup` doit être une chaîne JSON (core.telegram.org/bots/api#sending-files). */
+    replyMarkup?: TelegramInlineKeyboardMarkup,
   ): Promise<TelegramMessage> {
     const method = { photo: "sendPhoto", video: "sendVideo", audio: "sendAudio", voice: "sendVoice", document: "sendDocument" }[kind];
     return this.callMultipart<TelegramMessage>(
@@ -68,6 +70,7 @@ export class TelegramMessagingClient {
       {
         chat_id: String(chatId),
         ...(caption ? { caption } : {}),
+        ...(replyMarkup ? { reply_markup: JSON.stringify(replyMarkup) } : {}),
         ...(kind === "video" ? { supports_streaming: "true" } : {}),
       },
       kind,

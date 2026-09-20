@@ -76,6 +76,11 @@ export function buildRelatedEntityUrl(type: string | null, id: string | null): s
   // forfait/add-on (subscription-payment-service.ts), qui n'ont rien à
   // voir avec Canaux.
   if (type === "phone_number") return `/dashboard/channels`;
+  // Lot 5 — nouveau commentaire social (temps réel, voir
+  // social-post-tracking-service.ts). Pas de page de détail par
+  // commentaire en V1, même logique que "social_post" ci-dessus : on
+  // renvoie vers la liste, où le commentaire concerné est visible.
+  if (type === "social_comment") return `/dashboard/comments`;
   return null;
 }
 

@@ -109,19 +109,19 @@ describe("formatGroupBroadcastMessage", () => {
   ];
 
   it("liste chaque produit avec nom, prix, description, lien — jamais 'undefined'", () => {
-    const message = formatGroupBroadcastMessage(PRODUCTS);
+    const message = formatGroupBroadcastMessage(PRODUCTS, "https://monsalon.cresyva.app");
 
     expect(message).toContain("Sac en cuir");
     // fr-FR utilise une espace fine insécable (U+202F) comme séparateur —
     // on matche sur les chiffres et "FCFA" plutôt que l'espace exact.
     expect(message).toMatch(/25.000\sFCFA/);
     expect(message).toContain("Fait main");
-    expect(message).toContain("/produits/sac-en-cuir");
+    expect(message).toContain("https://monsalon.cresyva.app/produits/sac-en-cuir");
     expect(message).not.toContain("undefined");
   });
 
   it("retourne une chaîne vide pour un catalogue vide (jamais un message vide envoyé aux groupes)", () => {
-    expect(formatGroupBroadcastMessage([])).toBe("");
+    expect(formatGroupBroadcastMessage([], "https://monsalon.cresyva.app")).toBe("");
   });
 });
 

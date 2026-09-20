@@ -50,8 +50,56 @@ export interface ZernioInboxWebhookConversation {
 }
 
 export interface ZernioInboxWebhookAccount {
-  id: string; // confirmé : clé de routage multi-tenant pour les events inbox
+  id: string; // confirmé : clé de routage multi-tenant pour les events `messaging`
   platform?: string;
+  /**
+   * Lot 5 — CONFIRMÉ (docs.zernio.com/webhooks/inbox : "Message payloads
+   * carry an `account` block with `accountId` and `profileId`, so one
+   * endpoint can serve many profiles"). Clé de routage pour les events
+   * `comment.received`/`post.external.*` — voir resolve-organization.ts
+   * ::resolveOrganizationIdBySocialProfile pour pourquoi `id` seul n'est
+   * PAS fiable pour ces deux events précis.
+   */
+  profileId?: string;
+}
+
+/**
+ * Lot 5 (20/09/2026) — payload de `comment.received`
+ * (docs.zernio.com/webhooks/inbox, "Fired when a new comment arrived on
+ * a tracked post"). CONFIRMÉ : événement câblé sur un objet `comment`
+ * distinct (pas fusionné dans `message`). Champs internes de `comment`
+ * NON confirmés verbatim au niveau DU WEBHOOK (page consultée ne les
+ * énumère pas) — repris PAR ANALOGIE avec la ressource `comment`
+ * CONFIRMÉE de l'API REST `GET /v1/inbox/comments/{postId}` (voir
+ * `social/zernio/types.ts::ZernioInboxComment`, qui expose exactement
+ * `id`/`message`/`from`/`createdTime`/`canReply`/`canHide`) — même
+ * discipline que `ZernioPostWebhookEvent` plus bas, qui réutilise par
+ * analogie la ressource `post` confirmée côté REST. À vérifier avec un
+ * vrai payload ("Test webhook", dashboard Zernio) avant mise en prod.
+ */
+export interface ZernioInboxWebhookCommentAuthor {
+  id?: string;
+  name?: string;
+}
+
+export interface ZernioInboxWebhookComment {
+  id: string;
+  message?: string;
+  from?: ZernioInboxWebhookCommentAuthor;
+  createdTime?: string;
+}
+
+/**
+ * Référence minimale au post commenté, portée par `comment.received`.
+ * CONFIRMÉ uniquement au niveau du principe (l'événement dit "sur un
+ * post tracké" et le SDK chat-sdk-adapter documente le format d'id de
+ * thread `zernio:{accountId}:comment:{postId}`, confirmant qu'un
+ * `postId` identifie bien le post côté payload) — le nom exact du champ
+ * (`post.id` supposé, par symétrie avec `post.external.*` ci-dessous, où
+ * `post.id` EST confirmé) reste à vérifier avec un vrai payload de test.
+ */
+export interface ZernioInboxWebhookPostRef {
+  id: string;
 }
 
 export interface ZernioInboxWebhookEvent {
@@ -84,6 +132,41 @@ export interface ZernioInboxWebhookEvent {
   account: ZernioInboxWebhookAccount;
   metadata?: Record<string, unknown> | null;
   timestamp: string;
+  /** Lot 5 — présent uniquement sur `comment.received` (voir ci-dessus). */
+  comment?: ZernioInboxWebhookComment;
+  /** Lot 5 — présent uniquement sur `comment.received` (voir ci-dessus). */
+  post?: ZernioInboxWebhookPostRef;
+}
+
+/**
+ * Bouton CTA URL interactif WhatsApp — forme `interactive` CONFIRMÉE par
+ * recoupement de 2 sources indépendantes le 19/09/2026 : l'exemple
+ * officiel `client.sendInteractive(...)` du SDK `@zernio/chat-sdk-adapter`
+ * (github.com/zernio-dev/chat-sdk-adapter) et la documentation Meta Cloud
+ * API elle-même (developers.facebook.com, "Interactive Call-to-Action URL
+ * Button Messages") — docs.zernio.com confirme que la forme `interactive`
+ * "mirrors Meta's Cloud API `interactive` object verbatim". Message de
+ * session UNIQUEMENT (fenêtre de 24h ouverte par le dernier message
+ * entrant du contact) — déjà toujours le cas ici, ZernioAdapter.sendMessage
+ * exige déjà externalThreadId, aucun envoi "à froid" n'existe dans ce
+ * projet (voir adapter.ts). UN SEUL bouton par message (limite du type
+ * `cta_url` — contrairement à Telegram, WhatsApp ne permet pas plusieurs
+ * boutons URL distincts dans un même message via ce type).
+ *
+ * ⚠️ Fusion #17 : confirmé pour les conversations 1:1 UNIQUEMENT. NON confirmé
+ * — et probablement refusé — pour les GROUPES WhatsApp : la documentation de
+ * l'API Groupes (360dialog, Unipile, sept. 2026) liste les messages
+ * interactifs comme non pris en charge, et docs.zernio.com ne dit rien de
+ * contraire. Aucun appelant de groupe ne passe donc de bouton (voir
+ * omnichannel-publication-service.ts / whatsapp-group-service.ts).
+ */
+export interface ZernioInteractiveCtaUrl {
+  type: "cta_url";
+  body: { text: string };
+  action: {
+    name: "cta_url";
+    parameters: { display_text: string; url: string };
+  };
 }
 
 /** Body confirmé pour répondre dans une conversation inbox existante. */
@@ -100,6 +183,8 @@ export interface ZernioSendInboxMessagePayload {
    */
   attachmentUrl?: string;
   attachmentType?: "image" | "video" | "audio" | "file";
+  /** Voir ZernioInteractiveCtaUrl. Prioritaire sur `message` quand présent (WhatsApp — un message est soit texte, soit interactif, jamais les deux). */
+  interactive?: ZernioInteractiveCtaUrl;
 }
 
 export interface ZernioSendInboxMessageResponse {
@@ -232,9 +317,55 @@ export interface ZernioPostWebhookEvent {
   timestamp: string;
 }
 
-export type ZernioWebhookEvent = ZernioInboxWebhookEvent | ZernioPostWebhookEvent;
+/**
+ * Lot 5 (20/09/2026) — payload pour `post.external.created` /
+ * `post.external.updated` / `post.external.deleted`
+ * (docs.zernio.com/webhooks/posts) : "Zernio's background sync detected
+ * a post authored natively on the platform, outside Zernio... `post.source`
+ * is always "external" and `post.id` is the platform-native post id."
+ * CONFIRMÉ : `post.source === "external"`, `post.id`. Détection ~horaire
+ * (poll), pas temps réel — voir social-post-tracking-service.ts.
+ * Champs additionnels décrits en prose par la doc (texte, media) mais
+ * NON énumérés verbatim au niveau champ sur la page consultée — jamais
+ * devinés : seuls `id`/`source`/`platform` sont lus ici, le reste
+ * attend un vrai payload de test avant d'être exploité (même réserve
+ * que le reste de ce fichier).
+ */
+export interface ZernioExternalPostWebhookAccount {
+  id: string;
+  platform?: string;
+  /** Voir ZernioInboxWebhookAccount.profileId — même raisonnement, même clé de routage. */
+  profileId?: string;
+}
 
-/** Distingue les deux catégories d'événements Zernio partageant le même webhook (voir app/api/webhooks/zernio/route.ts). */
+export interface ZernioExternalPostWebhookPost {
+  id: string;
+  source: "external";
+  platform?: string;
+  deletedAt?: string;
+}
+
+export interface ZernioExternalPostWebhookEvent {
+  id: string;
+  event: "post.external.created" | "post.external.updated" | "post.external.deleted";
+  post: ZernioExternalPostWebhookPost;
+  account: ZernioExternalPostWebhookAccount;
+  timestamp: string;
+}
+
+export type ZernioWebhookEvent = ZernioInboxWebhookEvent | ZernioPostWebhookEvent | ZernioExternalPostWebhookEvent;
+
+/**
+ * Distingue un event `post.external.*` (post détecté nativement sur la
+ * plateforme, HORS pipeline de publication CRESYVA) d'un event `post.*`
+ * "normal" ci-dessous — à vérifier EN PREMIER, avant `isZernioPostEvent`
+ * (qui matcherait sinon aussi sur le préfixe `post.`).
+ */
+export function isZernioExternalPostEvent(raw: { event: string }): raw is ZernioExternalPostWebhookEvent {
+  return raw.event.startsWith("post.external.");
+}
+
+/** Distingue les catégories d'événements Zernio partageant le même webhook (voir app/api/webhooks/zernio/route.ts). */
 export function isZernioPostEvent(raw: { event: string }): raw is ZernioPostWebhookEvent {
-  return raw.event.startsWith("post.");
+  return raw.event.startsWith("post.") && !isZernioExternalPostEvent(raw);
 }

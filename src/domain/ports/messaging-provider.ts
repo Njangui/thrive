@@ -56,6 +56,25 @@ export interface OutboundMessage {
   uploadBinary?: boolean;
   attachmentFileName?: string;
   attachmentMimeType?: string;
+  /**
+   * Boutons URL sous le message (ex. « Voir plus » vers la fiche produit).
+   * Support réel par canal — jamais deviné :
+   *  - Telegram : plusieurs boutons (un par ligne), sur TOUS les types d'envoi
+   *    (texte, photo, vidéo, audio, vocal, document ; par URL comme par
+   *    téléversement). API Bot `reply_markup.inline_keyboard`, CONFIRMÉ
+   *    core.telegram.org/bots/api.
+   *  - WhatsApp via Zernio : UN SEUL bouton (`interactive.type = "cta_url"`),
+   *    messages 1:1 en fenêtre de session uniquement (voir
+   *    zernio/types.ts::ZernioInteractiveCtaUrl). 0 ou 2+ boutons : repli sur
+   *    le texte simple.
+   *    ⚠️ NE PAS passer de boutons pour un GROUPE WhatsApp : la documentation de
+   *    l'API Groupes (360dialog, Unipile) liste les messages interactifs comme
+   *    non pris en charge, et rien n'indique que Zernio fait exception. Un envoi
+   *    de groupe rejeté ferait échouer toute la diffusion (le lien étant retiré
+   *    du texte quand un bouton l'accompagne).
+   *  - Autres canaux : ignoré silencieusement.
+   */
+  buttons?: { text: string; url: string }[];
 }
 
 export interface SendMessageResult {

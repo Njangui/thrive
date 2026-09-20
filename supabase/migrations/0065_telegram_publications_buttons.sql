@@ -1,0 +1,25 @@
+-- Boutons inline Telegram ("Voir plus" / "Voir : {produit}") pour les
+-- publications programmées. NULL = aucun bouton (comportement actuel
+-- inchangé, ex: publication texte libre du composeur générique). Rempli
+-- uniquement par le chemin catalogue (omnichannel-publication-service.ts
+-- ::publishOmnichannel), lu et transmis à l'API Bot Telegram par
+-- processScheduledTelegramPublications (telegram-publication-service.ts)
+-- au moment de l'envoi effectif — voir reply_markup.inline_keyboard,
+-- core.telegram.org/bots/api#inlinekeyboardmarkup.
+--
+-- Forme stockée : [{ "text": "...", "url": "..." }, ...] — un objet par
+-- bouton/ligne, jamais imbriqué en lignes (contrairement à
+-- TelegramInlineKeyboardMarkup côté TypeScript) : la conversion en
+-- lignes (un bouton par ligne) se fait dans l'adapter au moment de
+-- l'envoi, pas ici — évite de dupliquer cette décision de mise en page
+-- dans la donnée stockée.
+--
+-- FUSION #17 : livrée à l'origine sous le nom `0056_telegram_publications_buttons.sql`
+-- (branche « liens tenant + boutons »). Renumérotée `0065` car `0056` est pris
+-- par `0056_service_images_and_specifications.sql` sur l'autre branche
+-- (même schéma que les collisions 0016/0038/0055 déjà rencontrées, voir
+-- docs/DATABASE.md). Rendue idempotente (`if not exists`) : si l'ancienne
+-- `0056_telegram_publications_buttons` a déjà été appliquée quelque part,
+-- rejouer celle-ci est sans effet au lieu d'échouer.
+alter table telegram_publications
+  add column if not exists buttons jsonb;
