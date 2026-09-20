@@ -40,24 +40,29 @@ async function inviteMemberAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const role = String(formData.get("role") ?? "") as MemberRole;
 
+  // Résultat capturé, redirection APRÈS le try/catch : redirect() lève NEXT_REDIRECT, que le
+  // catch avalerait (l'invitation réussie s'affichait « Erreur lors de l'invitation » et le
+  // lien de partage manuel n'apparaissait jamais).
+  let outcome: { kind: "success" | "error"; message: string; extra?: Record<string, string> };
   try {
     const result = await inviteMember(organizationId, email, role, membership.userId);
     if (result.emailDelivered) {
-      flashRedirect("success", `Invitation envoyée à ${email}.`);
+      outcome = { kind: "success", message: `Invitation envoyée à ${email}.` };
     } else {
       // Email non transmis (clé absente, domaine Resend non vérifié...) —
       // le lien reste garanti, affiché pour un partage manuel plutôt que
       // de laisser croire qu'un email est parti (cahier V3, EmailProvider).
-      flashRedirect(
-        "error",
-        `Invitation créée pour ${email}, mais l'email n'a pas pu être envoyé. Partagez ce lien manuellement :`,
-        { inviteUrl: result.inviteUrl },
-      );
+      outcome = {
+        kind: "error",
+        message: `Invitation créée pour ${email}, mais l'email n'a pas pu être envoyé. Partagez ce lien manuellement :`,
+        extra: { inviteUrl: result.inviteUrl },
+      };
     }
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de l'invitation.";
     flashRedirect("error", message);
   }
+  flashRedirect(outcome.kind, outcome.message, outcome.extra);
 }
 
 async function revokeInvitationAction(formData: FormData) {
@@ -68,11 +73,11 @@ async function revokeInvitationAction(formData: FormData) {
   const invitationId = String(formData.get("invitationId") ?? "");
   try {
     await revokeInvitation(organizationId, invitationId);
-    flashRedirect("success", "Invitation révoquée.");
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la révocation.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", "Invitation révoquée.");
 }
 
 async function updateMemberRoleAction(formData: FormData) {
@@ -85,11 +90,11 @@ async function updateMemberRoleAction(formData: FormData) {
 
   try {
     await updateMemberRole(organizationId, targetUserId, newRole, membership);
-    flashRedirect("success", "Rôle mis à jour.");
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors du changement de rôle.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", "Rôle mis à jour.");
 }
 
 async function removeMemberAction(formData: FormData) {
@@ -100,11 +105,11 @@ async function removeMemberAction(formData: FormData) {
   const targetUserId = String(formData.get("targetUserId") ?? "");
   try {
     await removeMember(organizationId, targetUserId, membership);
-    flashRedirect("success", "Membre retiré.");
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors du retrait.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", "Membre retiré.");
 }
 
 export default async function TeamPage({

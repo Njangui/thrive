@@ -1,4 +1,6 @@
+import { Fragment } from "react";
 import type { StorefrontSite } from "@/application/services/storefront-service";
+import { listActiveStorefrontVideos } from "@/application/services/catalog-video-service";
 import { getLandingSectionData, type LandingSectionData } from "@/application/services/landing-config-service";
 import type { LandingSectionType } from "@/domain/entities/landing";
 
@@ -15,6 +17,7 @@ import { FaqSection } from "./landing-sections/faq";
 import { BookingSection } from "./landing-sections/booking";
 import { ContactSection, LocationSection, SocialLinksSection } from "./landing-sections/contact";
 import { CtaSection } from "./landing-sections/cta";
+import { VideosSection } from "./landing-sections/videos";
 
 /**
  * Composition de la PAGE D'ACCUEIL de la vitrine.
@@ -64,11 +67,18 @@ export async function TenantLanding({
   );
   const dataByType = new Map<LandingSectionType, LandingSectionData | null>(dataEntries);
 
+  // Vidéos du catalogue : affichées automatiquement (pas une section à activer)
+  // tant qu'il en existe de NON EXPIRÉES — Zernio supprime les fichiers après
+  // 7 jours. Insérées après la première section « visuelle » présente.
+  const videos = await listActiveStorefrontVideos(tenant.organizationId, { limit: 3 });
+  const videosAnchor = (["products", "gallery", "services", "hero"] as const).find((type) => enabledSections.includes(type));
+
   const hasBookingSection = enabledSections.includes("booking");
 
   return (
     <>
       {enabledSections.map((type) => {
+        const section = (() => {
         switch (type) {
           case "hero":
             return (
@@ -138,6 +148,16 @@ export async function TenantLanding({
           default:
             return null;
         }
+        })();
+
+        return type === videosAnchor && videos.length > 0 ? (
+          <Fragment key={`${type}-with-videos`}>
+            {section}
+            <VideosSection videos={videos} site={site} />
+          </Fragment>
+        ) : (
+          section
+        );
       })}
     </>
   );

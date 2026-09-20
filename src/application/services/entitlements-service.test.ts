@@ -104,14 +104,14 @@ describe("canUseFeature", () => {
   });
 
   it("compte les lignes existantes pour une clé cumulative (whatsapp_groups)", async () => {
-    mockGetOrganizationPlanKey.mockResolvedValue("business");
+    mockGetOrganizationPlanKey.mockResolvedValue("pro");
     mockGetEntitlementLimit.mockResolvedValue(10);
     mockCountOrganizationRows.mockResolvedValue(7);
 
     const result = await canUseFeature("org-1", "whatsapp_groups", 2);
 
     expect(mockGetOrganizationPlanKey).toHaveBeenCalledWith("org-1");
-    expect(mockGetEntitlementLimit).toHaveBeenCalledWith("business", "whatsapp_groups");
+    expect(mockGetEntitlementLimit).toHaveBeenCalledWith("pro", "whatsapp_groups");
     // Lot F : ne compte que les groupes 'connected' contre le quota (voir
     // plans-repository.ts/countOrganizationRows — 3e argument optionnel et
     // rétrocompatible, ajouté par ce lot) — sinon déconnecter un groupe ne
@@ -384,7 +384,7 @@ describe("Tests de bordure — 99/100, 100/100, 101/100 par entitlement_key", ()
 
   describe("whatsapp_groups (cumulatif, countOrganizationRows)", () => {
     beforeEach(() => {
-      mockGetOrganizationPlanKey.mockResolvedValue("business");
+      mockGetOrganizationPlanKey.mockResolvedValue("pro");
       mockGetEntitlementLimit.mockResolvedValue(100);
     });
 
@@ -425,7 +425,7 @@ describe("Tests de bordure — 99/100, 100/100, 101/100 par entitlement_key", ()
 
   describe.each([["broadcast_contacts"], ["social_accounts"]])("%s (\"par action\", used=0)", (key) => {
     beforeEach(() => {
-      mockGetOrganizationPlanKey.mockResolvedValue("business");
+      mockGetOrganizationPlanKey.mockResolvedValue("pro");
       mockGetEntitlementLimit.mockResolvedValue(100);
     });
 
@@ -453,7 +453,7 @@ describe("Tests de bordure — 99/100, 100/100, 101/100 par entitlement_key", ()
     // 103, pas 100 — la ligne exacte que le master prompt demande de
     // vérifier explicitement ("le bonus add-ons s'additionne correctement
     // à la limite du plan dans chaque cas de bordure").
-    mockGetOrganizationPlanKey.mockResolvedValue("business");
+    mockGetOrganizationPlanKey.mockResolvedValue("pro");
     mockGetEntitlementLimit.mockResolvedValue(100);
     mockGetOrganizationAddonBonus.mockResolvedValue(3);
     mockCountOrganizationRows.mockResolvedValue(99);

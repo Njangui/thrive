@@ -1,9 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { getPlatformSettingNumber } from "./platform-settings-service";
 import { resolveCurrencyForCountry } from "./country-service";
-
-/** Filet de sécurité si platform_settings.trial_days est illisible/absent — voir createTrialSubscription. */
-const FALLBACK_TRIAL_DAYS = 14;
 
 /**
  * Lot B — accès bas niveau aux tables `plans` / `plan_entitlements` /
@@ -22,7 +18,7 @@ const FALLBACK_TRIAL_DAYS = 14;
  * d'acceptation Lot B).
  */
 
-export const PLAN_KEYS = ["starter", "business", "pro"] as const;
+export const PLAN_KEYS = ["free", "starter", "pro"] as const;
 export type PlanKey = (typeof PLAN_KEYS)[number];
 
 export type OrganizationSubscriptionStatus = "trialing" | "active" | "past_due" | "cancelled";
@@ -115,38 +111,59 @@ export async function getOrganizationSubscription(organizationId: string): Promi
 }
 
 /**
- * Crée la ligne d'abonnement par défaut à l'onboarding (section 78 :
- * plan "starter", essai de `trialDays` jours). Idempotent : si une ligne
- * existe déjà pour cette organisation (ne devrait pas arriver, l'org
- * vient d'être créée, mais on reste défensif), on ne l'écrase pas.
+ * Crée la ligne d'abonnement par défaut à l'onboarding — passage en mode
+ * freemium (sur demande explicite, la période d'essai est retirée) :
+ * plan "free" permanent, `status='active'` dès la création, aucune
+ * échéance (`trial_end`/`current_period_end` NULL). L'organisation reste
+ * sur ce plan indéfiniment tant qu'elle ne choisit pas explicitement de
+ * passer à un forfait payant (voir payPlanAction, subscription-payment-
+ * service.ts::initiatePayment) — plus de compte à rebours forçant une
+ * décision. Idempotent comme l'ancienne créateTrialSubscription : si une
+ * ligne existe déjà pour cette organisation, on ne l'écrase pas.
  */
-export async function createTrialSubscription(
-  organizationId: string,
-  planKey: PlanKey = "starter",
-  trialDays?: number,
-): Promise<void> {
+export async function createFreemiumSubscription(organizationId: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
-  // Lot G : durée d'essai configurable depuis /admin/addons
-  // (platform_settings.trial_days) au lieu de la constante 14 en dur —
-  // `trialDays` explicite (ex: un appelant qui veut forcer une durée
-  // précise) reste toujours prioritaire sur le réglage plateforme.
-  const effectiveTrialDays = trialDays ?? (await getPlatformSettingNumber("trial_days", FALLBACK_TRIAL_DAYS));
-  const trialStart = new Date();
-  const trialEnd = new Date(trialStart.getTime() + effectiveTrialDays * 24 * 60 * 60 * 1000);
 
   const { error } = await supabase.from("organization_subscriptions").upsert(
     {
       organization_id: organizationId,
-      plan_key: planKey,
-      status: "trialing",
-      trial_start: trialStart.toISOString(),
-      trial_end: trialEnd.toISOString(),
+      plan_key: "free",
+      status: "active",
+      trial_start: null,
+      trial_end: null,
+      current_period_end: null,
     },
     { onConflict: "organization_id", ignoreDuplicates: true },
   );
 
   if (error) {
     throw new Error(`Impossible de créer l'abonnement par défaut: ${error.message}`);
+  }
+}
+
+/**
+ * Repasse une organisation au plan "free" immédiatement, sans paiement
+ * (downgrade self-service depuis /dashboard/subscription) — distinct de
+ * `initiatePayment` (subscription-payment-service.ts), qui refuse
+ * explicitement `planKey==='free'` : il n'y a rien à facturer ici.
+ */
+export async function switchToFreePlan(organizationId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+
+  const { error } = await supabase
+    .from("organization_subscriptions")
+    .update({
+      plan_key: "free",
+      status: "active",
+      trial_start: null,
+      trial_end: null,
+      current_period_end: null,
+      last_renewal_reminder_sent_at: null,
+    })
+    .eq("organization_id", organizationId);
+
+  if (error) {
+    throw new Error(`Impossible de repasser au plan gratuit: ${error.message}`);
   }
 }
 

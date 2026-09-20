@@ -285,6 +285,25 @@ export async function appendServiceImage(organizationId: string, serviceId: stri
   if (error) throw new Error(`Impossible d'ajouter la photo: ${error.message}`);
 }
 
+/** Version plurielle — voir catalog-service.ts::appendProductImages (même correctif, même raisonnement). */
+export async function appendServiceImages(organizationId: string, serviceId: string, urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+  const existing = await listServiceImages(organizationId, serviceId);
+  const startPosition = existing.length > 0 ? Math.max(...existing.map((i) => i.position)) + 1 : 0;
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase.from("service_images").insert(
+    urls.map((url, index) => ({
+      organization_id: organizationId,
+      service_id: serviceId,
+      url,
+      position: startPosition + index,
+    })),
+  );
+
+  if (error) throw new Error(`Impossible d'ajouter les photos: ${error.message}`);
+}
+
 /** Referme l'écart des positions (toujours 0,1,2... contigu) après une suppression — voir catalog-service.ts::renumberProductImages. */
 async function renumberServiceImages(organizationId: string, serviceId: string): Promise<void> {
   const supabase = getSupabaseServiceClient();

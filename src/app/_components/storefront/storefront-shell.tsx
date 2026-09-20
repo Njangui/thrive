@@ -4,6 +4,7 @@ import { getTenantBrandingStyle, resolveTenantFontClassName, resolveBrandRadius 
 import { StorefrontHeader } from "./storefront-header";
 import { StorefrontFooter } from "./storefront-footer";
 import { WhatsappFab } from "./whatsapp-fab";
+import { StorefrontPageTracker } from "./storefront-page-tracker";
 import { Container } from "./storefront-ui";
 
 /**
@@ -35,6 +36,7 @@ export function StorefrontShell({ site, children }: { site: StorefrontSite; chil
       data-sector={site.sector || "default"}
       data-visual-style={config.visualStyle}
     >
+      <StorefrontPageTracker />
       {announcement && (
         <div className="sf-announcement bg-brand text-white">
           <Container className="py-2 text-center text-xs font-medium sm:text-sm">{announcement}</Container>

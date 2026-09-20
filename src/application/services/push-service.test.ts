@@ -87,6 +87,34 @@ describe("sendPush", () => {
     expect(mockSendNotification).toHaveBeenCalledTimes(2);
   });
 
+  it("demande une urgence « high » par défaut et un TTL de 24 h (réveille l'appareil, pas d'alerte périmée)", async () => {
+    mockFrom.mockReturnValue({ select: () => ({ eq: () => Promise.resolve({ data: [buildSubscriptionRow()], error: null }) }) });
+    mockSendNotification.mockResolvedValue(undefined);
+
+    const { sendPush } = await importPushService(true);
+    await sendPush("org-1", "Titre", "Corps");
+
+    expect(mockSendNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({ urgency: "high", TTL: 86400 }),
+    );
+  });
+
+  it("transmet l'urgence « normal » demandée par l'appelant", async () => {
+    mockFrom.mockReturnValue({ select: () => ({ eq: () => Promise.resolve({ data: [buildSubscriptionRow()], error: null }) }) });
+    mockSendNotification.mockResolvedValue(undefined);
+
+    const { sendPush } = await importPushService(true);
+    await sendPush("org-1", "Titre", "Corps", undefined, { urgency: "normal" });
+
+    expect(mockSendNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({ urgency: "normal" }),
+    );
+  });
+
   it("n'échoue jamais (ne lève pas) même si l'envoi réseau vers une souscription échoue — critère d'acceptation Lot I", async () => {
     mockFrom.mockReturnValue({
       select: () => ({ eq: () => Promise.resolve({ data: [buildSubscriptionRow()], error: null }) }),

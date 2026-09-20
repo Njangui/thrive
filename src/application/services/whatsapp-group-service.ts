@@ -1,5 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { getMessagingProvider } from "@/infrastructure/providers/registry";
+import { getWhatsAppGroupsProvider } from "@/infrastructure/providers/registry";
 import type { WhatsAppGroupSummary } from "@/domain/ports/messaging-provider";
 import { canUseFeature } from "./entitlements-service";
 import { getProductsByIds, type CatalogProductSummary } from "./catalog-service";
@@ -40,7 +40,7 @@ export interface ConnectedGroup {
   name: string;
   /** NULLABLE : Zernio ne renvoie pas ce champ (voir types.ts du provider). */
   participantCount: number | null;
-  status: "connected" | "disconnected" | "error";
+  status: "connected" | "disconnected" | "error" | "suspended";
   /**
    * true seulement si une conversation Zernio est déjà établie avec ce
    * groupe — condition réelle et nécessaire pour qu'une diffusion puisse
@@ -156,7 +156,7 @@ export async function listConnectedGroups(organizationId: string): Promise<Conne
 export async function listAvailableGroupsFromZernio(organizationId: string): Promise<ListAvailableGroupsResult> {
   let provider;
   try {
-    provider = await getMessagingProvider(organizationId, "zernio"); // groupes WhatsApp : fonctionnalité Zernio uniquement (voir MessagingProvider.listWhatsAppGroups?, optionnel par provider).
+    provider = await getWhatsAppGroupsProvider(organizationId); // numéro DÉDIÉ aux groupes (provider_type='whatsapp_groups', distinct de la messagerie en Coexistence) — voir registry.ts::getWhatsAppGroupsProvider.
   } catch (err) {
     return { groups: [], error: err instanceof Error ? err.message : String(err) };
   }
@@ -394,7 +394,7 @@ export async function disconnectGroup(organizationId: string, groupId: string, _
 export async function syncGroupsFromZernio(organizationId: string): Promise<SyncGroupsResult> {
   let provider;
   try {
-    provider = await getMessagingProvider(organizationId, "zernio"); // groupes WhatsApp : fonctionnalité Zernio uniquement (voir MessagingProvider.listWhatsAppGroups?, optionnel par provider).
+    provider = await getWhatsAppGroupsProvider(organizationId); // numéro DÉDIÉ aux groupes (provider_type='whatsapp_groups', distinct de la messagerie en Coexistence) — voir registry.ts::getWhatsAppGroupsProvider.
   } catch (err) {
     return { refreshed: 0, markedError: 0, error: err instanceof Error ? err.message : String(err) };
   }
@@ -827,10 +827,10 @@ async function processOneBroadcast(
   // concerné).
   const broadcastImageUrl = orderedProducts.length === 1 ? (orderedProducts[0]?.imageUrl ?? null) : null;
 
-  let provider: Awaited<ReturnType<typeof getMessagingProvider>> | null = null;
+  let provider: Awaited<ReturnType<typeof getWhatsAppGroupsProvider>> | null = null;
   let providerError: string | null = null;
   try {
-    provider = await getMessagingProvider(organizationId, "zernio"); // groupes WhatsApp : fonctionnalité Zernio uniquement (voir MessagingProvider.listWhatsAppGroups?, optionnel par provider).
+    provider = await getWhatsAppGroupsProvider(organizationId); // numéro DÉDIÉ aux groupes (provider_type='whatsapp_groups', distinct de la messagerie en Coexistence) — voir registry.ts::getWhatsAppGroupsProvider.
   } catch (err) {
     providerError = err instanceof Error ? err.message : String(err);
   }

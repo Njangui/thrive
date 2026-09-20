@@ -9,6 +9,8 @@ export interface HandleInboundMessageResult {
   messageId: string;
   /** CORRECTIF Lot 3 : nécessaire pour que l'appelant (webhook route) applique le garde-fou handoff-service.ts::shouldAutoRespond avant toute réponse automatique. */
   handoffStatus: string;
+  /** Motif de l'escalade en cours (ex. `ai_unavailable`) — voir handoff-service.ts::getAutoReplyMode. */
+  handoffReason: string | null;
 }
 
 /**
@@ -66,7 +68,7 @@ export async function handleInboundMessage(
   }
 
   // 2. Conversation : upsert par (organization_id, channel, external_thread_id)
-  // `.select("id, handoff_status")` : sur un conflit (conversation déjà
+  // `.select("id, handoff_status, handoff_reason")` : sur un conflit (conversation déjà
   // existante), l'upsert ne modifie QUE les colonnes fournies ci-dessus —
   // handoff_status n'y figure pas, donc sa valeur existante est préservée
   // intacte et c'est bien elle qui revient ici (RETURNING post-upsert),
@@ -83,7 +85,7 @@ export async function handleInboundMessage(
       },
       { onConflict: "organization_id,channel,external_thread_id" },
     )
-    .select("id, handoff_status")
+    .select("id, handoff_status, handoff_reason")
     .single();
 
   if (conversationError || !conversation) {
@@ -124,5 +126,6 @@ export async function handleInboundMessage(
     leadId: lead.id,
     messageId: message.id,
     handoffStatus: conversation.handoff_status,
+    handoffReason: conversation.handoff_reason ?? null,
   };
 }

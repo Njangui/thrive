@@ -154,7 +154,7 @@ export interface ZernioListWhatsAppGroupsResponse {
  *   `post.platform.published`, `post.platform.failed`.
  * Seuls published/failed/partial/platform.published/platform.failed sont
  * traités par ce lot (voir marketing-service.ts::handlePostStatusWebhook) —
- * scheduled/cancelled/recycled sont déjà couverts côté SME-OS par nos
+ * scheduled/cancelled/recycled sont déjà couverts côté CRESYVA par nos
  * propres actions (schedulePost/cancelPost), pas par une confirmation
  * webhook a posteriori.
  */

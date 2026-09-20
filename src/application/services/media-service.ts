@@ -21,6 +21,9 @@ import { ValidationError } from "@/lib/errors";
  *
  * "telegram-inbox" : pièces jointes reçues par le bot Telegram d'un tenant
  * (webhook /api/webhooks/telegram/tenant/[token]) — Telegram Omnichannel v3.
+ *
+ * "message-attachment" : pièces jointes et messages vocaux ENVOYÉS depuis la
+ * messagerie du dashboard (message-attachment-service.ts).
  */
 export type MediaType =
   | "logo"
@@ -30,7 +33,8 @@ export type MediaType =
   | "seo_og"
   | "hero"
   | "service"
-  | "telegram-inbox";
+  | "telegram-inbox"
+  | "message-attachment";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 Mo — large mais borné (section 54 : échouer fort plutôt que silencieusement)
 
@@ -65,7 +69,6 @@ export interface ResolveImageOptions {
   /** Valeur actuelle (pour ne rien changer si les deux champs sont vides). */
   currentUrl?: string | null;
 }
-
 /**
  * Résout l'image finale à partir d'un FormData de formulaire mixte
  * (upload réel OU URL collée, cahier Lot E Partie 1 : "gardez la
@@ -109,4 +112,66 @@ export async function resolveImageFromFormData(
   if (typedUrl) return typedUrl;
 
   return opts.currentUrl ?? null;
+}
+
+export interface ResolveImagesOptions {
+  organizationId: string;
+  mediaType: MediaType;
+  /** Nom du champ `<input type="file" multiple>` dans le FormData. */
+  filesField: string;
+  /** Nom du champ texte (plusieurs URLs, une par ligne) dans le FormData. */
+  urlsField: string;
+}
+
+/**
+ * CORRECTIF (retour commerçant, sept. 2026) : ajouter une galerie de
+ * plusieurs photos demandait un enregistrement par photo
+ * (`resolveImageFromFormData` ne traite qu'un seul champ fichier + un
+ * seul champ URL). Version plurielle : un seul appel traite PLUSIEURS
+ * fichiers ET plusieurs URLs collées (une par ligne) en une seule
+ * soumission — combinées, pas exclusives, puisqu'un commerçant peut
+ * vouloir ajouter deux photos de son téléphone ET une URL trouvée
+ * ailleurs d'un même geste.
+ *
+ * Contrairement à l'import CSV (traitement autonome de dizaines de
+ * lignes, où une entrée cassée ne doit jamais faire perdre les autres),
+ * ce chemin est un formulaire interactif rempli en direct par un humain
+ * : un fichier trop lourd ou du mauvais type fait échouer TOUTE la
+ * soumission avec un message clair, plutôt que de l'ignorer
+ * silencieusement et laisser le commerçant se demander pourquoi une
+ * photo manque. Les URLs collées, elles, ne sont pas validées ici — même
+ * choix que `resolveImageFromFormData` pour l'URL unique.
+ */
+export async function resolveImagesFromFormData(formData: FormData, opts: ResolveImagesOptions): Promise<string[]> {
+  const urls: string[] = [];
+
+  for (const entry of formData.getAll(opts.filesField)) {
+    if (!(entry instanceof File) || entry.size === 0) continue;
+
+    if (entry.size > MAX_UPLOAD_BYTES) {
+      throw new ValidationError(`"${entry.name}" dépasse 5 Mo — retirez-la ou compressez-la avant de réessayer.`);
+    }
+    if (!entry.type.startsWith("image/")) {
+      throw new ValidationError(`"${entry.name}" n'est pas une image.`);
+    }
+
+    const provider = await getStorageProvider(opts.organizationId);
+    const buffer = Buffer.from(await entry.arrayBuffer());
+    const path = buildTenantObjectPath(opts.mediaType, entry.name);
+    const { url } = await provider.upload({
+      organizationId: opts.organizationId,
+      path,
+      contentType: entry.type,
+      data: buffer,
+    });
+    urls.push(url);
+  }
+
+  const pastedUrls = String(formData.get(opts.urlsField) ?? "")
+    .split("\n")
+    .map((u) => u.trim())
+    .filter(Boolean);
+  urls.push(...pastedUrls);
+
+  return urls;
 }

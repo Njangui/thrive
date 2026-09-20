@@ -420,7 +420,9 @@ async function main() {
   }
 
   // -------------------------------------------------------------------
-  // 10. Abonnement business actif + add-on (exception #3)
+  // 10. Abonnement Pro actif + add-on (exception #3)
+  //     (« business » est retiré du modèle actif depuis le freemium — 0061 le ramène à starter ;
+  //      plus aucune période d'essai : trial_start/trial_end ne sont plus renseignés)
   // -------------------------------------------------------------------
   const { data: existingSub } = await supabase
     .from("organization_subscriptions")
@@ -428,14 +430,15 @@ async function main() {
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  if (!existingSub || existingSub.plan_key !== "business") {
+  if (!existingSub || existingSub.plan_key !== "pro") {
     await supabase.from("organization_subscriptions").upsert(
       {
         organization_id: organizationId,
-        plan_key: "business",
+        plan_key: "pro",
         status: "active",
-        trial_start: new Date().toISOString(),
-        trial_end: new Date().toISOString(),
+        trial_start: null,
+        trial_end: null,
+        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       },
       { onConflict: "organization_id" },
     );

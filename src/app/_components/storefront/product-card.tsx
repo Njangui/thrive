@@ -28,10 +28,13 @@ export function ProductCard({
   organizationId,
   newBadgeLabel,
   categoryHref,
+  hasVideo = false,
 }: {
   product: StorefrontProduct;
   organizationId: string;
   newBadgeLabel?: string;
+  /** Vidéo ACTIVE (non expirée) disponible sur la fiche — affiche un badge « ▶ Vidéo ». */
+  hasVideo?: boolean;
   /** Lien vers la catégorie, quand la page appelante n'est pas déjà celle de cette catégorie. */
   categoryHref?: string | null;
 }) {
@@ -55,6 +58,11 @@ export function ProductCard({
           newLabel={newBadgeLabel}
           className="absolute left-2.5 top-2.5"
         />
+        {hasVideo && (
+          <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white">
+            ▶ Vidéo
+          </span>
+        )}
         {product.promotionEndsAt && (
           <div className="absolute right-2.5 top-2.5">
             <CountdownTimer endsAt={product.promotionEndsAt} variant="compact" />
@@ -107,11 +115,16 @@ export function ProductGrid({
   products,
   organizationId,
   newBadgeLabel,
+  productIdsWithVideo,
 }: {
   products: StorefrontProduct[];
   organizationId: string;
   newBadgeLabel?: string;
+  /** Produits ayant une vidéo active : reçoivent le badge « ▶ Vidéo ». */
+  productIdsWithVideo?: readonly string[];
 }) {
+  // Tableau (et non Set) : ce composant est client, ses props doivent rester sérialisables.
+  const withVideo = new Set(productIdsWithVideo ?? []);
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {products.map((product) => (
@@ -120,6 +133,7 @@ export function ProductGrid({
           product={product}
           organizationId={organizationId}
           newBadgeLabel={newBadgeLabel}
+          hasVideo={withVideo.has(product.id)}
         />
       ))}
     </div>

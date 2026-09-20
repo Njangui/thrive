@@ -250,7 +250,7 @@ de statut courant (voir `docs/ROADMAP.md`/`docs/MVP_SCOPE.md` pour ça).
 - le repli fail-safe des routes cron en production (Lot 1) ;
 - une vraie interface `/dashboard/services` et `/admin/plans`
   (Lots 2/4) — le backend existait, l'écran manquait ;
-- la landing marketing SME-OS (remplace une page de statut de
+- la landing marketing CRESYVA (remplace une page de statut de
   développement interne, Lot 2) ;
 - la galerie multi-photos produit (Lot 2) ;
 - deux bugs réels trouvés à la fusion elle-même (typage + hoisting

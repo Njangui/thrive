@@ -147,11 +147,25 @@ export async function listSubscriptions(organizationId: string, userId: string):
  * on la supprime immédiatement plutôt que de la retenter indéfiniment à
  * chaque notification future.
  */
+export interface SendPushOptions {
+  /**
+   * Urgence Web Push. « high » demande au service push (FCM/Apple/Mozilla)
+   * de réveiller l'appareil immédiatement ; en « normal », Android en mode
+   * économie d'énergie (Doze) peut différer et regrouper l'alerte — c'est
+   * l'une des causes d'une notification « arrivée mais sans son ».
+   */
+  urgency?: "high" | "normal";
+}
+
+/** Durée de vie d'un push non délivré : 24 h (le défaut de web-push est de 4 semaines — une alerte « nouveau message » n'a aucun sens le lendemain). */
+const PUSH_TTL_SECONDS = 24 * 60 * 60;
+
 export async function sendPush(
   organizationId: string,
   title: string,
   body: string,
   url?: string,
+  options: SendPushOptions = {},
 ): Promise<void> {
   const client = getConfiguredWebPushClient();
   if (!client) return;
@@ -177,6 +191,7 @@ export async function sendPush(
           await client.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh_key, auth: sub.auth_key } },
             payload,
+            { TTL: PUSH_TTL_SECONDS, urgency: options.urgency ?? "high" },
           );
         } catch (sendError) {
           const statusCode = (sendError as { statusCode?: number } | null)?.statusCode;

@@ -1,4 +1,5 @@
 import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tenant";
+import { env } from "@/lib/env";
 
 /**
  * "footer n'est pas une section activable — toujours présent (cohérence
@@ -16,7 +17,7 @@ export function FooterSection({ tenant }: { tenant: TenantContext }) {
       </p>
       <p className="mt-1">
         Site propulsé par{" "}
-        <a href="https://sme-os.app" className="font-medium hover:text-brand">
+        <a href={env.NEXT_PUBLIC_APP_URL} className="font-medium hover:text-brand">
           CRESYVA
         </a>
       </p>

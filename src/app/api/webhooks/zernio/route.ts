@@ -18,7 +18,7 @@ import {
 } from "@/infrastructure/providers/messaging/zernio/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
 import { routeMessage } from "@/application/services/conversation-orchestrator";
-import { escalateToHuman, shouldAutoRespond } from "@/application/services/handoff-service";
+import { escalateToHuman, getAutoReplyMode, notifyUnansweredInboundMessage } from "@/application/services/handoff-service";
 import { getMessagingProvider } from "@/infrastructure/providers/registry";
 import { activateGroupFromInboundConversation } from "@/application/services/whatsapp-group-service";
 import { handlePostStatusWebhook } from "@/application/services/marketing-service";
@@ -165,15 +165,27 @@ export async function POST(request: Request) {
         // pendant une prise en charge humaine — voir
         // handoff-service.ts::shouldAutoRespond pour le raisonnement
         // complet sur le bug corrigé ici.
-        if (shouldAutoRespond(result.handoffStatus)) {
+        const autoReplyMode = getAutoReplyMode(result.handoffStatus, result.handoffReason);
+        // Vrai dès qu'une réponse est partie OU qu'une escalade a déjà
+        // alerté les admins — sinon, on les alerte nous-mêmes plus bas
+        // (message client resté sans réponse).
+        let handledAutomatically = false;
+
+        if (autoReplyMode !== "none") {
           // Le ConversationOrchestrator est le SEUL point d'entrée vers une
           // réponse (section 17/45 doc 2) : règles/FAQ/catalogue/business
           // data d'abord, IA en dernier recours. Ne jamais appeler l'IA
           // directement ici — voir docs/GAP_ANALYSIS.md section L.
-          const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content);
+          const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content, {
+            // `deterministic_only` : conversation en attente d'humain
+            // uniquement parce que l'IA était indisponible — FAQ/catalogue
+            // restent permis, jamais l'IA (voir getAutoReplyMode).
+            allowAI: autoReplyMode === "full",
+          });
 
           if (routing.handoffReason) {
             await escalateToHuman(organizationId, result.conversationId, routing.handoffReason);
+            handledAutomatically = true; // escalateToHuman notifie déjà les admins
           }
 
           if (routing.replyText) {
@@ -204,7 +216,18 @@ export async function POST(request: Request) {
               content: routing.replyText,
               metadata: { intent: routing.intent, ai_invoked: routing.aiInvoked },
             });
+            handledAutomatically = true;
           }
+        }
+
+        if (!handledAutomatically) {
+          await notifyUnansweredInboundMessage(
+            organizationId,
+            result.conversationId,
+            domainEvent.payload.contactFullName,
+            domainEvent.payload.content,
+            Boolean(domainEvent.payload.attachment),
+          );
         }
       }
 

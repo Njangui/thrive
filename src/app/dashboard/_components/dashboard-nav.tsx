@@ -78,6 +78,7 @@ export const DASHBOARD_NAV_GROUPS: {
       { href: "/dashboard/groups", label: "Groupes WhatsApp", icon: IconGroupChat, module: "whatsapp" },
       { href: "/dashboard/marketing", label: "Publications", icon: IconMegaphone, module: "marketing" },
       { href: "/dashboard/analytics", label: "Analytics réseaux", icon: IconGlobe, module: "marketing" },
+      { href: "/dashboard/analytics/landing", label: "Analytics vitrine", icon: IconGlobe },
     ],
   },
   {

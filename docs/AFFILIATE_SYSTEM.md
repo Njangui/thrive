@@ -2,7 +2,7 @@
 
 ## Résumé
 
-Un affilié (n'importe quel utilisateur connecté — client SME-OS existant
+Un affilié (n'importe quel utilisateur connecté — client CRESYVA existant
 ou candidat totalement externe, les deux profils sont acceptés) candidate
 via `/devenir-affilie` -> `/affiliate/apply`, est approuvé par le Super
 Admin (`/admin/affiliates`), reçoit un lien de suivi personnel

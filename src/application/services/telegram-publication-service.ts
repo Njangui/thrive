@@ -1,3 +1,4 @@
+import { assertPublicationMediaAvailable } from "./catalog-video-service";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { getMessagingProvider } from "@/infrastructure/providers/registry";
 import { NotFoundError, ValidationError } from "@/lib/errors";
@@ -64,6 +65,13 @@ async function sendTelegramPublication(
   organizationId: string,
   publication: Pick<TelegramPublicationItem, "targetChatId" | "content" | "attachmentUrl" | "attachmentType">,
 ): Promise<number> {
+  // Au JOUR de la publication : la vidéo est relue chez Zernio par notre
+  // serveur puis envoyée à Telegram. Si le fichier a expiré (Zernio ne le
+  // garde que 7 jours), on échoue AVANT tout envoi avec un message clair —
+  // la publication passe « échouée » et le commerçant est notifié.
+  if (publication.attachmentUrl) {
+    await assertPublicationMediaAvailable(organizationId, [publication.attachmentUrl], null);
+  }
   const provider = await getMessagingProvider(organizationId, "telegram");
   const result = await provider.sendMessage(organizationId, {
     to: publication.targetChatId,
@@ -71,6 +79,9 @@ async function sendTelegramPublication(
     content: publication.content,
     attachmentUrl: publication.attachmentUrl ?? undefined,
     attachmentType: (publication.attachmentType as "image" | "video" | "audio" | "file" | undefined) ?? undefined,
+    // Vidéos / audios / fichiers : téléversés depuis notre serveur (50 Mo,
+    // tous formats) plutôt que donnés par URL (20 Mo). Les images restent par URL.
+    uploadBinary: Boolean(publication.attachmentUrl && publication.attachmentType && publication.attachmentType !== "image"),
   });
   return Number(result.providerMessageId);
 }

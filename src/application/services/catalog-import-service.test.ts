@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CsvRowSchema } from "./catalog-import-service";
+import { CsvRowSchema, parseImageUrls, resolveImageUrls, parseSpecifications } from "./catalog-import-service";
 
 describe("CsvRowSchema (import CSV catalogue, section 11)", () => {
   it("accepte une ligne minimale valide", () => {
@@ -41,5 +41,67 @@ describe("CsvRowSchema (import CSV catalogue, section 11)", () => {
     } else {
       throw new Error("parsing attendu réussi");
     }
+  });
+});
+
+describe("parseImageUrls (import CSV — plusieurs photos par produit)", () => {
+  it("sépare sur | et retire les espaces", () => {
+    expect(parseImageUrls("https://a.test/1.jpg | https://a.test/2.jpg")).toEqual([
+      "https://a.test/1.jpg",
+      "https://a.test/2.jpg",
+    ]);
+  });
+
+  it("ignore une URL cassée sans bloquer les autres", () => {
+    expect(parseImageUrls("https://a.test/1.jpg|pas-une-url|https://a.test/3.jpg")).toEqual([
+      "https://a.test/1.jpg",
+      "https://a.test/3.jpg",
+    ]);
+  });
+
+  it("valeur absente -> liste vide", () => {
+    expect(parseImageUrls(undefined)).toEqual([]);
+  });
+});
+
+describe("resolveImageUrls (image_urls prioritaire sur image_url)", () => {
+  it("utilise image_urls quand les deux colonnes sont renseignées", () => {
+    expect(resolveImageUrls({ image_url: "https://a.test/old.jpg", image_urls: "https://a.test/1.jpg|https://a.test/2.jpg" })).toEqual([
+      "https://a.test/1.jpg",
+      "https://a.test/2.jpg",
+    ]);
+  });
+
+  it("retombe sur image_url si image_urls est absente (compatibilité)", () => {
+    expect(resolveImageUrls({ image_url: "https://a.test/old.jpg" })).toEqual(["https://a.test/old.jpg"]);
+  });
+
+  it("aucune colonne renseignée -> liste vide", () => {
+    expect(resolveImageUrls({})).toEqual([]);
+  });
+});
+
+describe("parseSpecifications (import CSV — informations complémentaires)", () => {
+  it("parse plusieurs paires libellé:valeur", () => {
+    expect(parseSpecifications("Matière:Coton|Garantie:6 mois")).toEqual([
+      { label: "Matière", value: "Coton" },
+      { label: "Garantie", value: "6 mois" },
+    ]);
+  });
+
+  it("ignore une entrée sans ':' plutôt que de faire échouer les autres", () => {
+    expect(parseSpecifications("Matière:Coton|entrée invalide|Garantie:6 mois")).toEqual([
+      { label: "Matière", value: "Coton" },
+      { label: "Garantie", value: "6 mois" },
+    ]);
+  });
+
+  it("plafonne à 12 paires", () => {
+    const raw = Array.from({ length: 15 }, (_, i) => `Ligne ${i}:valeur`).join("|");
+    expect(parseSpecifications(raw)).toHaveLength(12);
+  });
+
+  it("valeur absente -> liste vide", () => {
+    expect(parseSpecifications(undefined)).toEqual([]);
   });
 });

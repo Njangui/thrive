@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/application/services/platform-admin-service";
 import {
   getPlansOverviewForAdmin,
@@ -27,6 +28,13 @@ async function updatePlanDetailsAction(formData: FormData) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour du plan";
     redirect(`/admin/plans?error=${encodeURIComponent(message)}`);
   }
+  // /tarifs lit plans/plan_entitlements en direct (Server Component, pas
+  // de cache applicatif) mais Next.js peut avoir mis la page en cache
+  // statique au build — revalidatePath() force le rendu suivant à relire
+  // les données à jour, pour que "je modifie un plan depuis le dashboard,
+  // ça modifie sur /tarifs simultanément" soit vrai à chaque fois, pas
+  // seulement après le prochain déploiement.
+  revalidatePath("/tarifs");
   redirect("/admin/plans?success=" + encodeURIComponent("Plan mis à jour."));
 }
 
@@ -53,10 +61,11 @@ async function updateEntitlementRowAction(formData: FormData) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour de la grille";
     redirect(`/admin/plans?error=${encodeURIComponent(message)}`);
   }
+  revalidatePath("/tarifs"); // voir le commentaire équivalent dans updatePlanDetailsAction ci-dessus.
   redirect("/admin/plans?success=" + encodeURIComponent("Grille mise à jour."));
 }
 
-const PLAN_LABELS: Record<PlanKey, string> = { starter: "Starter", business: "Business", pro: "Pro" };
+const PLAN_LABELS: Record<PlanKey, string> = { free: "Discover", starter: "Starter", pro: "Pro" };
 
 export default async function AdminPlansPage({
   searchParams,

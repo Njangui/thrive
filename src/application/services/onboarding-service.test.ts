@@ -13,7 +13,7 @@ vi.mock("@/infrastructure/supabase/server-session-client", () => ({
   getSupabaseServerSessionClient: vi.fn(),
 }));
 vi.mock("./finance-service", () => ({ seedDefaultExpenseCategories: vi.fn() }));
-vi.mock("./plans-repository", () => ({ createTrialSubscription: vi.fn() }));
+vi.mock("./plans-repository", () => ({ createFreemiumSubscription: vi.fn() }));
 vi.mock("./ai-credits-service", () => ({ initializeCreditBalance: vi.fn() }));
 vi.mock("./country-service", () => ({ validateCountryForSignup: vi.fn() }));
 
@@ -147,7 +147,7 @@ describe("createOrganization — Country Engine (section 12/13)", () => {
   }
 
   it("rejette un pays invalide AVANT toute vérification de session ou écriture DB", async () => {
-    mockValidateCountryForSignup.mockRejectedValue(new ValidationError("Ghana arrive bientôt sur SME-OS."));
+    mockValidateCountryForSignup.mockRejectedValue(new ValidationError("Ghana arrive bientôt sur CRESYVA."));
 
     await expect(createOrganization({ name: "Ma Boutique", countryCode: "GH" })).rejects.toBeInstanceOf(
       ValidationError,

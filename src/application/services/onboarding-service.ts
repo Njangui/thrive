@@ -3,7 +3,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { MODULE_KEYS, INDUSTRY_MODULE_PRESETS, type ModuleKey } from "@/application/config/modules";
 import { seedDefaultExpenseCategories } from "./finance-service";
-import { createTrialSubscription } from "./plans-repository";
+import { createFreemiumSubscription } from "./plans-repository";
 import { initializeCreditBalance } from "./ai-credits-service";
 import { validateCountryForSignup } from "./country-service";
 import { attributeReferral, attributeReferralByPromoCode, validatePromoCode } from "./affiliate-service";
@@ -141,13 +141,13 @@ export async function createOrganization(
 
   await seedDefaultExpenseCategories(org.id);
 
-  // Lot B (section 78) : plan "starter" + essai par défaut. Durée
-  // configurable depuis /admin/addons (Lot G, platform_settings.trial_days)
-  // — createTrialSubscription la lit elle-même si non précisée ici. Les
-  // crédits IA inclus sont résolus depuis ce plan (plan_entitlements, clé
-  // 'ai_credits') — createTrialSubscription doit s'exécuter avant
-  // initializeCreditBalance pour que la résolution du plan soit correcte.
-  await createTrialSubscription(org.id, "starter");
+  // Mode freemium (période d'essai retirée sur demande explicite) :
+  // plan "free" permanent dès l'onboarding, actif immédiatement, aucune
+  // échéance. Les crédits IA inclus sont résolus depuis ce plan
+  // (plan_entitlements, clé 'ai_credits') — createFreemiumSubscription
+  // doit s'exécuter avant initializeCreditBalance pour que la
+  // résolution du plan soit correcte.
+  await createFreemiumSubscription(org.id);
   await initializeCreditBalance(org.id);
 
   // Catégories produit/service par défaut (section design, sept. 2026 —

@@ -26,7 +26,9 @@ import type { CatalogProductSummary } from "./catalog-service";
  * (handoff-service.ts). Ajouter une notification ici doublonnerait.
  *
  * CORRECTIF Lot 3 (audit master prompt §30/§71) : le crédit est
- * maintenant RÉSERVÉ atomiquement AVANT l'appel LLM (plus
+ * maintenant RÉSERVÉ atomiquement AVANT l'appel LLM (mais APRÈS la
+ * vérification que l'IA est réellement disponible pour ce tenant — voir
+ * le correctif de sept. 2026 dans `generateAIReply`) (plus
  * hasCreditsAvailable() suivi d'un consumeCredit() best-effort après
  * coup — cette séquence check-then-act laissait une fenêtre où deux
  * requêtes concurrentes passaient toutes les deux le check, généraient
@@ -40,13 +42,26 @@ export async function generateAIReply(
   userMessage: string,
   recentProducts: CatalogProductSummary[] = [],
 ): Promise<AITextResponse> {
+  // CORRECTIF (sept. 2026) — la disponibilité de l'IA est vérifiée AVANT
+  // toute réservation de crédit. Avant ce correctif, `consumeCredit()` était
+  // appelé en premier, puis `getAIProvider()` levait "AI non activée" pour
+  // un tenant qui n'avait pas encore configuré/activé l'IA : le crédit
+  // réservé n'était JAMAIS remboursé (ce `getAIProvider` se trouvait hors du
+  // `try` qui appelle `releaseCredit`). Symptôme rapporté : des crédits IA
+  // consommés à chaque message client non couvert par la FAQ, alors que
+  // l'IA n'avait jamais été configurée.
+  //
+  // Ni `getAIProvider` ni `buildTenantAIContext` ne facturent quoi que ce
+  // soit (construction d'adaptateur + lecture DB) : les appeler avant la
+  // réservation ne coûte rien, et toute erreur ici (IA désactivée, clé
+  // manquante, contexte illisible) sort sans avoir touché au solde.
+  const { primary, fallback } = await getAIProvider(organizationId);
+  const systemPrompt = await buildTenantAIContext(organizationId, recentProducts);
+
   const reservation = await consumeCredit(organizationId);
   if (!reservation.success) {
     throw new QuotaExceededError("Crédits IA épuisés pour cette organisation.");
   }
-
-  const { primary, fallback } = await getAIProvider(organizationId);
-  const systemPrompt = await buildTenantAIContext(organizationId, recentProducts);
 
   let result: AITextResponse;
   try {

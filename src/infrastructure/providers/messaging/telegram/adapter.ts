@@ -6,6 +6,31 @@ import type {
   SendMessageResult,
 } from "@/domain/ports/messaging-provider";
 import { TelegramMessagingClient } from "./client";
+import { downloadRemoteMedia, fileNameFromUrl, isAllowedRemoteMediaHost, TELEGRAM_UPLOAD_MAX_BYTES } from "@/lib/remote-media";
+
+export type TelegramUploadKind = "photo" | "video" | "audio" | "voice" | "document";
+
+/**
+ * Choisit la méthode Bot API pour un envoi par téléversement. Fonction pure.
+ * Règle de prudence : on ne tente un rendu « natif » (vidéo lisible, vocal,
+ * lecteur audio) que pour les formats que Telegram documente ; tout le
+ * reste part en document — livré à coup sûr, simplement téléchargeable.
+ */
+export function pickTelegramUploadKind(
+  attachmentType: "image" | "video" | "audio" | "file" | undefined,
+  mimeType: string,
+  isVoiceNote: boolean,
+): TelegramUploadKind {
+  const mime = mimeType.split(";")[0]!.trim().toLowerCase();
+  if (attachmentType === "image") return mime === "image/gif" ? "document" : "photo";
+  if (attachmentType === "video") return mime === "video/mp4" ? "video" : "document"; // MOV/AVI/WebM : pas de lecture intégrée garantie
+  if (attachmentType === "audio") {
+    if (isVoiceNote && ["audio/ogg", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/x-m4a", "audio/m4a"].includes(mime)) return "voice";
+    if (["audio/mpeg", "audio/mp3", "audio/mp4", "audio/x-m4a", "audio/m4a"].includes(mime)) return "audio";
+    return "document"; // aac, amr, webm... : sendAudio n'accepte que MP3/M4A
+  }
+  return "document";
+}
 
 /**
  * Implémentation Telegram du port MessagingProvider — canal CLIENT
@@ -30,8 +55,24 @@ export class TelegramMessagingAdapter implements MessagingProvider {
     // via l'API Telegram. Cela couvre les réponses humaines et les
     // publications sans faire dépendre Telegram de Zernio.
     let sent;
-    if (message.attachmentUrl && message.attachmentType === "video") {
+    if (message.uploadBinary && message.attachmentUrl && isAllowedRemoteMediaHost(message.attachmentUrl)) {
+      // Le fichier est relu par NOTRE serveur (Zernio/Supabase) puis
+      // téléversé : contourne la limite de 20 Mo de l'envoi par URL.
+      const { data, contentType } = await downloadRemoteMedia(message.attachmentUrl, TELEGRAM_UPLOAD_MAX_BYTES);
+      const mimeType = (message.attachmentMimeType ?? contentType ?? "application/octet-stream").split(";")[0]!.trim().toLowerCase();
+      const kind = pickTelegramUploadKind(message.attachmentType, mimeType, Boolean(message.isVoiceNote));
+      sent = await this.client.sendFileUpload(
+        kind,
+        message.to,
+        { data, fileName: message.attachmentFileName ?? fileNameFromUrl(message.attachmentUrl), contentType: mimeType },
+        message.content || undefined,
+      );
+    } else if (message.attachmentUrl && message.attachmentType === "video") {
       sent = await this.client.sendVideo({ chat_id: message.to, video: message.attachmentUrl, caption: message.content || undefined });
+    } else if (message.attachmentUrl && message.attachmentType === "audio" && message.isVoiceNote) {
+      // Vocal enregistré depuis la messagerie : rendu comme un vrai message
+      // vocal Telegram (onde sonore) plutôt que comme un morceau de musique.
+      sent = await this.client.sendVoice({ chat_id: message.to, voice: message.attachmentUrl, caption: message.content || undefined });
     } else if (message.attachmentUrl && message.attachmentType === "audio") {
       sent = await this.client.sendAudio({ chat_id: message.to, audio: message.attachmentUrl, caption: message.content || undefined });
     } else if (message.attachmentUrl && message.attachmentType === "file") {

@@ -54,6 +54,61 @@ export function shouldAutoRespond(handoffStatus: string): boolean {
   return handoffStatus === "ai";
 }
 
+export type AutoReplyMode = "full" | "deterministic_only" | "none";
+
+/**
+ * CORRECTIF (sept. 2026) — décide QUEL type de réponse automatique est
+ * permis pour une conversation, au lieu du simple oui/non de
+ * `shouldAutoRespond`.
+ *
+ * Problème corrigé : quand l'IA n'est pas activée, le premier message
+ * qu'aucune règle ne couvre est escaladé (`ai_unavailable`) et la
+ * conversation passe en `pending_human`. `shouldAutoRespond` renvoyait
+ * alors `false` POUR TOUS LES MESSAGES SUIVANTS — la FAQ, pourtant
+ * configurée et gratuite, restait muette pour le reste de la
+ * conversation, et le commerçant devait répondre à la main.
+ *
+ * - `full` : statut `ai` — FAQ, catalogue, infos business, puis IA.
+ * - `deterministic_only` : `pending_human` déclenché UNIQUEMENT parce que
+ *   l'IA était indisponible (aucun humain n'a pris la main, aucune plainte
+ *   en cours) — les réponses sûres et déterministes (FAQ, catalogue,
+ *   horaires) restent permises ; jamais l'IA, jamais une nouvelle escalade
+ *   pour le même motif.
+ * - `none` : prise en charge humaine (`human`), plainte/remboursement en
+ *   attente, ou conversation clôturée — aucune réponse automatique.
+ */
+export function getAutoReplyMode(handoffStatus: string, handoffReason: string | null | undefined): AutoReplyMode {
+  if (handoffStatus === "ai") return "full";
+  if (handoffStatus === "pending_human" && handoffReason === "ai_unavailable") return "deterministic_only";
+  return "none";
+}
+
+/**
+ * Notifie les admins qu'un message client est arrivé et que PERSONNE ne
+ * lui répond automatiquement (prise en charge humaine, conversation
+ * clôturée, ou message sans réponse possible). Sans cela, une fois qu'un
+ * commerçant a pris la main, les réponses du client n'apparaissaient
+ * nulle part : ni alerte, ni son, il fallait ouvrir la messagerie pour le
+ * découvrir. Ne lève jamais (`notifyOrgAdmins` non plus).
+ */
+export async function notifyUnansweredInboundMessage(
+  organizationId: string,
+  conversationId: string,
+  contactName: string | null | undefined,
+  content: string,
+  hasAttachment = false,
+): Promise<void> {
+  const preview = content.trim() ? content.trim().slice(0, 90) : hasAttachment ? "Pièce jointe reçue" : "Nouveau message";
+  await notifyOrgAdmins({
+    organizationId,
+    title: contactName ? `Message de ${contactName}` : "Nouveau message client",
+    body: preview,
+    relatedEntityType: "conversation",
+    relatedEntityId: conversationId,
+    priority: "important",
+  });
+}
+
 /**
  * Heuristique V1 très simple pour décider si une réponse IA doit être
  * bloquée et escaladée plutôt qu'envoyée. À affiner en Phase 8 avec de

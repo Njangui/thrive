@@ -29,11 +29,21 @@ beforeEach(() => {
 });
 
 describe("generateAIReply — Lot 3 (réservation atomique avant génération, jamais un check-then-act)", () => {
-  it("solde épuisé : lève QuotaExceededError SANS jamais appeler le provider IA (aucun coût engagé)", async () => {
+  it("solde épuisé : lève QuotaExceededError SANS jamais générer de texte (aucun coût engagé)", async () => {
+    const generateText = vi.fn();
+    mockGetAIProvider.mockResolvedValue({ primary: { providerName: "mistral", generateText }, fallback: null });
     mockConsumeCredit.mockResolvedValue({ success: false });
 
     await expect(generateAIReply("org-1", "Bonjour")).rejects.toThrow(/Crédits IA épuisés/);
-    expect(mockGetAIProvider).not.toHaveBeenCalled();
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it("IA non configurée/désactivée : lève AVANT toute réservation — aucun crédit consommé, rien à rembourser", async () => {
+    mockGetAIProvider.mockRejectedValue(new Error("AI non activée pour l'organization org-1"));
+
+    await expect(generateAIReply("org-1", "Bonjour")).rejects.toThrow(/AI non activée/);
+    expect(mockConsumeCredit).not.toHaveBeenCalled();
+    expect(mockReleaseCredit).not.toHaveBeenCalled();
   });
 
   it("succès (primary) : réserve un crédit, ne rembourse jamais", async () => {

@@ -124,13 +124,25 @@ export async function getConversationThread(
  * l'orchestrateur que sur un nouveau message entrant, et que le statut
  * passe explicitement à 'human' ici.
  */
+export interface HumanReplyAttachment {
+  url: string;
+  type: "image" | "video" | "audio" | "file";
+  fileName?: string | null;
+  mimeType?: string | null;
+  /** Audio enregistré depuis le micro du dashboard (rendu « vocal » sur Telegram). */
+  isVoiceNote?: boolean;
+}
+
 export async function sendHumanReply(
   organizationId: string,
   conversationId: string,
   content: string,
   actorUserId: string,
+  attachment?: HumanReplyAttachment,
 ): Promise<void> {
-  if (!content.trim()) throw new ValidationError("Le message ne peut pas être vide");
+  // Texte OU pièce jointe (un vocal ou une image seuls, sans légende, sont
+  // des messages valides).
+  if (!content.trim() && !attachment) throw new ValidationError("Le message ne peut pas être vide");
 
   const supabase = getSupabaseServiceClient();
 
@@ -160,6 +172,18 @@ export async function sendHumanReply(
     channel: conversation.channel as "whatsapp" | "telegram",
     content,
     externalThreadId: conversation.external_thread_id,
+    ...(attachment
+      ? {
+          attachmentUrl: attachment.url,
+          attachmentType: attachment.type,
+          isVoiceNote: attachment.isVoiceNote,
+          // Telegram : l'envoi par URL refuse la plupart des documents et
+          // limite à 20 Mo — on téléverse le fichier (voir OutboundMessage).
+          uploadBinary: true,
+          attachmentFileName: attachment.fileName ?? undefined,
+          attachmentMimeType: attachment.mimeType ?? undefined,
+        }
+      : {}),
   });
 
   await supabase.from("messages").insert({
@@ -168,6 +192,22 @@ export async function sendHumanReply(
     direction: "outbound",
     sender: "human",
     content,
+    // Même forme que les pièces jointes ENTRANTES (`metadata.attachment`,
+    // lue par getConversationThread) : le fil affiche donc l'envoi de la
+    // même façon dans les deux sens.
+    ...(attachment
+      ? {
+          metadata: {
+            attachment: {
+              url: attachment.url,
+              type: attachment.type,
+              fileName: attachment.fileName ?? null,
+              mimeType: attachment.mimeType ?? null,
+              isVoiceNote: Boolean(attachment.isVoiceNote),
+            },
+          },
+        }
+      : {}),
   });
 
   const nowIso = new Date().toISOString();

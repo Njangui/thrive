@@ -255,3 +255,41 @@ describe("upsertCountryPrice", () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ amount: 0, currency_code: "XAF" }));
   });
 });
+
+describe("setCountryLaunchStatus — grille freemium (free / starter / pro)", () => {
+  // Le plan gratuit n'a JAMAIS de ligne plan_prices par pays (upsertCountryPrice le refuse) : sa
+  // source est toujours "fallback_default". La checklist ne doit pas le compter comme « non configuré ».
+  const FREE_ALWAYS_DEFAULT = { key: "free", amount: 0, currencyCode: "XAF", source: "fallback_default" };
+
+  it("active un pays dont starter et pro ont un prix propre, malgré le plan gratuit en prix par défaut", async () => {
+    mockGetCountry.mockResolvedValue(makeCountry({ isoCode: "GH", launchStatus: "coming_soon", notchpaySupported: true }));
+    mockGetChannels.mockResolvedValue([{ isAvailable: true }]);
+    mockListPlanPricesForCountry.mockResolvedValue([
+      FREE_ALWAYS_DEFAULT,
+      { key: "starter", amount: 15000, currencyCode: "XAF", source: "country_specific" },
+      { key: "pro", amount: 30000, currencyCode: "XAF", source: "country_specific" },
+    ]);
+    const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+    mockFrom.mockReturnValue({ update });
+
+    await setCountryLaunchStatus("GH", "active", "admin-1");
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ launch_status: "active" }));
+  });
+
+  it("bloque l'activation si un plan PAYANT n'a pas de prix, et ne cite jamais le plan gratuit", async () => {
+    mockGetCountry.mockResolvedValue(makeCountry({ isoCode: "GH", launchStatus: "coming_soon", notchpaySupported: true }));
+    mockGetChannels.mockResolvedValue([{ isAvailable: true }]);
+    mockListPlanPricesForCountry.mockResolvedValue([
+      FREE_ALWAYS_DEFAULT,
+      { key: "starter", amount: 15000, currencyCode: "XAF", source: "fallback_default" },
+      { key: "pro", amount: 30000, currencyCode: "XAF", source: "country_specific" },
+    ]);
+
+    const attempt = setCountryLaunchStatus("GH", "active", "admin-1");
+    await expect(attempt).rejects.toThrow(/Prix non configurés pour : starter\./);
+    await expect(attempt).rejects.not.toThrow(/free/);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+

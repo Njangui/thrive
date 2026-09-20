@@ -55,7 +55,7 @@ l'email est une commodité, jamais un point de blocage.
    seul provider email plateforme, voir `registry.ts::getEmailProvider`,
    même raisonnement que Storage/Payment/Domain).
 3. Mettre à jour `EMAIL_FROM_ADDRESS` avec une adresse sur ce domaine
-   vérifié (ex : `SME-OS <invitations@sme-os.app>`).
+   vérifié (ex : `CRESYVA <invitations@votre-domaine.com>`).
 4. Sans ces 3 étapes, `getEmailProvider()` retombe sur
    `ConsoleLogEmailAdapter` (si `RESEND_API_KEY` absente) — l'invitation
    reste fonctionnelle via le lien, l'email est seulement loggé.

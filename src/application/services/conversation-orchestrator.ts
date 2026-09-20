@@ -51,11 +51,25 @@ const PRODUCT_DISCOVERY_KEYWORDS = [
  * données structurées/règles → FAQ → catalogue → business data → IA en
  * dernier recours. Ne JAMAIS inverser cet ordre (coût + fiabilité).
  */
+export interface RouteMessageOptions {
+  /**
+   * `false` = étapes déterministes uniquement (FAQ, catalogue, prestations,
+   * infos business), jamais l'IA. Utilisé quand la conversation est en
+   * attente d'un humain UNIQUEMENT parce que l'IA était indisponible (voir
+   * handoff-service.ts::getAutoReplyMode) : on continue à répondre ce qui
+   * peut l'être sans risque, sans consommer de crédit ni ré-escalader.
+   * Défaut : `true` (comportement historique).
+   */
+  allowAI?: boolean;
+}
+
 export async function routeMessage(
   organizationId: string,
   conversationId: string,
   message: string,
+  options: RouteMessageOptions = {},
 ): Promise<OrchestrationResult> {
+  const allowAI = options.allowAI ?? true;
   const log = (intent: ConversationIntent, aiInvoked: boolean, handoffReason: HandoffReason | null) => {
     // Observabilité du router (section 48) : message -> intent -> IA appelée ou non -> handoff ou non.
     console.info(
@@ -136,6 +150,15 @@ export async function routeMessage(
     }
     // Donnée non configurée par le commerçant : on ne invente pas (section 47),
     // on tombe sur l'IA ci-dessous, qui elle-même peut escalader si nécessaire.
+  }
+
+  // 5bis. Mode « déterministe seulement » : rien ne correspond, et l'IA n'est
+  // pas autorisée pour cette conversation (déjà signalée à un humain).
+  // Aucune réponse, aucune nouvelle escalade — le commerçant a déjà été
+  // notifié, et un message de plus ne doit pas empiler des alertes.
+  if (!allowAI) {
+    log("human_escalation", false, null);
+    return { intent: "human_escalation", replyText: null, aiInvoked: false, handoffReason: null, replyImageUrl: null };
   }
 
   // 6. IA — dernier recours (section 20/45). Si indisponible, escalade

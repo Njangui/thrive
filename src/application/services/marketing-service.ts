@@ -215,7 +215,7 @@ export async function createCampaignFromProducts(
  * CORRECTIF Lot 3 : la version précédente marquait `paused` de façon
  * INCONDITIONNELLE, même quand `cancelPost` échouait côté Zernio — un
  * post resté réellement actif chez le fournisseur pouvait donc être
- * affiché "en pause" par SME-OS et se publier quand même (exactement le
+ * affiché "en pause" par CRESYVA et se publier quand même (exactement le
  * cas que §95 interdit : "Une publication échouée [ici : une annulation
  * échouée] ne doit pas être affichée comme publiée [ici : comme mise en
  * pause]"). Désormais :

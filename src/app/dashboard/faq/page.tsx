@@ -4,10 +4,18 @@ import { listFaqs, createFaq, updateFaq, deleteFaq } from "@/application/service
 import { AppError } from "@/lib/errors";
 
 function parseKeywords(raw: string): string[] {
+  // Virgules, points-virgules et retours à la ligne acceptés ; doublons et
+  // entrées vides écartés (un mot-clé vide ne doit jamais être enregistré).
+  const seen = new Set<string>();
   return raw
-    .split(",")
+    .split(/[,;\n]/)
     .map((k) => k.trim())
-    .filter(Boolean);
+    .filter((k) => {
+      const key = k.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 async function createFaqAction(formData: FormData) {
@@ -96,8 +104,9 @@ export default async function FaqPage({
     <div className="flex flex-col gap-6">
       <h1 className="font-jakarta text-2xl font-bold tracking-tight">FAQ</h1>
       <p className="text-sm text-slate-500">
-        Vos réponses aux questions fréquentes sont utilisées par l&apos;assistant WhatsApp EN PRIORITÉ sur l&apos;IA
-        — plus rapide, gratuit, et toujours exact. Les mots-clés déterminent quand une FAQ se déclenche.
+        Vos réponses aux questions fréquentes sont utilisées automatiquement (WhatsApp, Telegram) EN PRIORITÉ sur l&apos;IA
+        — plus rapide, gratuit, et toujours exact. Les mots-clés déterminent quand une FAQ se déclenche : les variantes proches
+        (livraison / livrez / livrer) sont reconnues, mais listez quand même les termes que vos clients utilisent vraiment.
       </p>
 
       {error && <p className="adm-alert-danger">{error}</p>}
@@ -129,7 +138,8 @@ export default async function FaqPage({
               className="mt-1 rounded-xl border border-navy-900/10 px-3 py-2 text-sm"
             />
             <span className="mt-1 text-xs text-slate-500">
-              Un client écrivant l&apos;un de ces mots recevra directement cette réponse, sans passer par l&apos;IA.
+              Un client écrivant l&apos;un de ces mots (ou une variante proche) recevra directement cette réponse, sans passer par l&apos;IA.
+              Une expression comme « mode de paiement » exige la présence de tous ses mots.
             </span>
           </label>
           <div>

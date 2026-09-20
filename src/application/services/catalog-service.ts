@@ -720,6 +720,32 @@ export async function appendProductImage(organizationId: string, productId: stri
   if (error) throw new Error(`Impossible d'ajouter la photo: ${error.message}`);
 }
 
+/**
+ * Version plurielle — une seule requête d'insertion pour plusieurs
+ * photos, positions contiguës à la suite de la galerie existante.
+ * CORRECTIF (retour commerçant, sept. 2026) : la galerie ne pouvait
+ * jusqu'ici s'enrichir qu'une photo à la fois (un enregistrement par
+ * photo) — voir `resolveImagesFromFormData` (media-service.ts) pour le
+ * chemin complet, du formulaire jusqu'ici.
+ */
+export async function appendProductImages(organizationId: string, productId: string, urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+  const existing = await listProductImages(organizationId, productId);
+  const startPosition = existing.length > 0 ? Math.max(...existing.map((i) => i.position)) + 1 : 0;
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase.from("product_images").insert(
+    urls.map((url, index) => ({
+      organization_id: organizationId,
+      product_id: productId,
+      url,
+      position: startPosition + index,
+    })),
+  );
+
+  if (error) throw new Error(`Impossible d'ajouter les photos: ${error.message}`);
+}
+
 /** Referme l'écart des positions (toujours 0,1,2... contigu) — nécessaire après une suppression pour que "position 0" reste un repère fiable de photo principale. */
 async function renumberProductImages(organizationId: string, productId: string): Promise<void> {
   const supabase = getSupabaseServiceClient();

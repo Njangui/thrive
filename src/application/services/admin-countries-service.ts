@@ -115,7 +115,11 @@ async function assertActivationReadiness(country: CountryRecord): Promise<void> 
   }
 
   const prices = await listPlanPricesForCountry(country.isoCode);
-  const missingPlans = prices.filter((p) => p.source === "fallback_default").map((p) => p.key);
+  // Le plan gratuit reste à 0 dans TOUS les pays et n'a jamais de ligne `plan_prices`
+  // (upsertCountryPrice le refuse) : sa source est donc toujours "fallback_default".
+  // Ce n'est pas un prix « non configuré » — sans cette exclusion, depuis le passage en
+  // freemium, aucun nouveau pays ne pouvait plus être activé (« Prix non configurés pour : free »).
+  const missingPlans = prices.filter((p) => p.key !== "free" && p.source === "fallback_default").map((p) => p.key);
   if (missingPlans.length > 0) {
     problems.push(`Prix non configurés pour : ${missingPlans.join(", ")}.`);
   }
@@ -187,6 +191,9 @@ export async function upsertCountryPrice(
 ): Promise<void> {
   if (!isPlanKey(planKey)) {
     throw new ValidationError(`Plan invalide — attendu l'un de : ${PLAN_KEYS.join(", ")}.`);
+  }
+  if (planKey === "free") {
+    throw new ValidationError('Le plan "free" reste à 0 dans tous les pays — aucun prix par pays à configurer pour lui.');
   }
 
   const country = await getCountry(isoCode);

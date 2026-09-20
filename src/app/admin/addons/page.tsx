@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { requirePlatformAdmin } from "@/application/services/platform-admin-service";
 import { listAddons } from "@/application/services/addons-service";
-import { createAddon, updateAddon, getTrialDays, setTrialDays } from "@/application/services/admin-addons-service";
+import { createAddon, updateAddon } from "@/application/services/admin-addons-service";
+import { getDedicatedNumberMonthlyPriceFcfa, setDedicatedNumberMonthlyPriceFcfa } from "@/application/services/phone-number-rental-service";
 import { AppError } from "@/lib/errors";
 
 async function createAddonAction(formData: FormData) {
@@ -44,19 +45,29 @@ async function toggleAddonAction(formData: FormData) {
   redirect("/admin/addons?success=" + encodeURIComponent(active ? "Add-on désactivé." : "Add-on réactivé."));
 }
 
-async function updateTrialDaysAction(formData: FormData) {
+/**
+ * Loyer mensuel du numéro WhatsApp dédié aux groupes (chemin payant,
+ * voir phone-number-rental-service.ts et
+ * 0058_whatsapp_coexistence_dedicated_numbers.sql) — PAS un add-on du
+ * catalogue générique ci-dessous : "whatsapp_groups" est explicitement
+ * bloqué comme entitlementKey (voir createAddon dans
+ * admin-addons-service.ts) parce que la capacité vient désormais d'un
+ * numéro dédié connecté, pas d'un incrément acheté. Réglage plateforme
+ * unique.
+ */
+async function updateDedicatedNumberPriceAction(formData: FormData) {
   "use server";
   const admin = await requirePlatformAdmin();
-  const days = Number(formData.get("trialDays") ?? 0);
+  const priceFcfa = Number(formData.get("dedicatedNumberPriceFcfa") ?? 0);
 
   try {
-    await setTrialDays(days, admin.userId);
+    await setDedicatedNumberMonthlyPriceFcfa(priceFcfa, admin.userId);
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour du réglage";
     redirect(`/admin/addons?error=${encodeURIComponent(message)}`);
   }
 
-  redirect("/admin/addons?success=" + encodeURIComponent("Durée d'essai mise à jour."));
+  redirect("/admin/addons?success=" + encodeURIComponent("Prix du numéro dédié mis à jour."));
 }
 
 export default async function AdminAddonsPage({
@@ -66,7 +77,10 @@ export default async function AdminAddonsPage({
 }) {
   await requirePlatformAdmin();
   const { error, success } = await searchParams;
-  const [addons, trialDays] = await Promise.all([listAddons(true), getTrialDays()]);
+  const [addons, dedicatedNumberPriceFcfa] = await Promise.all([
+    listAddons(true),
+    getDedicatedNumberMonthlyPriceFcfa(),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -82,21 +96,28 @@ export default async function AdminAddonsPage({
 
       <section>
         <h2 className="font-jakarta text-lg font-semibold">Réglages plateforme</h2>
-        <form action={updateTrialDaysAction} className="mt-3 flex items-end gap-2">
-          <label className="flex flex-col text-sm">
-            Durée d&apos;essai par défaut (jours)
-            <input
-              type="number"
-              name="trialDays"
-              min={1}
-              defaultValue={trialDays}
-              className="mt-1 w-32 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm text-navy-900"
-            />
-          </label>
-          <button type="submit" className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:opacity-90">
-            Enregistrer
-          </button>
-        </form>
+        <div className="mt-3 flex flex-wrap gap-6">
+          <form action={updateDedicatedNumberPriceAction} className="flex items-end gap-2">
+            <label className="flex flex-col text-sm">
+              Numéro Groupe WhatsApp — loyer mensuel (FCFA)
+              <input
+                type="number"
+                name="dedicatedNumberPriceFcfa"
+                min={1}
+                defaultValue={dedicatedNumberPriceFcfa}
+                className="mt-1 w-40 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm text-navy-900"
+              />
+            </label>
+            <button type="submit" className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:opacity-90">
+              Enregistrer
+            </button>
+          </form>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Le numéro dédié aux groupes n&apos;apparaît pas dans le catalogue d&apos;add-ons ci-dessous : c&apos;est un réglage
+          plateforme unique (pas un incrément acheté), géré depuis <a href="/admin/numbers" className="underline">/admin/numbers</a>{" "}
+          pour l&apos;assignation des numéros.
+        </p>
       </section>
 
       <section>
@@ -119,7 +140,7 @@ export default async function AdminAddonsPage({
             <input type="number" name="priceFcfa" min={0} required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">
-            Clé d&apos;entitlement ciblée (ex: ai_credits, whatsapp_groups)
+            Clé d&apos;entitlement ciblée (ex: ai_credits — whatsapp_groups n&apos;est plus vendable ici, voir /admin/numbers)
             <input name="entitlementKey" required className="mt-1 rounded-xl border border-navy-900/[0.12] px-3 py-2 text-sm" />
           </label>
           <label className="flex flex-col text-sm">

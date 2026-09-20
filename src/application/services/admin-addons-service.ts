@@ -1,7 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { writeAdminAuditLog } from "./admin-organizations-service";
-import { getPlatformSettingNumber, setPlatformSetting } from "./platform-settings-service";
 
 /**
  * Lot G, Partie 2 — gestion Super Admin du catalogue d'add-ons (section
@@ -24,6 +23,11 @@ export async function createAddon(input: CreateAddonInput, actorUserId: string):
   if (!key) throw new ValidationError("La clé de l'add-on est requise.");
   if (!input.name.trim()) throw new ValidationError("Le nom de l'add-on est requis.");
   if (!input.entitlementKey.trim()) throw new ValidationError("La clé d'entitlement ciblée est requise.");
+  if (input.entitlementKey.trim() === "whatsapp_groups") {
+    throw new ValidationError(
+      "\"whatsapp_groups\" ne peut plus être vendu comme add-on — la capacité vient désormais exclusivement d'un numéro dédié connecté (self-serve ou location, voir /admin/numbers).",
+    );
+  }
   if (input.priceFcfa < 0) throw new ValidationError("Le prix doit être positif.");
   if (!Number.isInteger(input.incrementValue) || input.incrementValue <= 0) {
     throw new ValidationError("L'incrément doit être un entier positif.");
@@ -97,16 +101,4 @@ export async function updateAddon(key: string, input: UpdateAddonInput, actorUse
     beforeState: before,
     afterState: { ...before, ...patch },
   });
-}
-
-/** Durée d'essai par défaut (jours) — consommée par plans-repository.ts::createTrialSubscription(). */
-export async function getTrialDays(): Promise<number> {
-  return getPlatformSettingNumber("trial_days", 14);
-}
-
-export async function setTrialDays(days: number, actorUserId: string): Promise<void> {
-  if (!Number.isInteger(days) || days <= 0) {
-    throw new ValidationError("La durée d'essai doit être un nombre entier de jours positif.");
-  }
-  await setPlatformSetting("trial_days", days, actorUserId);
 }

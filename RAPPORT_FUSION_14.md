@@ -162,3 +162,79 @@ repris.
 
 Livré en zip du projet complet (`node_modules`, `.next` et
 `tsconfig.tsbuildinfo` exclus).
+
+---
+
+## Addendum — retours après mise en ligne (19/09/2026)
+
+Trois écrans signalés, trois causes distinctes.
+
+### 1. « Erreur lors de l'enregistrement. » sur `/dashboard/ai` — bug de code, corrigé
+
+**Cause.** `redirect()` (et tout helper qui l'appelle, ici `flashRedirect`) ne
+« retourne » pas : il **lève** l'exception spéciale `NEXT_REDIRECT` que Next.js
+intercepte plus haut. L'action de `/dashboard/ai` appelait
+`flashRedirect("success", …)` **à l'intérieur** d'un `try` dont le `catch`
+attrape tout : ce `catch` avalait le `NEXT_REDIRECT` du succès et redirigeait
+vers le message d'erreur générique. Conséquence : **l'écriture en base
+réussissait, mais l'utilisateur voyait une erreur à chaque enregistrement**
+(le formulaire rechargé montrait d'ailleurs la case cochée). Même famille que
+le bug déjà corrigé en #13 dans `dashboard/channels/page.tsx`, présent tel
+quel dans l'archive thrive et dans cresyva (antérieur à toute fusion).
+
+**Audit systématique** (parcours AST de tout `src/`, pas seulement le fichier
+signalé) : 16 `try/catch` contenant un appel de type redirect, dont 3 faux
+positifs sûrs (`catch` qui re-lance ce qu'il ne reconnaît pas :
+`affiliate/dashboard/telegram`, `dashboard/leads` ; et
+`NextResponse.redirect` de `api/youtube/callback`, qui retourne une réponse
+sans rien lever). **13 sites réels dans 6 fichiers**, tous corrigés :
+
+| Fichier | Sites | Effet visible avant correctif |
+|---|---|---|
+| `dashboard/ai/page.tsx` | 1 | « Erreur lors de l'enregistrement » après chaque succès |
+| `dashboard/groups/page.tsx` | 5 (connecter, déconnecter, programmer, annuler, relancer) | erreur affichée après une opération réussie |
+| `dashboard/team/page.tsx` | 4 (inviter, révoquer, changer de rôle, retirer) | idem ; en plus, le lien d'invitation à partager manuellement (email non parti) n'apparaissait jamais |
+| `dashboard/marketing/nouveau/page.tsx` | 1 | une publication réussie affichait « NEXT_REDIRECT » comme message d'erreur |
+| `dashboard/products/[id]/edit/page.tsx` et `dashboard/services/[id]/edit/page.tsx` | 1 chacun | ajout de photo sans fichier ni lien : message générique au lieu de « Choisissez une photo… » |
+
+Schéma appliqué : résultat capturé dans une variable dans le `try`, appel de
+`redirect()` **après** le `try/catch` (ou `throw new AppError(...)` pour une
+validation, dont le `catch` existant affiche déjà le message). Messages
+inchangés. Dans `/dashboard/ai`, la cause réelle d'un échec non prévu est
+maintenant écrite dans les logs serveur (`console.error`), l'écran restant
+volontairement générique.
+
+**Garde-fou.** `src/lib/no-redirect-in-try-catch.test.ts` parcourt tout `src/`
+et **échoue** si `redirect()`/`permanentRedirect()`/`notFound()` — ou un helper
+du même fichier qui les appelle — est de nouveau appelé dans un `try` dont le
+`catch` ne re-lance pas l'erreur. Le bug est apparu à deux fusions consécutives ;
+le test l'empêche de revenir sans que personne ne le remarque.
+
+### 2. `/dashboard/marketing` et vitrine du tenant « Une erreur est survenue » — cause probable : migrations non appliquées (NON vérifié)
+
+Les deux écrans exécutent des requêtes qui **lèvent** si un objet SQL manque :
+- `/dashboard/marketing` lit `telegram_publications` (migration `0055`) ;
+  `listTelegramPublications` lève une erreur si la table n'existe pas ;
+- la vitrine publique charge ses sections via `listStorefrontProducts`
+  (colonne `promotion_ends_at`, `0057`) et `listActiveServicesForStorefront`
+  (table `service_images`, `0056`), qui lèvent de même.
+
+Cette fusion ajoute donc trois migrations **qui doivent être appliquées à la
+base avant/avec le déploiement du code** (`0055`, `0056`, `0057`). Je n'ai
+aucun accès à la base ni aux logs de production : c'est une hypothèse, pas un
+constat. Deux façons de la confirmer ou l'infirmer :
+- exécuter `supabase/CHECK_MIGRATIONS_0055_0061.sql` (lecture seule, fourni)
+  dans le SQL Editor : un `false` désigne la migration manquante ;
+- lire la cause exacte dans les logs serveur (Vercel → Logs) : chercher
+  « does not exist » ou « Could not find a relationship ».
+
+### 3. Erreur de ma fusion #14, corrigée en #15
+
+Ce rapport affirmait plus haut que la renumérotation avait mis à jour « le
+commentaire d'en-tête » des migrations. C'était inexact : seules les
+références numériques nues (`0055`, `0056`) avaient été remplacées ; la ligne
+2 de `0056_service_images_and_specifications.sql` et de
+`0057_promotion_deadline.sql` citait encore l'ancien nom de fichier (`0055_…`,
+`0056_…`) parce que le motif `\b0055\b` ne s'applique pas avant un
+underscore. Corrigé en #15 (aucun impact à l'exécution : ce sont des
+commentaires SQL).

@@ -7,12 +7,26 @@ export interface FaqMatch {
 }
 
 /**
- * Cherche une FAQ correspondant au message entrant, uniquement par
- * correspondance de mots-clés (section 18 : "NE PAS appeler le LLM").
- * Volontairement simple : un match si au moins un mot-clé de la FAQ
- * apparaît dans le message (normalisé, sans accents). Une recherche plus
- * fine (score, plusieurs mots-clés requis) peut être affinée plus tard
- * avec de vrais cas d'usage — pas de sur-ingénierie prématurée.
+ * Cherche une FAQ correspondant au message entrant, sans jamais appeler
+ * le LLM (section 18). Correspondance par MOTS, tolérante aux variantes.
+ *
+ * CORRECTIF (sept. 2026) — la version précédente n'acceptait un mot-clé
+ * que s'il apparaissait TEL QUEL dans le message : un mot-clé
+ * « livraison » ne se déclenchait donc jamais sur « vous livrez ? », ni
+ * « horaire » sur « à quelle heure ouvrez-vous ». Le client n'a aucune
+ * raison de reprendre le mot exact configuré par le commerçant, et le
+ * message tombait alors dans le reste du pipeline (jusqu'à l'IA, donc
+ * jusqu'à une escalade quand elle n'est pas configurée).
+ *
+ * Règles (voir `wordsMatch`) :
+ *  1. un mot-clé peut être une expression (« mode de paiement ») : tous
+ *     ses mots significatifs doivent se retrouver dans le message ;
+ *  2. deux mots correspondent s'ils sont identiques, ou s'ils partagent
+ *     le même radical (livraison ~ livrez ~ livrer) ;
+ *  3. à défaut de mot-clé, la QUESTION de la FAQ sert de filet de
+ *     sécurité (au moins 2 mots significatifs et 60 % d'entre eux).
+ * En cas de plusieurs FAQ candidates, celle qui a le plus de mots-clés
+ * touchés (puis le mot-clé le plus long) l'emporte.
  */
 export async function matchFaq(organizationId: string, message: string): Promise<FaqMatch | null> {
   const supabase = getSupabaseServiceClient();
@@ -29,23 +43,93 @@ export async function matchFaq(organizationId: string, message: string): Promise
   }
 
   const normalizedMessage = normalize(message);
+  const messageTokens = normalizedMessage.split(" ").filter(Boolean);
+  if (messageTokens.length === 0) return null;
+
+  let best: { faq: { question: string; answer: string }; hits: number; longest: number } | null = null;
 
   for (const faq of faqs ?? []) {
-    const keywords = (faq.keywords ?? []) as string[];
-    const hasMatch = keywords.some((keyword) => normalizedMessage.includes(normalize(keyword)));
-    if (hasMatch) {
-      return { question: faq.question, answer: faq.answer };
+    const keywords = ((faq.keywords ?? []) as string[]).map((k) => normalize(String(k))).filter(Boolean);
+    let hits = 0;
+    let longest = 0;
+    for (const keyword of keywords) {
+      if (keywordMatches(keyword, normalizedMessage, messageTokens)) {
+        hits += 1;
+        longest = Math.max(longest, keyword.length);
+      }
+    }
+    if (hits > 0 && (!best || hits > best.hits || (hits === best.hits && longest > best.longest))) {
+      best = { faq: { question: faq.question, answer: faq.answer }, hits, longest };
     }
   }
+  if (best) return { question: best.faq.question, answer: best.faq.answer };
 
-  return null;
+  // Filet de sécurité : la question elle-même, quand aucun mot-clé ne colle.
+  let bestByQuestion: { faq: { question: string; answer: string }; ratio: number } | null = null;
+  for (const faq of faqs ?? []) {
+    const questionTokens = significantTokens(normalize(faq.question ?? ""));
+    if (questionTokens.length < 2) continue;
+    const matched = questionTokens.filter((qt) => messageTokens.some((mt) => wordsMatch(qt, mt))).length;
+    const ratio = matched / questionTokens.length;
+    if (matched >= 2 && ratio >= 0.6 && (!bestByQuestion || ratio > bestByQuestion.ratio)) {
+      bestByQuestion = { faq: { question: faq.question, answer: faq.answer }, ratio };
+    }
+  }
+  return bestByQuestion ? { question: bestByQuestion.faq.question, answer: bestByQuestion.faq.answer } : null;
 }
 
+const STOP_WORDS = new Set([
+  "de", "du", "des", "la", "le", "les", "un", "une", "et", "en", "au", "aux", "ou", "pour", "que", "qui", "sur", "avec",
+  "est", "vous", "nous", "votre", "vos", "mon", "ma", "mes", "ce", "cet", "cette", "ces", "pas", "par", "dans", "quel", "quelle",
+]);
+
+function significantTokens(normalizedText: string): string[] {
+  return normalizedText.split(" ").filter((t) => t.length >= 3 && !STOP_WORDS.has(t));
+}
+
+/**
+ * Deux mots (déjà normalisés) se correspondent s'ils sont identiques ou
+ * partagent un radical. Prudent volontairement : un mot court (≤ 5
+ * lettres) doit être le DÉBUT de l'autre (heure/heures, tarif/tarifs) —
+ * jamais un simple préfixe commun, sinon « livre » (l'objet) déclencherait
+ * une FAQ « livraison ». Pour les mots plus longs, un radical commun d'au
+ * moins 4 lettres couvrant l'essentiel du plus court suffit
+ * (livraison/livrez/livrer).
+ */
+export function wordsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const minLen = Math.min(a.length, b.length);
+  if (minLen < 3) return false;
+  if (minLen <= 5) return a.startsWith(b) || b.startsWith(a);
+  let common = 0;
+  while (common < minLen && a[common] === b[common]) common += 1;
+  return common >= Math.max(4, minLen - 2);
+}
+
+function keywordMatches(keyword: string, normalizedMessage: string, messageTokens: string[]): boolean {
+  // Ancien comportement conservé pour les mots-clés assez longs (un radical
+  // saisi par le commerçant, ex. « livr », doit continuer à fonctionner) —
+  // mais jamais pour 1 à 3 lettres, où « ci »/« eau » se retrouvaient dans
+  // « merci »/« beaucoup ».
+  if (keyword.length >= 4 && normalizedMessage.includes(keyword)) return true;
+
+  const keywordTokens = significantTokens(keyword);
+  if (keywordTokens.length === 0) {
+    // Mot-clé fait uniquement de mots vides ou très courts (« ou », « 24h ») :
+    // correspondance exacte sur mots entiers, jamais en sous-chaîne.
+    return ` ${normalizedMessage} `.includes(` ${keyword} `);
+  }
+  return keywordTokens.every((kt) => messageTokens.some((mt) => wordsMatch(kt, mt)));
+}
+
+/** Minuscules, sans accents, ponctuation → espaces (« vous-livrez ? » → « vous livrez »). */
 function normalize(text: string): string {
   return text
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 /**

@@ -107,3 +107,52 @@ describe("listFaqs", () => {
     expect(result[0]!.keywords).toEqual([]);
   });
 });
+
+function mockFaqRows(rows: Array<{ question: string; answer: string; keywords: string[] }>) {
+  mockFrom.mockReturnValue({
+    select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: rows, error: null }) }) }),
+  });
+}
+
+describe("matchFaq — tolérance aux variantes (correctif sept. 2026 : FAQ configurée mais jamais déclenchée)", () => {
+  const livraison = [{ question: "Livrez-vous à domicile ?", answer: "LIVRAISON", keywords: ["livraison"] }];
+
+  it("un client écrivant « livrez » déclenche le mot-clé « livraison » (même radical)", async () => {
+    mockFaqRows(livraison);
+    expect((await matchFaq("org-1", "Bonjour, vous livrez à Douala ?"))?.answer).toBe("LIVRAISON");
+  });
+
+  it("« livre » (l'objet) ne déclenche PAS une FAQ « livraison » (faux positif évité)", async () => {
+    mockFaqRows(livraison);
+    expect(await matchFaq("org-1", "Avez-vous ce livre en stock ?")).toBeNull();
+  });
+
+  it("un mot-clé vide ou fait d'espaces ne matche jamais tout", async () => {
+    mockFaqRows([{ question: "Q", answer: "A", keywords: ["", " "] }]);
+    expect(await matchFaq("org-1", "bonjour")).toBeNull();
+  });
+
+  it("un mot-clé de 2 lettres ne se retrouve pas dans un autre mot (« ci » / « merci »)", async () => {
+    mockFaqRows([{ question: "Q", answer: "A", keywords: ["ci"] }]);
+    expect(await matchFaq("org-1", "merci beaucoup")).toBeNull();
+  });
+
+  it("un mot-clé en plusieurs mots exige tous ses mots significatifs", async () => {
+    mockFaqRows([{ question: "Q", answer: "PAY", keywords: ["mode de paiement"] }]);
+    expect((await matchFaq("org-1", "quels sont vos modes de paiement ?"))?.answer).toBe("PAY");
+    expect(await matchFaq("org-1", "quel est le mode de livraison ?")).toBeNull();
+  });
+
+  it("à défaut de mot-clé, la question de la FAQ sert de filet de sécurité", async () => {
+    mockFaqRows([{ question: "Acceptez-vous le paiement par Mobile Money ?", answer: "MM", keywords: ["momo"] }]);
+    expect((await matchFaq("org-1", "est-ce que le paiement mobile money est accepté"))?.answer).toBe("MM");
+  });
+
+  it("plusieurs FAQ candidates : celle qui a le plus de mots-clés touchés l'emporte", async () => {
+    mockFaqRows([
+      { question: "A", answer: "A1", keywords: ["prix"] },
+      { question: "B", answer: "B2", keywords: ["prix", "livraison"] },
+    ]);
+    expect((await matchFaq("org-1", "quel est le prix de la livraison ?"))?.answer).toBe("B2");
+  });
+});

@@ -1,5 +1,5 @@
 -- ============================================================
--- 0056_promotion_deadline.sql
+-- 0057_promotion_deadline.sql
 -- Chantier « catalogue V2 », itération 2 (compte à rebours des promotions).
 --
 -- Une session précédente avait délibérément renoncé à un compte à rebours

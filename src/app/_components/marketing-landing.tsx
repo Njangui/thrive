@@ -120,7 +120,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "Puis-je essayer avant de payer ?",
-    answer: "Oui, chaque nouvelle entreprise démarre avec une période d'essai gratuite, sans engagement.",
+    answer: "Oui. Chaque nouvelle entreprise démarre sur l'offre gratuite Discover — sans limite de durée et sans carte bancaire — et passe à une offre payante seulement quand elle en a besoin.",
   },
   {
     question: "Puis-je changer d'offre ou arrêter à tout moment ?",

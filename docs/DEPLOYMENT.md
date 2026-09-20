@@ -178,6 +178,29 @@ Même mise en place que `process-broadcasts` ci-dessus (même
    permet de vérifier rapidement que le cron tourne et de repérer un
    volume anormal de paiements bloqués.
 
+## 4quater. Numéros WhatsApp dédiés aux Groupes (Coexistence) — cron externe
+
+Depuis le lot WhatsApp Coexistence (migration `0058_whatsapp_coexistence_dedicated_numbers.sql`),
+la messagerie WhatsApp 1:1 passe en Coexistence et les **Groupes** exigent un
+second numéro, dédié (voir l'en-tête de la migration pour le contexte produit
+complet). Un commerçant peut soit connecter lui-même son propre numéro
+(gratuit), soit en demander un à la plateforme (loyer mensuel, séparé du
+forfait ; un Super Admin l'assigne depuis `/admin/numbers`).
+
+`app/api/cron/process-phone-number-renewals/route.ts` gère l'échéance de ces
+loyers : relance J-3, puis **reprise automatique du numéro et suspension des
+groupes qu'il alimente** si le loyer n'est pas renouvelé. Même mise en place que
+`process-subscription-renewals` (même `CRON_SECRET`) :
+
+1. Programmer un appel `GET` (ou `POST`) toutes les 1 à 4 heures vers
+   `https://votre-domaine.com/api/cron/process-phone-number-renewals`, avec
+   l'en-tête `Authorization: Bearer <CRON_SECRET>`.
+2. Vérifier la réponse JSON `{ ok, remindersSent, reclaimed, skipped }`.
+
+Sans ce déclencheur, la route existe mais rien ne s'exécute : aucun numéro loué
+n'est relancé ni repris. Le prix mensuel se règle depuis `/admin/addons`
+(affiché sur `/admin/numbers` ; valeur de repli : 5 000 FCFA).
+
 ## 5. Domaines custom par tenant
 
 `middleware.ts` gère déjà la résolution par sous-domaine
@@ -235,6 +258,9 @@ jamais une vérification de sécurité.
       désormais la requête en production (`NODE_ENV === "production"`,
       correctif Lot 1, voir `docs/SECURITY.md`) plutôt que de l'accepter
       silencieusement
+- [ ] Programmer aussi `/api/cron/process-phone-number-renewals` (toutes les
+      1 à 4 h, même `CRON_SECRET`, section 4quater) — sans lui, aucun numéro
+      WhatsApp dédié n'est relancé ni repris à échéance
 - [ ] Configurer le webhook NotchPay + `NOTCHPAY_WEBHOOK_SECRET` (Lot G,
       section 3bis) avant d'annoncer le paiement d'abonnement/add-ons
 - [ ] Vérifier l'activation carte bancaire NotchPay dans le dashboard du

@@ -36,10 +36,11 @@ export interface SubscriptionPaymentSummary {
 interface SubscriptionPaymentRow {
   id: string;
   organization_id: string;
-  payment_type: "plan_subscription" | "addon";
+  payment_type: "plan_subscription" | "addon" | "dedicated_number";
   plan_key: string | null;
   addon_key: string | null;
   addon_quantity: number | null;
+  phone_number_id: string | null;
   amount_fcfa: number;
   currency_code: string;
   provider_reference: string;
@@ -80,7 +81,7 @@ export interface AdminPaymentSummary extends SubscriptionPaymentSummary {
  * Lot 4 (section 52 du master prompt — "Payments" dans la liste des
  * sections attendues du Super Admin). `listPaymentsForOrganization`
  * ci-dessus n'existait qu'à l'échelle d'un tenant (dashboard) ; jusqu'à
- * ce lot, l'opérateur SME-OS n'avait aucune vue d'ensemble des paiements
+ * ce lot, l'opérateur CRESYVA n'avait aucune vue d'ensemble des paiements
  * plateforme (rapprochement, paiements en attente/échoués tous tenants
  * confondus). Lecture seule : les changements de statut restent la
  * responsabilité exclusive de handlePaymentWebhook() ci-dessous — cette
@@ -165,6 +166,13 @@ export async function initiatePayment(
   if (!plan) {
     throw new ValidationError(`Forfait "${planKey}" introuvable.`);
   }
+  if (planKey === "free") {
+    // Rien à facturer — le downgrade vers "free" passe par
+    // plans-repository.ts::switchToFreePlan (dashboard/subscription/
+    // page.tsx en fait un chemin distinct de payPlanAction), jamais par
+    // ce pipeline de paiement NotchPay.
+    throw new ValidationError('Le plan "free" ne nécessite aucun paiement — utilisez switchToFreePlan().');
+  }
 
   const countryCode = await getOrganizationCountryCode(organizationId);
   const { amount: listedAmount, currencyCode } = await resolvePlanPriceForCountry(plan, countryCode);
@@ -215,7 +223,7 @@ export async function initiatePayment(
     amount,
     currency: currencyCode,
     customerEmail: payerEmail,
-    description: `Abonnement SME-OS — forfait ${plan.name}`,
+    description: `Abonnement CRESYVA — forfait ${plan.name}`,
   });
 
   if (result.providerReference !== paymentId) {
@@ -284,7 +292,7 @@ export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise
   const { data: payment, error } = await supabase
     .from("subscription_payments")
     .select(
-      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, currency_code, provider_reference, status",
+      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, phone_number_id, amount_fcfa, currency_code, provider_reference, status",
     )
     .eq("provider_reference", reference)
     .maybeSingle();
@@ -398,7 +406,7 @@ export async function reconcileStalePayments(staleAfterMinutes = 20): Promise<{
   const { data: stalePayments, error } = await supabase
     .from("subscription_payments")
     .select(
-      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, amount_fcfa, currency_code, provider_reference, status",
+      "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, phone_number_id, amount_fcfa, currency_code, provider_reference, status",
     )
     .eq("status", "pending")
     .lt("created_at", staleThreshold)
@@ -521,8 +529,12 @@ interface RenewalCandidate {
  * fonction pure métier appelée par une route protégée par CRON_SECRET,
  * jamais l'inverse.
  *
- * Pour chaque abonnement `trialing` (échéance = trial_end) ou `active`
- * (échéance = current_period_end) :
+ * Pour chaque abonnement PAYANT `active` (échéance = current_period_end) — ou `trialing`
+ * (échéance = trial_end), état hérité de l'ancien essai, qui ne peut plus être créé depuis le
+ * freemium mais reste traité tant qu'une telle ligne existe. Le plan gratuit est exclu dès la
+ * requête : sans échéance par construction, il forme désormais la grande majorité des lignes
+ * (les charger à chaque passage du cron serait du travail perdu, et les compter en `skipped`
+ * noierait ce compteur) :
  * - échéance dans J-3 ET aucune relance déjà envoyée pour CETTE échéance
  *   (`last_renewal_reminder_sent_at` NULL) -> génère un lien de paiement +
  *   notifie + marque la relance envoyée (jamais une seconde fois pour la
@@ -544,7 +556,8 @@ export async function processSubscriptionRenewals(): Promise<{
   const { data: candidates, error } = await supabase
     .from("organization_subscriptions")
     .select("organization_id, status, trial_end, current_period_end, last_renewal_reminder_sent_at")
-    .in("status", ["trialing", "active"]);
+    .in("status", ["trialing", "active"])
+    .neq("plan_key", "free");
 
   if (error) throw new Error(`Erreur lecture organization_subscriptions: ${error.message}`);
 
@@ -581,7 +594,7 @@ export async function processSubscriptionRenewals(): Promise<{
       await notifyOrgAdmins({
         organizationId: row.organization_id,
         title: "Abonnement expiré.",
-        body: "Votre période d'essai ou d'abonnement est arrivée à échéance sans paiement. Renouvelez depuis Mon abonnement pour continuer à utiliser SME-OS.",
+        body: "Votre abonnement est arrivé à échéance sans paiement. Renouvelez-le depuis Mon abonnement pour conserver votre offre, ou repassez à l'offre gratuite.",
         relatedEntityType: "organization_subscription",
         relatedEntityId: row.organization_id,
       });
@@ -664,6 +677,35 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
       organizationId: payment.organization_id,
       addonKey: payment.addon_key,
       addonQuantity: payment.addon_quantity,
+    });
+    return;
+  }
+
+  // Loyer du numéro WhatsApp dédié aux groupes (0058_whatsapp_
+  // coexistence_dedicated_numbers.sql) — cycle indépendant de
+  // organization_subscriptions ci-dessous, volontairement traité ici
+  // (pas dans phone-number-rental-service.ts) pour éviter tout import
+  // croisé entre les deux fichiers de paiement (voir ce fichier,
+  // findOwnerEmailForPhoneNumberRenewal).
+  if (payment.payment_type === "dedicated_number" && payment.phone_number_id) {
+    const currentPeriodEnd = new Date();
+    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+
+    const { error: numberError } = await supabase
+      .from("phone_numbers")
+      .update({ current_period_end: currentPeriodEnd.toISOString(), last_renewal_reminder_sent_at: null })
+      .eq("id", payment.phone_number_id);
+
+    if (numberError) {
+      throw new Error(`markPaymentCompleted: échec mise à jour phone_numbers: ${numberError.message}`);
+    }
+
+    await notifyOrgAdmins({
+      organizationId: payment.organization_id,
+      title: "Numéro dédié renouvelé.",
+      body: `Votre numéro WhatsApp dédié aux groupes est reconduit jusqu'au ${currentPeriodEnd.toLocaleDateString("fr-FR")}.`,
+      relatedEntityType: "phone_number",
+      relatedEntityId: payment.phone_number_id,
     });
     return;
   }

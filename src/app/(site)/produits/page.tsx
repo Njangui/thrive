@@ -1,3 +1,4 @@
+import { listProductIdsWithActiveVideo } from "@/application/services/catalog-video-service";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -72,7 +73,7 @@ export default async function CatalogPage({
 
   const category = categorySlug ? await getStorefrontCategoryBySlug(tenant.organizationId, categorySlug) : null;
 
-  const [products, totalCount, categories] = await Promise.all([
+  const [products, totalCount, categories, productIdsWithVideo] = await Promise.all([
     listStorefrontProducts(tenant.organizationId, {
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
@@ -82,6 +83,7 @@ export default async function CatalogPage({
     }),
     countStorefrontProducts(tenant.organizationId, { categoryId: category?.id, search }),
     listStorefrontCategories(tenant.organizationId),
+    listProductIdsWithActiveVideo(tenant.organizationId),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -196,6 +198,7 @@ export default async function CatalogPage({
             <ProductGrid
               products={products}
               organizationId={tenant.organizationId}
+              productIdsWithVideo={[...productIdsWithVideo]}
               newBadgeLabel={blueprint.newBadgeLabel}
             />
             <Pagination page={page} totalPages={totalPages} buildHref={(target) => buildHref({ page: String(target) })} />

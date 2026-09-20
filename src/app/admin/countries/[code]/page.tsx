@@ -19,7 +19,11 @@ const STATUS_LABELS: Record<CountryLaunchStatus, string> = {
   active: "Actif",
 };
 
-const PLAN_LABELS: Record<PlanKey, string> = { starter: "Starter", business: "Business", pro: "Pro" };
+const PLAN_LABELS: Record<PlanKey, string> = { free: "Discover", starter: "Starter", pro: "Pro" };
+// "free" est volontairement exclu de la tarification par pays
+// ci-dessous : le plan gratuit reste à 0 partout, jamais de prix par
+// pays à configurer pour lui (voir PAID_PLAN_KEYS plus bas).
+const PAID_PLAN_KEYS = PLAN_KEYS.filter((key) => key !== "free");
 
 const CONFIRM_MESSAGES: Partial<Record<CountryLaunchStatus, (name: string) => string>> = {
   active: (name) => `Activer ${name} ? Les nouvelles organisations pourront s'inscrire immédiatement.`,
@@ -204,7 +208,7 @@ export default async function AdminCountryDetailPage({
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          {PLAN_KEYS.map((planKey) => {
+          {PAID_PLAN_KEYS.map((planKey) => {
             const price = prices.find((p) => p.key === planKey);
             return (
               <form

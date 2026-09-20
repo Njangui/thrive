@@ -155,7 +155,7 @@ export async function disconnectTelegramChannel(organizationId: string, actorUse
 
   // Best-effort : le tenant a pu révoquer/supprimer son bot côté
   // BotFather entre-temps — un échec ici ne doit jamais empêcher la
-  // déconnexion côté SME-OS (voir aussi le raisonnement identique pour
+  // déconnexion côté CRESYVA (voir aussi le raisonnement identique pour
   // Zernio dans provider-connection-service.ts).
   if (existing.credential_reference) {
     try {

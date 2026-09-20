@@ -89,12 +89,12 @@ export function mapZernioEventToDomainEvent(
     }
 
     // Confirmés (types.ts) mais pas encore consommés par une fonctionnalité
-    // SME-OS dans ce lot : conversation.started, message.sent/edited/
+    // CRESYVA dans ce lot : conversation.started, message.sent/edited/
     // deleted/delivered/read, reaction.received, comment.received (couvert
     // séparément par la synchronisation manuelle existante,
     // social-comment-service.ts — un webhook temps réel dédié reste à
     // construire), review.new/updated (aucune fonctionnalité "avis" dans
-    // SME-OS à ce jour — voir RAPPORT_LOT_3.md, section Missing). Logué
+    // CRESYVA à ce jour — voir RAPPORT_LOT_3.md, section Missing). Logué
     // proprement plutôt que silencieusement ignoré (section 44 : "Les
     // événements non supportés doivent être loggés proprement").
     default:
@@ -111,7 +111,7 @@ export function mapZernioEventToDomainEvent(
  *
  * `null` pour tout event qu'on ne traite pas activement dans ce lot
  * (post.scheduled/post.cancelled/post.recycled — déjà reflétés côté
- * SME-OS par nos propres actions schedulePost/cancelPost, pas par une
+ * CRESYVA par nos propres actions schedulePost/cancelPost, pas par une
  * confirmation webhook a posteriori) ou pour un event sans id de post
  * exploitable (jamais deviné).
  */

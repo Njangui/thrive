@@ -59,7 +59,7 @@ export async function getStorageProvider(_organizationId: string): Promise<Stora
  * un abonnement se paie AU platform (une seule ligne comptable NotchPay
  * plateforme), pas à un compte NotchPay propre à chaque tenant. Pas de
  * lookup `provider_connections` ici (ça n'aurait pas de sens : aucun
- * commerçant ne "connecte" son propre NotchPay pour payer SME-OS).
+ * commerçant ne "connecte" son propre NotchPay pour payer CRESYVA).
  * `organizationId` accepté pour la même raison que StorageProvider : ne
  * pas casser les appelants si un jour plusieurs comptes providers
  * plateforme coexistent (ex: NotchPay + CinetPay selon la devise/pays).
@@ -206,6 +206,50 @@ export async function getMessagingProvider(organizationId: string, providerName?
     default:
       throw new Error(`MessagingProvider "${connection.provider_name}" non implémenté.`);
   }
+}
+
+/**
+ * Variante de getMessagingProvider() ci-dessus, scopée au numéro
+ * WhatsApp DÉDIÉ aux groupes (provider_type='whatsapp_groups' — un
+ * second profil Zernio distinct de la messagerie 1:1, voir
+ * zernio-channel-service.ts::ensureZernioGroupsProfile). Fonction
+ * séparée plutôt qu'un paramètre optionnel sur getMessagingProvider :
+ * une connexion WhatsApp en Coexistence (provider_type='messaging',
+ * utilisée par getMessagingProvider pour les conversations 1:1) ne
+ * supporte PAS l'API Groupes (confirmé docs.zernio.com/platforms/
+ * whatsapp/connection) — les deux connexions doivent donc rester
+ * impossibles à confondre plutôt que de dépendre d'un paramètre qu'un
+ * appelant pourrait oublier de passer (même principe que le commentaire
+ * de tête de getMessagingProvider : "ambiguïté rendue impossible plutôt
+ * que silencieusement supposée").
+ */
+export async function getWhatsAppGroupsProvider(organizationId: string): Promise<MessagingProvider> {
+  const supabase = getSupabaseServiceClient();
+
+  const { data: connection, error } = await supabase
+    .from("provider_connections")
+    .select("provider_name, status, metadata")
+    .eq("organization_id", organizationId)
+    .eq("provider_type", "whatsapp_groups")
+    .eq("status", "connected")
+    .maybeSingle();
+
+  if (error) throw new Error(`Erreur lecture provider_connections (whatsapp_groups): ${error.message}`);
+  if (!connection) {
+    throw new Error(
+      `Aucun numéro WhatsApp dédié aux groupes connecté pour l'organization ${organizationId}. ` +
+        `Connectez un numéro dédié depuis Canaux avant d'utiliser les Groupes WhatsApp.`,
+    );
+  }
+
+  const metadata = (connection.metadata ?? {}) as { profileId?: string; accountId?: string };
+  if (!metadata.profileId || !metadata.accountId) {
+    throw new Error(
+      `provider_connections.metadata incomplet pour whatsapp_groups (profileId/accountId manquants), org ${organizationId}`,
+    );
+  }
+  const apiKey = await resolveCredential(organizationId, "messaging", "zernio");
+  return new ZernioAdapter(new ZernioClient(apiKey), metadata.profileId, metadata.accountId);
 }
 
 interface AIProviderBundle {

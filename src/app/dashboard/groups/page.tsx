@@ -31,6 +31,7 @@ const GROUP_STATUS_LABELS: Record<string, string> = {
   connected: "Connecté",
   disconnected: "Déconnecté",
   error: "Erreur",
+  suspended: "Suspendu (numéro dédié repris)",
 };
 
 const BROADCAST_STATUS_LABELS: Record<string, string> = {
@@ -97,16 +98,19 @@ async function connectGroupsAction(formData: FormData) {
     name: String(formData.get(`groupName:${externalId}`) ?? externalId),
   }));
 
+  // Succès appelé APRÈS le try/catch : redirect() lève NEXT_REDIRECT, que le catch avalerait.
+  let successMessage: string;
   try {
     const result = await connectGroups(organizationId, candidates, membership.userId);
     const parts: string[] = [];
     if (result.connected.length > 0) parts.push(`${result.connected.length} groupe(s) connecté(s)`);
     if (result.skipped.length > 0) parts.push(`${result.skipped.length} déjà connecté(s)`);
-    flashRedirect("success", parts.join(", ") || "Aucun changement.");
+    successMessage = parts.join(", ") || "Aucun changement.";
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la connexion des groupes.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", successMessage);
 }
 
 async function disconnectGroupAction(formData: FormData) {
@@ -117,11 +121,11 @@ async function disconnectGroupAction(formData: FormData) {
 
   try {
     await disconnectGroup(organizationId, groupId, membership.userId);
-    flashRedirect("success", "Groupe déconnecté.");
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la déconnexion du groupe.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", "Groupe déconnecté.");
 }
 
 async function createBroadcastAction(formData: FormData) {
@@ -133,18 +137,17 @@ async function createBroadcastAction(formData: FormData) {
   const groupIds = formData.getAll("groupIds").map(String);
   const scheduledAtLocal = String(formData.get("scheduledAt") ?? "");
 
+  let successMessage: string;
   try {
     if (!scheduledAtLocal) throw new AppError("Choisissez une date et une heure de diffusion.", 400, "validation");
     const scheduledAtIso = cameroonLocalToUtcIso(scheduledAtLocal);
     const result = await createBroadcast(organizationId, productIds, groupIds, scheduledAtIso, membership.userId);
-    flashRedirect(
-      "success",
-      `Diffusion programmée : ${result.productCount} produit(s) vers ${result.targetCount} groupe(s).`,
-    );
+    successMessage = `Diffusion programmée : ${result.productCount} produit(s) vers ${result.targetCount} groupe(s).`;
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la programmation de la diffusion.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", successMessage);
 }
 
 async function cancelBroadcastAction(formData: FormData) {
@@ -155,11 +158,11 @@ async function cancelBroadcastAction(formData: FormData) {
 
   try {
     await cancelBroadcast(organizationId, broadcastId, membership.userId);
-    flashRedirect("success", "Diffusion annulée.");
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de l'annulation.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", "Diffusion annulée.");
 }
 
 async function retryBroadcastAction(formData: FormData) {
@@ -168,16 +171,16 @@ async function retryBroadcastAction(formData: FormData) {
   const broadcastId = String(formData.get("broadcastId") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
+  let successMessage: string;
   try {
     const result = await retryFailedTargets(organizationId, broadcastId, membership.userId);
-    flashRedirect(
-      "success",
-      result.retried > 0 ? `${result.retried} groupe(s) en échec relancé(s).` : "Aucune cible en échec à relancer.",
-    );
+    successMessage =
+      result.retried > 0 ? `${result.retried} groupe(s) en échec relancé(s).` : "Aucune cible en échec à relancer.";
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la relance.";
     flashRedirect("error", message);
   }
+  flashRedirect("success", successMessage);
 }
 
 // ---------------------------------------------------------------------------

@@ -73,6 +73,13 @@ export interface TelegramSendAudioParams {
   caption?: string;
 }
 
+export interface TelegramSendVoiceParams {
+  chat_id: number | string;
+  /** OGG/OPUS, MP3 ou M4A uniquement (contrainte Bot API) — un WebM est refusé. */
+  voice: string;
+  caption?: string;
+}
+
 export interface TelegramSendDocumentParams {
   chat_id: number | string;
   document: string;

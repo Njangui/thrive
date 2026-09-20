@@ -1,7 +1,7 @@
 # Country Engine
 
 Système centralisé de gestion des pays, devises et tarification qui
-permet à SME-OS de s'étendre du Cameroun vers d'autres marchés africains
+permet à CRESYVA de s'étendre du Cameroun vers d'autres marchés africains
 **sans modifier le code métier** — activer un pays devient une opération
 de configuration Super Admin, pas une opération de développement.
 
@@ -11,7 +11,7 @@ et `docs/internationalization.md` (devises, téléphone, langue).
 ## Principe fondateur
 
 ```
-NotchPay (capacité technique)  ≠  SME-OS (décision commerciale)
+NotchPay (capacité technique)  ≠  CRESYVA (décision commerciale)
 ```
 
 `countries.notchpay_supported = true` **n'implique jamais**
@@ -77,8 +77,11 @@ si, au moment de l'activation :
   gérée manuellement en base depuis le 16/09/2026, voir
   docs/notchpay-resources.md) ;
 - aucun canal de paiement disponible ;
-- au moins un des 3 plans (`starter`/`business`/`pro`) n'a pas de ligne
-  `plan_prices` active pour ce pays (repose sur le prix par défaut).
+- au moins un des plans **payants** (`starter`/`pro`) n'a pas de ligne
+  `plan_prices` active pour ce pays (repose sur le prix par défaut). Le plan
+  gratuit (`free`) est exclu de cette vérification : il reste à 0 dans tous les
+  pays et n'a jamais de ligne de prix (le compter « non configuré » empêcherait
+  d'activer le moindre pays).
 
 Cette checklist ne s'applique **qu'à l'activation d'un pays pas encore
 actif** — un Super Admin peut corriger un prix sur un pays déjà actif

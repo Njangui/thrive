@@ -4,7 +4,7 @@ import { listAllPaymentsForAdmin } from "@/application/services/subscription-pay
 import { listOrganizationsForAdmin } from "@/application/services/admin-organizations-service";
 import { AdminBadge, AdminCard, AdminSectionHeader, AdminStatCard, AdminTableCard, AdminEmptyState } from "./_components/ui";
 import { AdminLineChart, AdminDonutChart } from "./_components/charts";
-import { IconAlert, IconBanknote, IconBot, IconClock, IconTag, IconUsers } from "./_components/icons";
+import { IconAlert, IconBanknote, IconBot, IconTag, IconUsers } from "./_components/icons";
 
 function formatFcfa(value: number): string {
   return `${value.toLocaleString("fr-FR")} FCFA`;
@@ -47,8 +47,8 @@ export default async function AdminOverviewPage() {
   const { organizationsStatusBreakdown: breakdown } = overview;
 
   const donutSegments = [
-    { label: "Actives", value: breakdown.active, color: "#16A34A" },
-    { label: "En essai", value: breakdown.trialing, color: "#D97706" },
+    { label: "Offre payante", value: breakdown.paid, color: "#16A34A" },
+    { label: "Offre gratuite", value: breakdown.free, color: "#0891B2" },
     { label: "Suspendues", value: breakdown.suspended, color: "#DC2626" },
     { label: "Autres", value: breakdown.other, color: "#94A3B8" },
   ].filter((s) => s.value > 0);
@@ -63,8 +63,8 @@ export default async function AdminOverviewPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <AdminStatCard label="Entreprises actives" value={String(overview.organizationsActive)} icon={<IconUsers className="h-4 w-4" />} />
-        <AdminStatCard label="En période d'essai" value={String(overview.organizationsTrialing)} icon={<IconClock className="h-4 w-4" />} />
-        <AdminStatCard label="Abonnées (hors starter)" value={String(overview.organizationsSubscribed)} icon={<IconTag className="h-4 w-4" />} />
+        <AdminStatCard label="Offre gratuite" value={String(overview.organizationsFree)} icon={<IconUsers className="h-4 w-4" />} />
+        <AdminStatCard label="Abonnées (offres payantes)" value={String(overview.organizationsSubscribed)} icon={<IconTag className="h-4 w-4" />} />
         <AdminStatCard label="Suspendues" value={String(overview.organizationsSuspended)} icon={<IconAlert className="h-4 w-4" />} />
         <AdminStatCard label="Revenus (30j)" value={formatFcfa(overview.revenueLast30Days)} icon={<IconBanknote className="h-4 w-4" />} />
         <AdminStatCard label="Messages IA (30j)" value={String(overview.aiMessagesLast30Days)} icon={<IconBot className="h-4 w-4" />} />

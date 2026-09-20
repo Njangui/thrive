@@ -1,10 +1,16 @@
 import { redirect } from "next/navigation";
-import { requireCurrentOrganization, requireMembership } from "@/application/services/auth-service";
+import { requireCurrentOrganization, requireMembership, getCurrentUserEmail } from "@/application/services/auth-service";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { SubmitButton } from "@/app/_components/submit-button";
-import { getZernioAccounts, getZernioConnectUrl } from "@/application/services/zernio-channel-service";
+import { getZernioAccounts, getZernioConnectUrl, getZernioWhatsAppGroupsConnectUrl, getZernioWhatsAppGroupsAccount } from "@/application/services/zernio-channel-service";
 import { connectTelegramChannel, disconnectTelegramChannel, getTelegramChannelStatus } from "@/application/services/telegram-channel-service";
 import { createYouTubeConnectUrl, getYouTubeConnection } from "@/application/services/youtube-channel-service";
+import {
+  requestDedicatedNumber,
+  getOrganizationDedicatedNumberStatus,
+  getDedicatedNumberMonthlyPriceFcfa,
+  initiateDedicatedNumberPayment,
+} from "@/application/services/phone-number-rental-service";
 import { AppError } from "@/lib/errors";
 import { SOCIAL_BRAND } from "@/app/_components/brand-icons";
 
@@ -67,6 +73,56 @@ async function connectWhatsAppAction(formData: FormData) {
   redirect(url);
 }
 
+/** Numéro DÉDIÉ aux Groupes WhatsApp (Cloud API, jamais Coexistence) — chemin gratuit (le commerçant connecte son propre numéro). */
+async function connectWhatsAppGroupsAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  const supabase = getSupabaseServiceClient();
+  const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
+  let url: string;
+  try {
+    url = await getZernioWhatsAppGroupsConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA");
+  } catch (error) {
+    flash("error", error instanceof Error ? error.message : "Connexion du numéro dédié impossible.");
+  }
+  redirect(url);
+}
+
+/** Chemin payant — le commerçant demande à CRESYVA de lui fournir un numéro dédié (traité ensuite depuis /admin/numbers). */
+async function requestDedicatedNumberAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  try {
+    await requestDedicatedNumber(organizationId, membership.userId);
+  } catch (error) {
+    flash("error", error instanceof AppError ? error.message : "Impossible d'envoyer la demande.");
+  }
+  flash("success", "Demande envoyée — l'équipe CRESYVA va vous assigner un numéro sous peu.");
+}
+
+/** Paiement (premier mois ou renouvellement) du loyer du numéro dédié. */
+async function payDedicatedNumberAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const phoneNumberId = String(formData.get("phoneNumberId") ?? "");
+  const membership = await requireMembership(organizationId, ["owner", "admin"]);
+  const email = await getCurrentUserEmail();
+  if (!email) {
+    flash("error", "Email de session introuvable — reconnectez-vous.");
+  }
+  let url: string;
+  try {
+    const result = await initiateDedicatedNumberPayment(organizationId, phoneNumberId, membership.userId, email as string);
+    if (!result.paymentUrl) throw new Error("URL de paiement manquante dans la réponse NotchPay.");
+    url = result.paymentUrl;
+  } catch (error) {
+    flash("error", error instanceof AppError ? error.message : "Erreur lors de l'initiation du paiement.");
+  }
+  redirect(url);
+}
+
 async function connectTelegramAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
@@ -110,10 +166,13 @@ async function connectYouTubeAction(formData: FormData) {
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string }> }) {
   const { success, error } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
-  const [accounts, telegram, youtube] = await Promise.all([
+  const [accounts, telegram, youtube, whatsappGroupsAccount, dedicatedNumber, dedicatedNumberPriceFcfa] = await Promise.all([
     getZernioAccounts(organizationId).catch(() => []),
     getTelegramChannelStatus(organizationId).catch(() => ({ connected: false, botUsername: null })),
     getYouTubeConnection(organizationId).catch(() => ({ connected: false, metadata: {} as { channelId?: string; title?: string; username?: string }, credentialReference: null })),
+    getZernioWhatsAppGroupsAccount(organizationId).catch(() => null),
+    getOrganizationDedicatedNumberStatus(organizationId).catch(() => ({ pendingRequestId: null, assignedNumber: null })),
+    getDedicatedNumberMonthlyPriceFcfa().catch(() => null),
   ]);
   const byPlatform = new Map(accounts.filter((a) => a.platform !== "youtube").map((a) => [a.platform, a]));
   const totalConnected = byPlatform.size + (youtube.connected ? 1 : 0) + (telegram.connected ? 1 : 0);
@@ -140,11 +199,51 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
 
       <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
         <div className="adm-card overflow-hidden p-0">
-          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={byPlatform.get("whatsapp") ? "adm-badge-success" : "adm-badge-neutral"}>{byPlatform.get("whatsapp") ? "Connecté" : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Le parcours d&apos;autorisation est guidé. Une fois connecté, vos conversations arrivent dans votre boîte CRESYVA.</p></div>
-          <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">{[["01","Compte","Sélectionnez votre compte professionnel."],["02","Autorisation","Validez les accès demandés."],["03","Test","Revenez ici et envoyez votre premier message."]].map(([n,t,d])=><div key={n} className="rounded-2xl bg-[#F8FAFC] p-4"><span className="text-xs font-bold text-violet-600">{n}</span><p className="mt-2 text-sm font-semibold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}</div>
+          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={byPlatform.get("whatsapp") ? "adm-badge-success" : "adm-badge-neutral"}>{byPlatform.get("whatsapp") ? "Connecté" : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Connectez le numéro que vous utilisez déjà sur l&apos;app WhatsApp Business : vous continuez à discuter normalement depuis votre téléphone, et vos conversations arrivent en plus dans votre boîte CRESYVA. Aucun numéro n&apos;est retiré ni remplacé.</p></div>
+          <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">{[["01","Compte","Sélectionnez votre compte WhatsApp Business existant."],["02","Autorisation","Validez les accès demandés (votre app continue de fonctionner)."],["03","Test","Revenez ici et envoyez votre premier message."]].map(([n,t,d])=><div key={n} className="rounded-2xl bg-[#F8FAFC] p-4"><span className="text-xs font-bold text-violet-600">{n}</span><p className="mt-2 text-sm font-semibold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}</div>
           <div className="border-t border-navy-900/[0.06] p-5 sm:p-6"><form action={connectWhatsAppAction}><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" className="adm-btn-primary w-full sm:w-auto">{byPlatform.get("whatsapp") ? "Reconnecter WhatsApp" : "Connecter WhatsApp"}</SubmitButton></form></div>
         </div>
         <div className="adm-card bg-gradient-to-br from-violet-50 via-white to-indigo-50"><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">Une boîte pour vendre</h2><div className="mt-5 space-y-3">{[['●','WhatsApp','Demandes et suivi clients'],['◎','Instagram','Conversations sociales'],['◈','Facebook','Messenger et commentaires'],['✦','Assistant','Réponse automatique puis transfert humain']].map(([i,t,d])=><div key={t} className="flex items-center gap-3 rounded-2xl bg-white/80 p-3 shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-700">{i}</span><div><p className="text-sm font-semibold">{t}</p><p className="text-xs text-slate-500">{d}</p></div></div>)}</div><a href="/dashboard/conversations" className="mt-5 inline-flex text-sm font-semibold text-violet-700 hover:underline">Ouvrir la boîte de réception →</a></div>
+      </section>
+
+      <section className="adm-card overflow-hidden p-0">
+        <div className="border-b border-navy-900/[0.06] p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Groupes</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Groupes</h2></div><span className={whatsappGroupsAccount ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappGroupsAccount ? "Connecté" : "Non connecté"}</span></div>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            Diffuser dans des groupes WhatsApp demande un <strong>second numéro, différent de celui de votre messagerie</strong> ci-dessus — WhatsApp ne permet pas les groupes sur un numéro qui reste utilisable sur votre téléphone. Ce numéro dédié ne sert qu&apos;aux Groupes, jamais à discuter normalement.
+          </p>
+        </div>
+
+        {whatsappGroupsAccount ? (
+          <div className="p-5 sm:p-6">
+            <p className="text-sm text-slate-600">Numéro dédié connecté{whatsappGroupsAccount.username ? ` : ${whatsappGroupsAccount.username}` : ""}.</p>
+            <a href="/dashboard/groups" className="mt-3 inline-flex text-sm font-semibold text-violet-700 hover:underline">Gérer mes Groupes WhatsApp →</a>
+          </div>
+        ) : (
+          <div className="grid gap-0 sm:grid-cols-2">
+            <div className="border-t border-navy-900/[0.06] p-5 sm:border-r sm:p-6">
+              <p className="text-sm font-semibold">J&apos;ai déjà un numéro à dédier</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Gratuit — utilisez une carte SIM ou un numéro que vous n&apos;utilisez pas déjà sur l&apos;app WhatsApp.</p>
+              <form action={connectWhatsAppGroupsAction} className="mt-4"><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" className="adm-btn-primary w-full sm:w-auto">Connecter mon numéro dédié</SubmitButton></form>
+            </div>
+            <div className="border-t border-navy-900/[0.06] p-5 sm:p-6">
+              <p className="text-sm font-semibold">Je veux que CRESYVA m&apos;en fournisse un</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Abonnement mensuel{dedicatedNumberPriceFcfa ? ` de ${dedicatedNumberPriceFcfa.toLocaleString("fr-FR")} FCFA` : ""}, séparé de votre forfait. Le numéro est repris si l&apos;abonnement n&apos;est pas renouvelé.</p>
+              {dedicatedNumber.assignedNumber ? (
+                <div className="mt-4 rounded-2xl bg-[#F7F6FD] p-4">
+                  <p className="text-sm font-semibold">{dedicatedNumber.assignedNumber.phoneE164}</p>
+                  <p className="mt-1 text-xs text-slate-500">{dedicatedNumber.assignedNumber.currentPeriodEnd ? `Échéance : ${new Date(dedicatedNumber.assignedNumber.currentPeriodEnd).toLocaleDateString("fr-FR")}` : "Échéance non définie."}</p>
+                  <form action={payDedicatedNumberAction} className="mt-3"><input type="hidden" name="organizationId" value={organizationId}/><input type="hidden" name="phoneNumberId" value={dedicatedNumber.assignedNumber.id}/><SubmitButton pendingLabel="Ouverture…" className="w-full rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500">Payer / renouveler</SubmitButton></form>
+                  <p className="mt-3 text-xs text-slate-500">Une fois payé, connectez ce numéro avec le bouton &laquo;&nbsp;Connecter mon numéro dédié&nbsp;&raquo; ci-contre.</p>
+                </div>
+              ) : dedicatedNumber.pendingRequestId ? (
+                <p className="mt-4 text-sm text-violet-700">Demande envoyée — en attente de traitement par l&apos;équipe CRESYVA.</p>
+              ) : (
+                <form action={requestDedicatedNumberAction} className="mt-4"><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Envoi…" className="w-full rounded-xl border border-navy-900/10 bg-white px-4 py-2 text-sm font-semibold text-navy-900 hover:border-violet-300 hover:bg-violet-50 sm:w-auto">Demander un numéro à CRESYVA</SubmitButton></form>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="adm-card">

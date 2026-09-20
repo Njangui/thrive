@@ -344,6 +344,8 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
   function configureRenewalMocks(subscriptions: MockSubRow[]) {
     const subState = subscriptions.map((s) => ({ ...s }));
     const updateCalls: Array<{ organizationId: string; patch: Record<string, unknown> }> = [];
+    // Filtres `.neq()` de la lecture liste — enregistrés à part : ils ne doivent pas servir de garde aux UPDATE ci-dessous.
+    const neqCalls: Array<{ col: string; val: unknown }> = [];
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "organization_subscriptions") {
@@ -354,6 +356,10 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
         const builder = {
           select: () => builder,
           in: () => builder, // le mock ne filtre pas réellement : subState ne contient que trialing/active, comme le ferait la vraie requête
+          neq: (col: string, val: unknown) => {
+            neqCalls.push({ col, val });
+            return builder;
+          },
           update: (p: Record<string, unknown>) => {
             mode = "update";
             patch = p;
@@ -428,7 +434,7 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
       status: "pending",
     }));
 
-    return { subState, updateCalls };
+    return { subState, updateCalls, neqCalls };
   }
 
   function daysFromNow(days: number): string {
@@ -506,6 +512,32 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
 
     expect(result).toEqual({ remindersSent: 0, markedPastDue: 0, skipped: 1 });
     expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
+  });
+
+  it("freemium : ne charge jamais les abonnements du plan gratuit (aucune échéance, et ils forment la majorité des lignes)", async () => {
+    const { neqCalls } = configureRenewalMocks([]);
+
+    await processSubscriptionRenewals();
+
+    expect(neqCalls).toContainEqual({ col: "plan_key", val: "free" });
+  });
+
+  it("échéance dépassée : la notification ne parle plus de « période d'essai » et propose l'offre gratuite", async () => {
+    configureRenewalMocks([
+      {
+        organization_id: "org-4",
+        status: "active",
+        trial_end: null,
+        current_period_end: daysFromNow(-2),
+        last_renewal_reminder_sent_at: daysFromNow(-5),
+      },
+    ]);
+
+    await processSubscriptionRenewals();
+
+    const call = mockNotifyOrgAdmins.mock.calls[0]![0] as { body: string };
+    expect(call.body).not.toMatch(/essai/i);
+    expect(call.body).toMatch(/offre gratuite/);
   });
 });
 

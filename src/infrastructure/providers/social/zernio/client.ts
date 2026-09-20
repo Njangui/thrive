@@ -52,6 +52,56 @@ export class ZernioSocialClient {
     return res.json() as Promise<ZernioCreatePostResponse>;
   }
 
+  /**
+   * VÉRIFIÉ (docs.zernio.com, guide « Media Uploads » + « Get upload URL »,
+   * sept. 2026) : `POST /v1/media/presign` (`filename`, `contentType`,
+   * `size` optionnel pour contrôler la limite de 5 Go) renvoie `uploadUrl`
+   * (URL Cloudflare R2 présignée, valable 1 h, où le NAVIGATEUR envoie le
+   * fichier en `PUT` avec le même `Content-Type`, sans en-tête
+   * Authorization), `publicUrl` (`media.zernio.com/temp/...`), `key` et
+   * `expiresIn`. « Uploads expire after 7 days » : stockage temporaire, à
+   * utiliser dans une publication programmée dans les 7 jours — voir
+   * catalog-video-service.ts.
+   *
+   * Les noms de champs de la requête ont changé entre deux versions de la
+   * doc (`filename`/`contentType` aujourd'hui, `fileName`/`fileType`
+   * auparavant) : on envoie la forme actuelle et, sur un 400, on retente
+   * une fois avec l'ancienne plutôt que d'échouer sur un simple renommage.
+   */
+  async createMediaPresign(
+    fileName: string,
+    contentType: string,
+    sizeBytes?: number,
+  ): Promise<{ uploadUrl: string; publicUrl: string; key?: string; expiresIn?: number }> {
+    this.assertConfigured();
+
+    const attempt = async (body: Record<string, string | number>) =>
+      fetch(`${this.baseUrl}/media/presign`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    let res = await attempt({
+      filename: fileName,
+      contentType,
+      ...(sizeBytes ? { size: sizeBytes } : {}),
+    });
+    if (res.status === 400) res = await attempt({ fileName, fileType: contentType });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio createMediaPresign failed (${res.status}): ${body}`);
+    }
+
+    const data = (await res.json()) as { uploadUrl?: string; publicUrl?: string; fileUrl?: string; key?: string; expiresIn?: number };
+    const publicUrl = data.publicUrl ?? data.fileUrl;
+    if (!data.uploadUrl || !publicUrl) {
+      throw new Error("Réponse Zernio inattendue : uploadUrl/publicUrl manquant.");
+    }
+    return { uploadUrl: data.uploadUrl, publicUrl, key: data.key, expiresIn: data.expiresIn };
+  }
+
   /** CONFIRMÉ (doc Discord "Edit & Delete", endpoint générique Posts API) : supprime un brouillon ou annule un post programmé. */
   async deletePost(postId: string): Promise<void> {
     this.assertConfigured();
@@ -205,10 +255,27 @@ export class ZernioSocialClient {
     return res.json() as Promise<{ profile: { _id: string; name: string } }> ;
   }
 
-  async getConnectUrl(platform: string, profileId: string, redirectUrl: string): Promise<{ authUrl: string; state?: string }> {
+  /**
+   * `onboarding` (WhatsApp uniquement) : "business_app" = Coexistence
+   * (le commerçant garde son numéro utilisable sur l'app WhatsApp
+   * Business — voir docs.zernio.com/platforms/whatsapp/connection),
+   * "api" = Cloud API classique (numéro dédié, requis pour l'API
+   * Groupes, qui ne fonctionne PAS sur un numéro en Coexistence). Par
+   * défaut "business_app" : c'est le mode par défaut chez Zernio et
+   * celui qui correspond à l'usage le plus courant (messagerie 1:1).
+   * L'appelant passe explicitement "api" pour le parcours numéro dédié
+   * aux groupes (voir zernio-channel-service.ts::
+   * getZernioWhatsAppGroupsConnectUrl).
+   */
+  async getConnectUrl(
+    platform: string,
+    profileId: string,
+    redirectUrl: string,
+    options?: { onboarding?: "api" | "business_app" },
+  ): Promise<{ authUrl: string; state?: string }> {
     this.assertConfigured();
     const params = new URLSearchParams({ profileId, redirect_url: redirectUrl });
-    if (platform === "whatsapp") params.set("onboarding", "api");
+    if (platform === "whatsapp") params.set("onboarding", options?.onboarding ?? "business_app");
     const res = await fetch(`${this.baseUrl}/connect/${encodeURIComponent(platform)}?${params.toString()}`, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
     });

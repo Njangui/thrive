@@ -93,13 +93,13 @@ describe("getCreditStatus", () => {
 
   it("tenant sans ligne ai_credit_balances : calcule un statut virtuel depuis son plan, ne plante pas", async () => {
     configureSupabase({ ai_credit_balances: { data: null, error: null } });
-    mockGetOrganizationPlanKey.mockResolvedValue("business");
+    mockGetOrganizationPlanKey.mockResolvedValue("pro");
     mockGetEntitlementLimit.mockResolvedValue(500);
 
     const status = await getCreditStatus("org-legacy");
 
     expect(mockGetOrganizationPlanKey).toHaveBeenCalledWith("org-legacy");
-    expect(mockGetEntitlementLimit).toHaveBeenCalledWith("business", "ai_credits");
+    expect(mockGetEntitlementLimit).toHaveBeenCalledWith("pro", "ai_credits");
     expect(status).toEqual({
       organizationId: "org-legacy",
       includedCredits: 500,

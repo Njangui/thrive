@@ -9,7 +9,7 @@ import { mapTelegramUpdateToDomainEvent } from "@/infrastructure/providers/messa
 import { resolveOrganizationIdByTelegramWebhookToken } from "@/infrastructure/providers/messaging/telegram/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
 import { routeMessage } from "@/application/services/conversation-orchestrator";
-import { escalateToHuman, shouldAutoRespond } from "@/application/services/handoff-service";
+import { escalateToHuman, getAutoReplyMode, notifyUnansweredInboundMessage } from "@/application/services/handoff-service";
 import { getMessagingProvider, getStorageProvider } from "@/infrastructure/providers/registry";
 import { buildTenantObjectPath, type MediaType } from "@/application/services/media-service";
 
@@ -82,11 +82,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
       // Même garde-fou que le webhook Zernio (section 22/31) : jamais de
       // réponse automatique pendant une prise en charge humaine.
-      if (shouldAutoRespond(result.handoffStatus)) {
-        const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content);
+      const autoReplyMode = getAutoReplyMode(result.handoffStatus, result.handoffReason);
+      // Vrai dès qu'une réponse est partie OU qu'une escalade a déjà alerté
+      // les admins — sinon on les alerte plus bas (message sans réponse).
+      let handledAutomatically = false;
+
+      if (autoReplyMode !== "none") {
+        const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content, {
+          // `deterministic_only` : voir handoff-service.ts::getAutoReplyMode.
+          allowAI: autoReplyMode === "full",
+        });
 
         if (routing.handoffReason) {
           await escalateToHuman(organizationId, result.conversationId, routing.handoffReason);
+          handledAutomatically = true;
         }
 
         if (routing.replyText) {
@@ -110,7 +119,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
             content: routing.replyText,
             metadata: { intent: routing.intent, ai_invoked: routing.aiInvoked },
           });
+          handledAutomatically = true;
         }
+      }
+
+      if (!handledAutomatically) {
+        await notifyUnansweredInboundMessage(
+          organizationId,
+          result.conversationId,
+          domainEvent.payload.contactFullName,
+          domainEvent.payload.content,
+          Boolean(domainEvent.payload.attachment),
+        );
       }
     }
 

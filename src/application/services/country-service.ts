@@ -58,7 +58,7 @@ export async function isCountryOnWaitlist(isoCode: string): Promise<boolean> {
   return country?.launchStatus === "waitlist";
 }
 
-/** Capacité TECHNIQUE NotchPay — distincte de la décision commerciale (section 7). Un pays peut être `notchpaySupported=true` sans jamais être `active` côté SME-OS. */
+/** Capacité TECHNIQUE NotchPay — distincte de la décision commerciale (section 7). Un pays peut être `notchpaySupported=true` sans jamais être `active` côté CRESYVA. */
 export async function isCountrySupportedByPaymentProvider(isoCode: string): Promise<boolean> {
   const country = await getCountrySafe(isoCode);
   return country?.notchpaySupported === true;
@@ -114,9 +114,9 @@ export async function validateCountryForSignup(
   }
   if (country.launchStatus !== "active") {
     const statusLabel: Record<CountryRecord["launchStatus"], string> = {
-      disabled: "n'est pas encore disponible sur SME-OS",
-      coming_soon: "arrive bientôt sur SME-OS",
-      waitlist: "est en liste d'attente sur SME-OS",
+      disabled: "n'est pas encore disponible sur CRESYVA",
+      coming_soon: "arrive bientôt sur CRESYVA",
+      waitlist: "est en liste d'attente sur CRESYVA",
       active: "est actif", // jamais atteint (garde par l'if ci-dessus), gardé pour l'exhaustivité du type
     };
     throw new ValidationError(`${country.name} ${statusLabel[country.launchStatus]} — inscription pas encore ouverte.`);

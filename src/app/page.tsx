@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
 import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
-import { trackEvent } from "@/application/services/analytics-service";
 import { resolveOrganizationSeo, buildOrganizationJsonLd } from "@/lib/seo";
 import { getStorefrontSite } from "@/application/services/storefront-service";
 import { StorefrontShell } from "./_components/storefront/storefront-shell";
@@ -108,16 +107,11 @@ export default async function RootPage({
 
   const { bookingSuccess, bookingError } = await searchParams;
 
-  // Lot H, Partie 2 (master prompt §55) — démarré en parallèle du reste,
-  // `await`é avant de rendre pour donner à l'insertion une vraie chance de
-  // se terminer avant que la réponse ne parte (même raisonnement que
-  // `notifyOrgAdmins`, voir analytics-service.ts::trackEvent) sans pour
-  // autant sérialiser sa latence avec le reste du chargement de la page.
-  const trackPageView = trackEvent(tenant.organizationId, "page_view", "organization");
+  // La page vue est comptée par <StorefrontPageTracker /> (navigateur) — voir
+  // landing-analytics-service.ts. Ne pas la recompter ici côté serveur.
 
   const origin = await resolveRequestOrigin();
 
-  await trackPageView;
 
   // JSON-LD (schema.org) — au-delà du strict minimum du cahier Lot H, mais
   // rien dans son "Hors scope" ne l'exclut (voir src/lib/seo.ts). Aide au

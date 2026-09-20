@@ -1,3 +1,5 @@
+import { listActiveStorefrontVideos } from "@/application/services/catalog-video-service";
+import { StorefrontVideo } from "@/app/_components/storefront/storefront-video";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -96,6 +98,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   // Produits similaires : même vitrine, hors produit courant. Une fiche
   // produit sans rebond est un cul-de-sac — le visiteur arrivé par un
   // lien WhatsApp repartait sans jamais voir le reste du catalogue.
+  // Vidéos actives uniquement (jamais un lecteur vers un fichier supprimé chez Zernio).
+  const videos = await listActiveStorefrontVideos(tenant.organizationId, { productId: product.id, limit: 3 });
+
   const related = await listStorefrontProducts(tenant.organizationId, {
     limit: 4,
     excludeProductId: product.id,
@@ -166,6 +171,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 ))}
               </div>
             )}
+            {videos.map((video) => (
+              <StorefrontVideo key={video.id} videoId={video.id} src={video.url} title={video.title ?? product.name} />
+            ))}
           </div>
 
           <div className="flex flex-col gap-4">

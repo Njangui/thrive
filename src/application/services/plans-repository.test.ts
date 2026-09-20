@@ -30,7 +30,7 @@ function configureFrom(byTable: Record<string, QueryResult>) {
   });
 }
 
-const businessPlan: PlanSummary = { key: "business", name: "Business", priceFcfa: 15000, description: null };
+const proPlan: PlanSummary = { key: "pro", name: "Pro", priceFcfa: 30000, description: null };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -40,7 +40,7 @@ describe("resolvePlanPriceForCountry", () => {
   it("utilise le prix country-specific quand une ligne active existe", async () => {
     configureFrom({ plan_prices: { data: { amount: 25000, currency_code: "GHS" }, error: null } });
 
-    const result = await resolvePlanPriceForCountry(businessPlan, "GH");
+    const result = await resolvePlanPriceForCountry(proPlan, "GH");
 
     expect(result).toEqual({ amount: 25000, currencyCode: "GHS", source: "country_specific" });
     expect(mockResolveCurrencyForCountry).not.toHaveBeenCalled();
@@ -50,18 +50,18 @@ describe("resolvePlanPriceForCountry", () => {
     configureFrom({ plan_prices: { data: null, error: null } });
     mockResolveCurrencyForCountry.mockResolvedValue("XAF");
 
-    const result = await resolvePlanPriceForCountry(businessPlan, "CM");
+    const result = await resolvePlanPriceForCountry(proPlan, "CM");
 
-    expect(result).toEqual({ amount: 15000, currencyCode: "XAF", source: "fallback_default" });
+    expect(result).toEqual({ amount: 30000, currencyCode: "XAF", source: "fallback_default" });
   });
 
   it("une erreur de lecture plan_prices retombe aussi sur le prix par défaut, sans lever", async () => {
     configureFrom({ plan_prices: { data: null, error: { message: "connexion perdue" } } });
     mockResolveCurrencyForCountry.mockResolvedValue("XOF");
 
-    const result = await resolvePlanPriceForCountry(businessPlan, "CI");
+    const result = await resolvePlanPriceForCountry(proPlan, "CI");
 
-    expect(result).toEqual({ amount: 15000, currencyCode: "XOF", source: "fallback_default" });
+    expect(result).toEqual({ amount: 30000, currencyCode: "XOF", source: "fallback_default" });
   });
 });
 
@@ -71,7 +71,7 @@ describe("listPlanPricesForCountry", () => {
       plans: {
         data: [
           { key: "starter", name: "Starter", price_fcfa: 0, description: null },
-          { key: "business", name: "Business", price_fcfa: 15000, description: null },
+          { key: "pro", name: "Pro", price_fcfa: 15000, description: null },
         ],
         error: null,
       },
@@ -82,6 +82,6 @@ describe("listPlanPricesForCountry", () => {
     const result = await listPlanPricesForCountry("CM");
 
     expect(result).toHaveLength(2);
-    expect(result[1]).toMatchObject({ key: "business", amount: 15000, currencyCode: "XAF" });
+    expect(result[1]).toMatchObject({ key: "pro", amount: 15000, currencyCode: "XAF" });
   });
 });

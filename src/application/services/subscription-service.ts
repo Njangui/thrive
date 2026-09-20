@@ -36,8 +36,6 @@ export interface SubscriptionOverview {
   planKey: PlanKey;
   planName: string;
   status: OrganizationSubscriptionStatus;
-  /** null si le tenant n'est pas en période d'essai. */
-  trialDaysRemaining: number | null;
   usage: UsageGauge[];
   features: FeatureFlag[];
   plans: PlanComparisonRow[];
@@ -62,17 +60,12 @@ export const USAGE_GAUGES: { key: string; label: string; mode: "cumulative" | "c
 ];
 
 export const FEATURE_FLAGS: { key: string; label: string }[] = [
+  { key: "whatsapp", label: "WhatsApp (messagerie)" },
   { key: "facebook_messenger", label: "Messages Facebook Messenger" },
   { key: "instagram_messages", label: "Messages Instagram" },
   { key: "linkedin", label: "Publications LinkedIn" },
   { key: "tiktok", label: "Publications TikTok" },
 ];
-
-function computeTrialDaysRemaining(status: OrganizationSubscriptionStatus, trialEnd: string | null): number | null {
-  if (status !== "trialing" || !trialEnd) return null;
-  const msRemaining = new Date(trialEnd).getTime() - Date.now();
-  return Math.max(Math.ceil(msRemaining / (24 * 60 * 60 * 1000)), 0);
-}
 
 export async function getSubscriptionOverview(organizationId: string): Promise<SubscriptionOverview> {
   const [subscription, plans] = await Promise.all([
@@ -107,7 +100,6 @@ export async function getSubscriptionOverview(organizationId: string): Promise<S
     planKey: subscription.planKey,
     planName: currentPlan?.name ?? subscription.planKey,
     status: subscription.status,
-    trialDaysRemaining: computeTrialDaysRemaining(subscription.status, subscription.trialEnd),
     usage,
     features,
     plans: plans.map((p) => ({ ...p, isCurrent: p.key === subscription.planKey })),

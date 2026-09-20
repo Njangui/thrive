@@ -26,10 +26,17 @@ async function updateAiConfigAction(formData: FormData) {
   const lengthMap: Record<string, number> = { short: 320, standard: 640, detailed: 1200 };
   const tempMap: Record<string, number> = { precise: 0.1, natural: 0.35, creative: 0.65 };
   const objectives = String(formData.get("objectives") ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
+// NB : redirect() lève l'exception spéciale NEXT_REDIRECT — jamais dans un `try` qui a son
+// propre `catch`, sinon ce catch l'avale et le succès s'affiche comme une erreur
+// (voir RAPPORT_FUSION_14.md, addendum). Le succès est donc appelé APRÈS le try/catch.
   try {
     await updateAiConfig(organizationId, { enabled: formData.get("enabled") === "on", provider: selected.provider, fallbackProvider: selected.fallback, tone: String(formData.get("tone") ?? "professionnel et chaleureux"), language: String(formData.get("language") ?? "fr"), objectives, maxTokens: lengthMap[length] ?? 640, temperature: tempMap[creativity] ?? 0.35 }, membership.userId);
-    flashRedirect("success", "Assistant enregistré.");
-  } catch (error) { flashRedirect("error", error instanceof AppError ? error.message : "Erreur lors de l'enregistrement."); }
+  } catch (error) {
+    // Cause réelle dans les logs serveur : le message affiché reste volontairement générique.
+    if (!(error instanceof AppError)) console.error("[dashboard/ai] updateAiConfig a échoué :", error);
+    flashRedirect("error", error instanceof AppError ? error.message : "Erreur lors de l'enregistrement.");
+  }
+  flashRedirect("success", "Assistant enregistré.");
 }
 
 export default async function AiConfigPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string }> }) {

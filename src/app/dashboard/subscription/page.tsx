@@ -6,7 +6,7 @@ import {
   cancelPendingPayment,
   listPaymentsForOrganization,
 } from "@/application/services/subscription-payment-service";
-import type { PlanKey } from "@/application/services/plans-repository";
+import { switchToFreePlan, type PlanKey } from "@/application/services/plans-repository";
 import { AppError } from "@/lib/errors";
 
 function formatLimit(value: number): string {
@@ -84,6 +84,21 @@ async function payPlanAction(formData: FormData) {
   redirect(paymentUrl);
 }
 
+/** Downgrade immédiat vers "free", sans passer par payPlanAction/NotchPay (rien à facturer — voir switchToFreePlan). */
+async function switchToFreeAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin"]);
+
+  try {
+    await switchToFreePlan(organizationId);
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors du passage au plan gratuit.";
+    redirect(`/dashboard/subscription?error=${encodeURIComponent(message)}`);
+  }
+  redirect("/dashboard/subscription?success=" + encodeURIComponent("Vous êtes maintenant sur le plan Gratuit."));
+}
+
 async function cancelPaymentAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
@@ -125,9 +140,10 @@ export default async function SubscriptionPage({
         <p className="adm-alert-success">{success}</p>
       )}
 
-      {overview.trialDaysRemaining !== null && (
-        <p className="adm-alert-success">
-          Il vous reste {overview.trialDaysRemaining} {overview.trialDaysRemaining === 1 ? "jour" : "jours"} d&apos;essai.
+      {overview.status === "past_due" && (
+        <p className="adm-alert-danger">
+          Votre abonnement est arrivé à échéance sans renouvellement. Passez à un forfait payant ou repassez au plan
+          Gratuit ci-dessous pour continuer.
         </p>
       )}
 
@@ -172,6 +188,16 @@ export default async function SubscriptionPage({
               {p.description && <p className="mt-2 text-xs text-slate-500">{p.description}</p>}
               {p.isCurrent ? (
                 <p className="mt-3 text-xs font-medium text-violet-600">Votre forfait actuel</p>
+              ) : p.key === "free" ? (
+                <form action={switchToFreeAction} className="mt-3">
+                  <input type="hidden" name="organizationId" value={organizationId} />
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl border border-navy-900/15 px-3 py-2 text-xs font-medium hover:bg-[#F8FAFC]"
+                  >
+                    Repasser au plan Gratuit
+                  </button>
+                </form>
               ) : (
                 <form action={payPlanAction} className="mt-3">
                   <input type="hidden" name="organizationId" value={organizationId} />
@@ -187,7 +213,7 @@ export default async function SubscriptionPage({
             </div>
           ))}
         </div>
-        {overview.status !== "trialing" && (
+        {overview.status === "past_due" && (
           <form action={payPlanAction} className="mt-3">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="planKey" value={overview.planKey} />

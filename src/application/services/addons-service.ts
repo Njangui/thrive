@@ -177,7 +177,7 @@ export async function purchaseAddon(
     amount: amountFcfa,
     currency: "XAF",
     customerEmail: payerEmail,
-    description: `Add-on SME-OS : ${addon.name} × ${quantity}`,
+    description: `Add-on CRESYVA : ${addon.name} × ${quantity}`,
   });
 
   if (result.providerReference !== paymentId) {

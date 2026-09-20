@@ -1,6 +1,6 @@
 import type { PlanKey } from "@/application/services/plans-repository";
 
-export const PLAN_ORDER: PlanKey[] = ["starter", "business", "pro"];
+export const PLAN_ORDER: PlanKey[] = ["free", "starter", "pro"];
 
 export const PRICING_FEATURES = [
   { key: "core_dashboard", label: "Tableau de bord métier", kind: "core" as const },
@@ -9,7 +9,7 @@ export const PRICING_FEATURES = [
   { key: "crm", label: "Clients & prospects", kind: "core" as const },
   { key: "faq", label: "FAQ structurée", kind: "core" as const },
   { key: "finance", label: "Finance légère", kind: "core" as const },
-  { key: "whatsapp", label: "WhatsApp", kind: "core" as const },
+  { key: "whatsapp", label: "WhatsApp", kind: "entitlement" as const },
   { key: "whatsapp_groups", label: "Groupes WhatsApp", kind: "entitlement" as const },
   { key: "broadcast_contacts", label: "Contacts par diffusion", kind: "entitlement" as const },
   { key: "ai_credits", label: "Crédits Assistant IA / mois", kind: "entitlement" as const },
@@ -25,7 +25,7 @@ export const PRICING_FEATURES = [
 ];
 
 export const RECOMMENDED_PLAN_PRICES: Record<PlanKey, number> = {
-  starter: 9900,
-  business: 19900,
-  pro: 39900,
+  free: 0,
+  starter: 15000,
+  pro: 30000,
 };

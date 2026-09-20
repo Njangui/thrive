@@ -1,15 +1,35 @@
 import Papa from "papaparse";
 import { z } from "zod";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { slugify, ProductStatusSchema } from "@/domain/entities/catalog";
+import { slugify, ProductStatusSchema, CatalogSpecificationSchema, type CatalogSpecification } from "@/domain/entities/catalog";
 import { findOrCreateCategory } from "./catalog-service";
 import { ValidationError } from "@/lib/errors";
 
 /**
  * Colonnes CSV attendues (section 11) : name, price, category, description,
- * stock, status. `image_url` est une extension raisonnable (une seule image
- * principale) pour ne pas laisser "la gestion des images" totalement de
- * côté, sans construire un système d'upload multi-images complexe en V1.
+ * stock, status.
+ *
+ * CORRECTIF (retour commerçant, sept. 2026) : ajouter des photos une par
+ * une depuis le dashboard demande un enregistrement à chaque photo — geste
+ * répété et lent pour un catalogue de plusieurs dizaines de produits. En
+ * plus d'assouplir le dashboard lui-même (voir la galerie multi-fichiers
+ * de `/dashboard/products/[id]/edit`), l'import CSV — déjà la voie de
+ * masse pour tout le reste du catalogue — gagne deux colonnes :
+ *
+ * - `image_urls` : plusieurs photos pour un même produit, séparées par
+ *   `|` (ex: "https://.../1.jpg|https://.../2.jpg"). `image_url` (une
+ *   seule, historique) reste accepté pour ne rien casser chez qui l'utilise
+ *   déjà ; ignoré si `image_urls` est renseignée sur la même ligne.
+ * - `specifications` : informations complémentaires (catalogue V2, 0056),
+ *   au format `Libellé:Valeur|Libellé2:Valeur2` (ex:
+ *   "Matière:Coton|Garantie:6 mois").
+ *
+ * Une URL d'image ou une paire libellé/valeur mal formée sur une ligne
+ * autrement valide est silencieusement ignorée plutôt que de faire
+ * échouer toute la ligne — même philosophie que "une ligne invalide
+ * n'interrompt jamais tout l'import" (section 43), étendue à
+ * l'intérieur même d'une ligne : le produit doit être créé même si une
+ * seule de ses cinq photos a un lien cassé.
  */
 export const CsvRowSchema = z.object({
   name: z.string().min(1, "name requis"),
@@ -18,7 +38,12 @@ export const CsvRowSchema = z.object({
   description: z.string().optional(),
   stock: z.coerce.number().nonnegative().optional().default(0),
   status: ProductStatusSchema.optional(),
-  image_url: z.string().url().optional(),
+  /** Une seule image — conservé pour compatibilité, voir image_urls pour plusieurs. */
+  image_url: z.string().optional(),
+  /** Catalogue V2 — plusieurs images séparées par "|". Prioritaire sur image_url si les deux sont renseignées. */
+  image_urls: z.string().optional(),
+  /** Catalogue V2 — "Libellé:Valeur|Libellé2:Valeur2", 12 paires maximum. */
+  specifications: z.string().optional(),
 });
 
 export interface ImportRowResult {
@@ -33,6 +58,41 @@ export interface ImportProductsResult {
   created: number;
   failed: number;
   rows: ImportRowResult[];
+}
+
+/** Sépare sur "|", nettoie, et ne garde que des URLs http(s) valides — une URL cassée est ignorée, pas bloquante pour le reste de la ligne. */
+export function parseImageUrls(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const httpUrl = z.string().url();
+  return raw
+    .split("|")
+    .map((u) => u.trim())
+    .filter((u) => u.length > 0 && httpUrl.safeParse(u).success);
+}
+
+/** `image_urls` (plusieurs) est prioritaire ; `image_url` (une seule, historique) sert de repli. */
+export function resolveImageUrls(data: { image_url?: string; image_urls?: string }): string[] {
+  if (data.image_urls) return parseImageUrls(data.image_urls);
+  if (data.image_url) return parseImageUrls(data.image_url);
+  return [];
+}
+
+/** "Libellé:Valeur|Libellé2:Valeur2" -> paires validées (CatalogSpecificationSchema), une paire mal formée est ignorée plutôt que de faire échouer les autres. Plafonné à 12, comme CatalogSpecificationsSchema. */
+export function parseSpecifications(raw: string | undefined): CatalogSpecification[] {
+  if (!raw) return [];
+  const valid: CatalogSpecification[] = [];
+  for (const entry of raw.split("|")) {
+    const separatorIndex = entry.indexOf(":");
+    if (separatorIndex === -1) continue;
+    const candidate = {
+      label: entry.slice(0, separatorIndex).trim(),
+      value: entry.slice(separatorIndex + 1).trim(),
+    };
+    const parsed = CatalogSpecificationSchema.safeParse(candidate);
+    if (parsed.success) valid.push(parsed.data);
+    if (valid.length >= 12) break;
+  }
+  return valid;
 }
 
 /**
@@ -92,6 +152,7 @@ export async function importProductsFromCsv(
     try {
       const categoryId = data.category ? await resolveCategoryId(data.category) : null;
       const status = data.status ?? (data.stock > 0 ? "active" : "draft");
+      const specifications = parseSpecifications(data.specifications);
 
       const { data: product, error: productError } = await supabase
         .from("products")
@@ -104,6 +165,7 @@ export async function importProductsFromCsv(
           unit_price: data.price,
           current_stock: data.stock,
           status,
+          specifications: specifications.length > 0 ? specifications : null,
         })
         .select("id")
         .single();
@@ -112,13 +174,16 @@ export async function importProductsFromCsv(
         throw new Error(productError?.message ?? "insert failed");
       }
 
-      if (data.image_url) {
-        await supabase.from("product_images").insert({
-          organization_id: organizationId,
-          product_id: product.id,
-          url: data.image_url,
-          position: 0,
-        });
+      const imageUrls = resolveImageUrls(data);
+      if (imageUrls.length > 0) {
+        await supabase.from("product_images").insert(
+          imageUrls.map((url, index) => ({
+            organization_id: organizationId,
+            product_id: product.id,
+            url,
+            position: index,
+          })),
+        );
       }
 
       await supabase.from("audit_logs").insert({

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SocialPublishingProvider, CreateSocialPostRequest, SocialAnalyticsEntry, SocialAnalyticsQuery, SocialComment, SocialDailyMetric, SocialPostResult, SocialPostStatus, SocialAccountSummary } from "@/domain/ports/social-publishing-provider";
 import { YouTubeClient, type YouTubeOAuthTokens } from "./client";
+import { isZernioMediaHost } from "@/lib/remote-media";
 
 export class YouTubeSocialAdapter implements SocialPublishingProvider {
   readonly providerName = "youtube";
@@ -19,10 +20,10 @@ export class YouTubeSocialAdapter implements SocialPublishingProvider {
     const videoUrl = request.mediaUrls?.find((url) => /\.(mp4|mov|webm|m4v)(\?.*)?$/i.test(url));
     if (!videoUrl) throw new Error("YouTube nécessite une vidéo (MP4, MOV, WebM ou M4V) dans la publication.");
     const response = await fetch(videoUrl);
-    if (!response.ok) throw new Error("La vidéo n'a pas pu être récupérée pour YouTube.");
+    if (!response.ok) throw new Error(isZernioMediaHost(videoUrl) ? "La vidéo n'est plus disponible chez Zernio (Zernio ne conserve les fichiers que 7 jours). Téléversez-la à nouveau." : "La vidéo n'a pas pu être récupérée pour YouTube.");
     const media = await response.arrayBuffer();
     const normalizedPublishAt = publishAt ? (publishAt.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(publishAt) ? new Date(publishAt).toISOString() : new Date(`${publishAt}+01:00`).toISOString()) : undefined;
-    const uploaded = await this.client.uploadVideo(media, { title: request.content.split("\n")[0] || "Publication SME-OS", description: request.content, privacyStatus, publishAt: normalizedPublishAt });
+    const uploaded = await this.client.uploadVideo(media, { title: request.content.split("\n")[0] || "Publication CRESYVA", description: request.content, privacyStatus, publishAt: normalizedPublishAt });
     return { providerPostId: uploaded.id!, status: uploaded.status?.uploadStatus === "uploaded" ? "published" : "processing" };
   }
   async getPostStatus(providerPostId: string): Promise<SocialPostStatus> {

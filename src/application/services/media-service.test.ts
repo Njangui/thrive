@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildTenantObjectPath, resolveImageFromFormData } from "./media-service";
+import { buildTenantObjectPath, resolveImageFromFormData, resolveImagesFromFormData } from "./media-service";
 
 describe("buildTenantObjectPath", () => {
   it("respecte le format {type}/{uuid}-{filename}", () => {
@@ -117,5 +117,92 @@ describe("resolveImageFromFormData", () => {
         urlField: "imageUrl",
       }),
     ).rejects.toThrow(/images/);
+  });
+});
+
+describe("resolveImagesFromFormData (galerie multi-photos, correctif retour commerçant sept. 2026)", () => {
+  beforeEach(() => {
+    uploadMock.mockReset();
+    // Une URL distincte par appel (dérivée du path, qui contient un UUID),
+    // pour vérifier que PLUSIEURS fichiers produisent PLUSIEURS URLs
+    // différentes plutôt qu'une même valeur répétée.
+    uploadMock.mockImplementation(async ({ path }: { path: string }) => ({
+      url: `https://cdn.example.com/${path}`,
+      path,
+    }));
+  });
+
+  it("uploade plusieurs fichiers en un seul appel", async () => {
+    const formData = new FormData();
+    formData.append("newImages", new File(["a"], "a.png", { type: "image/png" }));
+    formData.append("newImages", new File(["b"], "b.png", { type: "image/png" }));
+
+    const urls = await resolveImagesFromFormData(formData, {
+      organizationId: "org-1",
+      mediaType: "product",
+      filesField: "newImages",
+      urlsField: "newImageUrls",
+    });
+
+    expect(urls).toHaveLength(2);
+    expect(new Set(urls).size).toBe(2); // deux URLs distinctes, pas la même répétée
+    expect(uploadMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("combine fichiers uploadés ET URLs collées (une par ligne) en une seule soumission", async () => {
+    const formData = new FormData();
+    formData.append("newImages", new File(["a"], "a.png", { type: "image/png" }));
+    formData.set("newImageUrls", "https://exemple.com/1.jpg\nhttps://exemple.com/2.jpg");
+
+    const urls = await resolveImagesFromFormData(formData, {
+      organizationId: "org-1",
+      mediaType: "service",
+      filesField: "newImages",
+      urlsField: "newImageUrls",
+    });
+
+    expect(urls).toHaveLength(3);
+    expect(urls).toContain("https://exemple.com/1.jpg");
+    expect(urls).toContain("https://exemple.com/2.jpg");
+  });
+
+  it("ignore les lignes vides parmi les URLs collées", async () => {
+    const formData = new FormData();
+    formData.set("newImageUrls", "https://exemple.com/1.jpg\n\n  \nhttps://exemple.com/2.jpg");
+
+    const urls = await resolveImagesFromFormData(formData, {
+      organizationId: "org-1",
+      mediaType: "product",
+      filesField: "newImages",
+      urlsField: "newImageUrls",
+    });
+
+    expect(urls).toEqual(["https://exemple.com/1.jpg", "https://exemple.com/2.jpg"]);
+  });
+
+  it("aucun fichier ni URL -> liste vide (pas d'erreur)", async () => {
+    const formData = new FormData();
+    const urls = await resolveImagesFromFormData(formData, {
+      organizationId: "org-1",
+      mediaType: "product",
+      filesField: "newImages",
+      urlsField: "newImageUrls",
+    });
+    expect(urls).toEqual([]);
+  });
+
+  it("un seul fichier trop volumineux fait échouer TOUTE la soumission (formulaire interactif, contrairement à l'import CSV)", async () => {
+    const formData = new FormData();
+    formData.append("newImages", new File(["a"], "ok.png", { type: "image/png" }));
+    formData.append("newImages", new File([new Uint8Array(6 * 1024 * 1024)], "gros.png", { type: "image/png" }));
+
+    await expect(
+      resolveImagesFromFormData(formData, {
+        organizationId: "org-1",
+        mediaType: "product",
+        filesField: "newImages",
+        urlsField: "newImageUrls",
+      }),
+    ).rejects.toThrow(/5 Mo/);
   });
 });

@@ -12,6 +12,7 @@ import { DashboardTopbar } from "./_components/topbar";
 import { InstallAppBanner } from "./_components/install-app-banner";
 import { ROLE_LABELS } from "./_components/role-labels";
 import { DashboardHelp } from "./_components/dashboard-help";
+import { NotificationWatcher } from "./_components/notification-watcher";
 
 /**
  * Coquille du dashboard marchand — sidebar navy + topbar, reprise de
@@ -100,6 +101,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           isPlatformAdmin={Boolean(platformAdmin)}
         />
         <InstallAppBanner />
+        <NotificationWatcher />
         <DashboardHelp />
         <main className="min-w-0 flex-1 overflow-x-clip px-3 py-5 sm:px-6 sm:py-8">
           <div className="mx-auto w-full max-w-7xl min-w-0">{children}</div>

@@ -8,8 +8,10 @@
  * place d'une vraie réponse serveur.
  */
 
-const CACHE_NAME = "sme-os-shell-v1";
-const SHELL_ASSETS = ["/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
+// v2 : nouveau logo (mêmes noms de fichiers d'icônes — sans changement de
+// version, les appareils déjà installés garderaient l'ancien logo en cache).
+const CACHE_NAME = "sme-os-shell-v2";
+const SHELL_ASSETS = ["/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -56,7 +58,7 @@ self.addEventListener("push", (event) => {
     try {
       payload = { ...payload, ...event.data.json() };
     } catch {
-      // Payload non-JSON (ne devrait pas arriver côté SME-OS, mais un
+      // Payload non-JSON (ne devrait pas arriver côté CRESYVA, mais un
       // service worker doit rester défensif face à n'importe quel push) :
       // on garde au moins le texte brut comme corps du message.
       payload.body = event.data.text();
@@ -73,6 +75,14 @@ self.addEventListener("push", (event) => {
       // notifications du système d'exploitation.
       tag: payload.url,
       renotify: true,
+      // Explicite : certains navigateurs Android traitent l'absence de
+      // ces options comme « silencieux » lorsqu'une notification en
+      // remplace une autre de même `tag`. `renotify` + `silent: false` +
+      // `vibrate` garantissent une alerte sonore/vibrante à chaque push.
+      silent: false,
+      vibrate: [200, 100, 200],
+      timestamp: Date.now(),
+      lang: "fr",
       data: { url: payload.url },
     }),
   );

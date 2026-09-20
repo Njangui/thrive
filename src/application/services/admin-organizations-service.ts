@@ -18,7 +18,10 @@ export interface AdminOrganizationListItem {
   status: string;
   planKey: PlanKey;
   subscriptionStatus: string;
+  /** Vestige de l'ancien essai : NULL pour tout abonnement créé depuis le passage en freemium. */
   trialEnd: string | null;
+  /** Prochaine échéance d'un abonnement PAYANT ; NULL pour l'offre gratuite (aucune échéance). */
+  currentPeriodEnd: string | null;
   createdAt: string;
   connectedChannels: string[];
   /** Lot N, Partie 3 : "type:name" pour chaque provider ayant un compte dédié configuré (jamais le secret lui-même, voir requête ci-dessous). */
@@ -98,7 +101,7 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
       .not("last_message_at", "is", null)
       .order("last_message_at", { ascending: false })
       .limit(RECENT_ACTIVITY_SAMPLE_SIZE),
-    supabase.from("organization_subscriptions").select("organization_id, plan_key, status, trial_end"),
+    supabase.from("organization_subscriptions").select("organization_id, plan_key, status, trial_end, current_period_end"),
     supabase.from("ai_credit_balances").select("organization_id, included_credits, used_credits"),
     supabase.from("plan_entitlements").select("plan_key, limit_value").eq("entitlement_key", "ai_credits"),
   ]);
@@ -141,6 +144,7 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
     const planKey = isPlanKey(subRow?.plan_key) ? subRow.plan_key : "starter";
     const subscriptionStatus: OrganizationSubscriptionStatus = subRow?.status ?? "trialing";
     const trialEnd = subRow?.trial_end ?? null;
+    const currentPeriodEnd = subRow?.current_period_end ?? null;
 
     const balanceRow = creditBalanceByOrg.get(o.id);
     let creditStatus: CreditStatus;
@@ -166,6 +170,7 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
       planKey,
       subscriptionStatus,
       trialEnd,
+      currentPeriodEnd,
       createdAt: o.created_at,
       connectedChannels: channelsByOrg.get(o.id) ?? [],
       dedicatedCredentials: dedicatedCredentialsByOrg.get(o.id) ?? [],

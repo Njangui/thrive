@@ -1,4 +1,4 @@
-import type { TelegramApiResponse, TelegramFile, TelegramMessage, TelegramSendAudioParams, TelegramSendDocumentParams, TelegramSendMessageParams, TelegramSendPhotoParams, TelegramSendVideoParams, TelegramUser } from "./types";
+import type { TelegramApiResponse, TelegramFile, TelegramMessage, TelegramSendAudioParams, TelegramSendDocumentParams, TelegramSendMessageParams, TelegramSendPhotoParams, TelegramSendVideoParams, TelegramSendVoiceParams, TelegramUser } from "./types";
 
 /**
  * Client bas niveau Bot API Telegram pour le canal CLIENT — un tenant
@@ -31,6 +31,50 @@ export class TelegramMessagingClient {
     return payload.result as T;
   }
 
+  /**
+   * Envoi par TÉLÉVERSEMENT (multipart/form-data) — limites Bot API : 50 Mo
+   * (10 Mo pour une photo). Contrairement à l'envoi par URL (20 Mo, formats
+   * de documents restreints), le fichier part de notre serveur.
+   */
+  private async callMultipart<T>(
+    method: string,
+    fields: Record<string, string>,
+    fileField: string,
+    file: { data: Uint8Array; fileName: string; contentType: string },
+  ): Promise<T> {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.append(key, value);
+    form.append(fileField, new Blob([file.data as unknown as BlobPart], { type: file.contentType }), file.fileName);
+
+    const response = await fetch(`${this.baseUrl}/${method}`, { method: "POST", body: form });
+    const payload = (await response.json()) as TelegramApiResponse<T>;
+    if (!payload.ok) {
+      throw new Error(
+        `Telegram API ${method} a échoué (${payload.error_code ?? response.status}): ${payload.description ?? "erreur inconnue"}`,
+      );
+    }
+    return payload.result as T;
+  }
+
+  async sendFileUpload(
+    kind: "photo" | "video" | "audio" | "voice" | "document",
+    chatId: number | string,
+    file: { data: Uint8Array; fileName: string; contentType: string },
+    caption?: string,
+  ): Promise<TelegramMessage> {
+    const method = { photo: "sendPhoto", video: "sendVideo", audio: "sendAudio", voice: "sendVoice", document: "sendDocument" }[kind];
+    return this.callMultipart<TelegramMessage>(
+      method,
+      {
+        chat_id: String(chatId),
+        ...(caption ? { caption } : {}),
+        ...(kind === "video" ? { supports_streaming: "true" } : {}),
+      },
+      kind,
+      file,
+    );
+  }
+
   async sendMessage(params: TelegramSendMessageParams): Promise<TelegramMessage> {
     return this.call<TelegramMessage>("sendMessage", params as unknown as Record<string, unknown>);
   }
@@ -45,6 +89,10 @@ export class TelegramMessagingClient {
 
   async sendAudio(params: TelegramSendAudioParams): Promise<TelegramMessage> {
     return this.call<TelegramMessage>("sendAudio", params as unknown as Record<string, unknown>);
+  }
+
+  async sendVoice(params: TelegramSendVoiceParams): Promise<TelegramMessage> {
+    return this.call<TelegramMessage>("sendVoice", params as unknown as Record<string, unknown>);
   }
 
   async sendDocument(params: TelegramSendDocumentParams): Promise<TelegramMessage> {

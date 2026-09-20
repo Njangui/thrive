@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { StorefrontSite } from "@/application/services/storefront-service";
 import { PAYMENT_METHOD_LABELS } from "@/domain/entities/landing";
+import { env } from "@/lib/env";
 import { toSafeHref } from "@/lib/safe-url";
 import { PaymentBadge, IconMail, IconPhone, IconPin } from "./storefront-icons";
 import { Container } from "./storefront-ui";
@@ -158,7 +159,7 @@ export function StorefrontFooter({ site }: { site: StorefrontSite }) {
           </p>
           <p>
             Site propulsé par{" "}
-            <a href="https://sme-os.app" target="_blank" rel="noopener noreferrer" className="font-medium hover:text-brand">
+            <a href={env.NEXT_PUBLIC_APP_URL} target="_blank" rel="noopener noreferrer" className="font-medium hover:text-brand">
               CRESYVA
             </a>
           </p>

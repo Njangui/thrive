@@ -15,11 +15,23 @@ import { sendPush } from "./push-service";
  * distinction reste valable, `push-service.ts` est délibérément un fichier
  * séparé, pas une implémentation de ce port.
  *
- * Préférences par type : la priorité métier décide du canal. Tous les
- * owner/admin reçoivent les événements persistés in-app ; les priorités
- * important/critical ajoutent le push. Les événements normal restent
- * in-app pour éviter le bruit (voir dashboard/notifications/push-toggle.tsx).
+ * Canaux : tous les owner/admin reçoivent l'événement persisté in-app ET
+ * un push, quelle que soit la priorité.
+ *
+ * CORRECTIF (sept. 2026) : les événements « normal » restaient auparavant
+ * in-app uniquement (« pour éviter le bruit »). Résultat pour le
+ * commerçant : certaines notifications apparaissaient dans la liste sans
+ * jamais sonner (publication envoyée/programmée, relance envoyée, add-on
+ * activé, demande de domaine...), et il devait ouvrir la page pour les
+ * découvrir. La priorité ne décide donc plus SI on notifie mais avec
+ * quelle URGENCE : important/critical => urgence « high » (réveille
+ * l'appareil), normal => urgence « normal » (livré, sonore, mais peut être
+ * regroupé par le système). Pour re-couper le push des « normal », voir
+ * `PUSH_NORMAL_PRIORITY` ci-dessous.
  */
+
+/** Passer à `false` pour revenir à l'ancien comportement (normal = in-app seulement). */
+const PUSH_NORMAL_PRIORITY = true;
 
 export type NotificationPriority = "normal" | "important" | "critical";
 
@@ -29,7 +41,7 @@ export interface NotifyOrgAdminsInput {
   body: string;
   relatedEntityType?: string;
   relatedEntityId?: string;
-  /** important/critical => push + in-app ; normal => in-app uniquement. */
+  /** Urgence du push (important/critical => « high », normal => « normal »). Toutes les priorités notifient. */
   priority?: NotificationPriority;
 }
 
@@ -56,6 +68,14 @@ export function buildRelatedEntityUrl(type: string | null, id: string | null): s
   if (type === "provider_connection") return `/dashboard/channels`;
   if (type === "organization_subscription" || type === "subscription_payment") return `/dashboard/subscription`;
   if (type === "group_broadcast") return `/dashboard/groups`;
+  // Numéro WhatsApp dédié aux groupes (demande traitée, relance,
+  // reprise) — toujours actionnable depuis Canaux (voir
+  // phone-number-rental-service.ts et dashboard/channels/page.tsx).
+  // Uniquement "phone_number" ici, PAS "subscription_payment" : ce
+  // dernier type est partagé avec les notifications de paiement de
+  // forfait/add-on (subscription-payment-service.ts), qui n'ont rien à
+  // voir avec Canaux.
+  if (type === "phone_number") return `/dashboard/channels`;
   return null;
 }
 
@@ -119,10 +139,11 @@ export async function notifyOrgAdmins(input: NotifyOrgAdminsInput): Promise<void
     // garantit réellement l'envoi, sans jamais faire échouer
     // `notifyOrgAdmins` elle-même si ça tourne mal.
     const url = buildRelatedEntityUrl(input.relatedEntityType ?? null, input.relatedEntityId ?? null);
-    if ((input.priority ?? "important") !== "normal") {
-      await sendPush(input.organizationId, input.title, input.body, url ?? undefined).catch((err) =>
-        console.warn(`[notifications] échec canal push (org ${input.organizationId}):`, err),
-      );
+    const priority = input.priority ?? "important";
+    if (priority !== "normal" || PUSH_NORMAL_PRIORITY) {
+      await sendPush(input.organizationId, input.title, input.body, url ?? undefined, {
+        urgency: priority === "normal" ? "normal" : "high",
+      }).catch((err) => console.warn(`[notifications] échec canal push (org ${input.organizationId}):`, err));
     }
 
     // Le bot Telegram opérateur n'est volontairement PAS déclenché ici.
@@ -153,6 +174,47 @@ export async function getUnreadNotificationCount(organizationId: string, userId:
     return 0;
   }
   return count ?? 0;
+}
+
+export interface LatestUnreadNotification {
+  id: string;
+  title: string;
+  body: string;
+  url: string | null;
+  createdAt: string;
+}
+
+/**
+ * Dernière notification NON LUE du destinataire — alimente la détection
+ * « nouvelle notification » du dashboard ouvert (son + toast), voir
+ * app/api/notifications/unread/route.ts. Ne lève jamais.
+ */
+export async function getLatestUnreadNotification(
+  organizationId: string,
+  userId: string,
+): Promise<LatestUnreadNotification | null> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, title, body, related_entity_type, related_entity_id, created_at")
+    .eq("organization_id", organizationId)
+    .eq("recipient_user_id", userId)
+    .is("read_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.warn(`[notifications] échec lecture dernière non-lue (org ${organizationId}):`, error.message);
+    return null;
+  }
+  return {
+    id: data.id,
+    title: data.title,
+    body: data.body,
+    url: buildRelatedEntityUrl(data.related_entity_type, data.related_entity_id),
+    createdAt: data.created_at,
+  };
 }
 
 export interface NotificationListItem {

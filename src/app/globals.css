@@ -43,7 +43,7 @@
  * warning/danger` + `font-jakarta`/`font-inter` ajoutés à tailwind.config.ts.
  *
  * Unification design (sept. 2026) : `adm-*` sert désormais TOUT le
- * périmètre "app authentifiée/transactionnelle" de SME-OS — Super Admin
+ * périmètre "app authentifiée/transactionnelle" de CRESYVA — Super Admin
  * (`/admin/*`) ET dashboard marchand (`/dashboard/*`), + login/onboarding/
  * invite/pages légales — pas seulement la console Super Admin comme son
  * nom historique le suggère encore. Choix volontaire de ne PAS renommer
@@ -53,12 +53,12 @@
  * détail d'implémentation historique. La vitrine publique tenant
  * (`ink/paper/leaf/...` ci-dessus + `landing-sections/`) reste
  * volontairement SUR SON PROPRE THÈME — c'est la marque du commerçant qui
- * s'affiche à SES clients, pas celle de SME-OS (décision explicite,
+ * s'affiche à SES clients, pas celle de CRESYVA (décision explicite,
  * demandée par le porteur du projet, pas un oubli de ce chantier).
  */
 
 @layer components {
-  /* --- Landing marketing SME-OS --- */
+  /* --- Landing marketing CRESYVA --- */
   .mkt-shell {
     @apply bg-white font-inter text-navy-900;
   }
@@ -210,7 +210,7 @@
 
 @layer components {
   /* -----------------------------------------------------------------------
-     SME-OS 2026 visual system — shared polish
+     CRESYVA 2026 visual system — shared polish
      ----------------------------------------------------------------------- */
   .adm-eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.16em] text-violet-600; }
   .adm-card, .adm-card-alert { @apply transition-shadow duration-200; }
@@ -414,7 +414,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 @layer components {
-  /* SME-OS authenticated UI: consistent depth and mobile behavior across every dashboard page. */
+  /* CRESYVA authenticated UI: consistent depth and mobile behavior across every dashboard page. */
   .adm-shell main { min-width: 0; }
   .adm-shell main h1 { text-wrap: balance; }
   .adm-shell main .rounded-brand { border-radius: 1rem; }
@@ -459,7 +459,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
  *     la variable reste indéfinie et le repli prend le relais — jamais un
  *     fond transparent ni un texte invisible.
  *
- *  3. Le namespace `sf-` ne croise ni `mkt-`/`adm-` (SME-OS lui-même) ni
+ *  3. Le namespace `sf-` ne croise ni `mkt-`/`adm-` (CRESYVA lui-même) ni
  *     `receipt-row`/`ink`/`paper` : les trois systèmes cohabitent dans le
  *     même bundle sans jamais se toucher.
  */

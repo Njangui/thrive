@@ -1,5 +1,5 @@
 -- ============================================================
--- 0055_service_images_and_specifications.sql
+-- 0056_service_images_and_specifications.sql
 -- Catalogue riche (chantier « catalogue V2 », sept. 2026) — deux écarts
 -- identifiés par audit du code réel (pas seulement du schéma) :
 --

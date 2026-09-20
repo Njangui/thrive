@@ -1,5 +1,6 @@
+import { assertPublicationMediaAvailable, telegramVideoLimitErrorForUrl } from "./catalog-video-service";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { getMessagingProvider, getSocialPublishingProvider } from "@/infrastructure/providers/registry";
+import { getMessagingProvider, getSocialPublishingProvider, getWhatsAppGroupsProvider } from "@/infrastructure/providers/registry";
 import { getTelegramChannelStatus } from "./telegram-channel-service";
 import { listConnectedGroups, createBroadcast } from "./whatsapp-group-service";
 import { getProductsByIds, type CatalogProductSummary } from "./catalog-service";
@@ -86,6 +87,15 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
   const content = buildCatalogPublicationContent(products, input.content);
   const mediaUrls = input.mediaUrls?.filter(Boolean) ?? products.map((p) => p.imageUrl).filter((url): url is string => Boolean(url));
   const scheduledDate = validateFutureDate(input.scheduledFor);
+  // Garde-fou « 7 jours Zernio » (voir catalog-video-service.ts). Deux niveaux :
+  //  1. ici, pour TOUTES les cibles : le fichier doit exister MAINTENANT
+  //     (une vidéo déjà expirée ne peut plus être publiée nulle part) ;
+  //  2. par cible, plus bas, pour la DATE de programmation — uniquement pour
+  //     les cibles qui relisent le fichier au jour J (réseaux via Zernio,
+  //     Telegram). YouTube est exclu : l'adaptateur le téléverse chez YouTube
+  //     dès la programmation (privé + `publishAt`), c'est YouTube qui publie
+  //     à l'heure dite — la limite de 7 jours ne s'y applique donc pas.
+  await assertPublicationMediaAvailable(input.organizationId, mediaUrls, null);
   const result: PublicationResult = { published: 0, scheduled: 0, failed: [] };
 
   const socialTargets = targets.filter((t) => t.type === "social");
@@ -98,6 +108,14 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
       // en échec global. Le provider composite reste responsable de choisir
       // le connecteur concret derrière chaque plateforme.
       for (const target of socialTargets) {
+        if (scheduledDate && target.platform !== "youtube") {
+          try {
+            await assertPublicationMediaAvailable(input.organizationId, mediaUrls, scheduledDate);
+          } catch (error) {
+            result.failed.push({ target: target.label, error: error instanceof Error ? error.message : String(error) });
+            continue;
+          }
+        }
         const supabase = getSupabaseServiceClient();
         const { data: postRow, error: postInsertError } = await supabase.from("social_posts").insert({ organization_id: input.organizationId, product_id: productIds.length === 1 ? productIds[0] : null, content, media_urls: mediaUrls, status: scheduledDate ? "scheduled" : "draft", scheduled_for: scheduledDate?.toISOString() ?? null, timezone: "Africa/Douala" }).select("id").single();
         if (postInsertError || !postRow) { result.failed.push({ target: target.label, error: postInsertError?.message ?? "Impossible d'enregistrer la publication." }); continue; }
@@ -120,15 +138,23 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
   for (const target of targets.filter((t) => t.type === "telegram")) {
     try {
       if (!target.accountId) throw new ValidationError("Renseignez le @canal ou l'identifiant du groupe Telegram.");
+      // Telegram : la vidéo est relue chez Zernio AU JOUR de la publication.
+      if (scheduledDate) await assertPublicationMediaAvailable(input.organizationId, mediaUrls, scheduledDate);
       const provider = await getMessagingProvider(input.organizationId, "telegram");
       const attachmentUrl = mediaUrls[0];
+      // Telegram limite à 20 Mo un fichier envoyé par URL : mieux vaut un
+      // échec explicite pour CETTE cible que des erreurs opaques de l'API.
+      if (attachmentUrl && (input.mediaType ?? "image") === "video") {
+        const limitMessage = await telegramVideoLimitErrorForUrl(input.organizationId, attachmentUrl);
+        if (limitMessage) throw new ValidationError(limitMessage);
+      }
       if (scheduledDate) {
         const supabase = getSupabaseServiceClient();
         const { error } = await supabase.from("telegram_publications").insert({ organization_id: input.organizationId, created_by: input.actorUserId, content, target_chat_id: target.accountId, target_label: target.label, status: "scheduled", scheduled_for: scheduledDate.toISOString(), attachment_url: attachmentUrl ?? null, attachment_type: attachmentUrl ? (input.mediaType ?? "image") : null });
         if (error) throw new Error(error.message);
         result.scheduled++;
       } else {
-        await provider.sendMessage(input.organizationId, { to: target.accountId, channel: "telegram", content, attachmentUrl, attachmentType: attachmentUrl ? (input.mediaType ?? "image") : undefined });
+        await provider.sendMessage(input.organizationId, { to: target.accountId, channel: "telegram", content, attachmentUrl, attachmentType: attachmentUrl ? (input.mediaType ?? "image") : undefined, uploadBinary: Boolean(attachmentUrl && (input.mediaType ?? "image") !== "image") });
         result.published++;
       }
     } catch (error) { result.failed.push({ target: target.label, error: error instanceof Error ? error.message : String(error) }); }
@@ -142,7 +168,10 @@ export async function publishOmnichannel(input: PublicationInput): Promise<Publi
         await createBroadcast(input.organizationId, productIds, groupIds, scheduledDate.toISOString(), input.actorUserId);
         result.scheduled += groupIds.length;
       } else {
-        const provider = await getMessagingProvider(input.organizationId, "zernio");
+        // Groupes WhatsApp : numéro DÉDIÉ (provider_type='whatsapp_groups', lot WhatsApp Coexistence),
+        // jamais le profil de messagerie 1:1 — un numéro en Coexistence ne supporte pas l'API Groupes.
+        // Même fournisseur que whatsapp-group-service.ts (listage, diffusion programmée).
+        const provider = await getWhatsAppGroupsProvider(input.organizationId);
         const groups = await listConnectedGroups(input.organizationId);
         const byId = new Map(groups.map((g) => [g.id, g]));
         const imageUrl = products.length === 1 ? products[0]?.imageUrl : undefined;

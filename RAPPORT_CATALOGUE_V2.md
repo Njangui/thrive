@@ -1,11 +1,13 @@
 # RAPPORT — Chantier « Catalogue V2 »
 
-> **Note de fusion #14** — ce rapport est conservé tel qu'il a été écrit, pour
+> **Note de fusion (#14, mise à jour #15)** — ce rapport est conservé tel qu'il a été
+> écrit (2e livraison incluse : « Suite — ajout de photos par lot »), pour
 > l'historique. Une seule chose a changé à l'intégration dans ce dépôt : les
 > migrations citées ci-dessous sous les numéros `0055` et `0056` sont devenues
 > **`0056_service_images_and_specifications.sql`** et
 > **`0057_promotion_deadline.sql`** (le numéro `0055` était déjà pris par
-> `0055_telegram_publications.sql`). Voir `RAPPORT_FUSION_14.md`.
+> `0055_telegram_publications.sql`). Voir `RAPPORT_FUSION_14.md` et
+> `RAPPORT_FUSION_15.md`.
 
 Suite à la demande du 19/09/2026 : préconfiguration de la landing par
 secteur, catalogue produits/services enrichi (galerie multi-photos,
@@ -176,3 +178,40 @@ uniquement** dans cette itération — les services n'ont pas de
 - Réordonnancement des informations complémentaires (actuellement ajout
   en fin de liste uniquement, comme pour la galerie) — pas demandé, mais
   simple à ajouter sur le même modèle que `moveProductImage`.
+
+---
+
+## Suite (retour commerçant) — ajout de photos par lot
+
+Retour direct : ajouter des photos au catalogue demandait un
+enregistrement par photo (« je dois ajouter une, enregistrer, avant
+d'ajouter l'autre »). Deux correctifs, dans le même esprit que le reste
+du chantier :
+
+**Dashboard** — le formulaire « Ajouter une photo » de `/dashboard/
+products/[id]/edit` et `/dashboard/services/[id]/edit` accepte
+maintenant plusieurs fichiers d'un coup (`<input type="file" multiple>`)
+ET plusieurs liens collés (un par ligne), combinés en une seule
+soumission. Nouvelle fonction `resolveImagesFromFormData`
+(media-service.ts, version plurielle de `resolveImageFromFormData`) et
+`appendProductImages`/`appendServiceImages` (insertion en une seule
+requête, positions contiguës à la suite de la galerie existante).
+Un fichier invalide fait échouer toute la soumission avec un message
+clair — traitement différent de l'import CSV ci-dessous, volontairement
+(formulaire interactif rempli en direct par un humain, pas un traitement
+autonome de masse).
+
+**Import CSV** — deux nouvelles colonnes : `image_urls` (plusieurs
+photos séparées par `|`, `image_url` gardé pour compatibilité) et
+`specifications` (informations complémentaires, format
+`Libellé:Valeur|Libellé2:Valeur2`). Une URL cassée ou une paire mal
+formée est ignorée sans faire échouer toute la ligne, même philosophie
+que "une ligne invalide n'arrête jamais tout l'import". Le formulaire
+d'import (`csv-import-form.tsx`) affiche maintenant le détail des lignes
+en échec (ligne + message, jusque-là invisible — seuls les compteurs
+étaient affichés) et propose un exemple de fichier CSV à télécharger.
+
+**Non couvert par cette suite** (hors du périmètre demandé) : pas de
+réordonnancement en masse des photos déjà en galerie, pas de mise à jour
+d'un produit existant par CSV (l'import reste création uniquement,
+comme avant).

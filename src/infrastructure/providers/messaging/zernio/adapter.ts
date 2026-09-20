@@ -38,7 +38,9 @@ export class ZernioAdapter implements MessagingProvider {
 
     const response = await this.client.sendInboxMessage(message.externalThreadId, {
       accountId: this.accountId,
-      message: message.content,
+      // `message` est optionnel dans l'API : pour une pièce jointe seule
+      // (ou un vocal), on l'omet plutôt que d'envoyer une chaîne vide.
+      message: message.content || undefined,
       attachmentUrl: message.attachmentUrl,
       attachmentType: message.attachmentType,
     });

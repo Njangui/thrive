@@ -61,7 +61,7 @@ de message entrant.**
 **CONFIRMÉ (Lot M, docs.zernio.com/platforms/whatsapp/groups)** — fait
 central qui débloque tout : *"Each group has its own conversation thread
 identified by the group ID"* — pour un groupe, `conversationId ===
-l'id du groupe lui-même` (`external_id` côté SME-OS). La conversation
+l'id du groupe lui-même` (`external_id` côté CRESYVA). La conversation
 Zernio n'existe simplement pas tant que personne n'a écrit dedans, mais
 son id est connu D'AVANCE : c'est le même que celui du groupe. Le Lot F
 avait laissé `zernio_conversation_id` NULL pour toujours ("hors scope"

@@ -5,7 +5,10 @@ import {
   sendHumanReply,
   returnConversationToAI,
   closeConversation,
+  type HumanReplyAttachment,
 } from "@/application/services/conversation-admin-service";
+import { uploadOutboundAttachment } from "@/application/services/message-attachment-service";
+import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { AppError } from "@/lib/errors";
 import { ConversationThreadView } from "./conversation-thread-view";
 
@@ -26,8 +29,36 @@ export default async function ConversationDetailPage({
     "use server";
     const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
     const content = String(formData.get("content") ?? "");
+    const fileEntry = formData.get("attachment");
+    const file = fileEntry instanceof File && fileEntry.size > 0 ? fileEntry : null;
+    const isVoiceNote = formData.get("isVoiceNote") === "1";
     try {
-      await sendHumanReply(organizationId, conversationId, content, membership.userId);
+      let attachment: HumanReplyAttachment | undefined;
+      if (file) {
+        // Le canal décide des formats acceptés (WhatsApp est plus strict que
+        // Telegram sur WebP/WebM) — on le lit sur la conversation elle-même,
+        // jamais depuis le formulaire (valeur fournie par le client).
+        const { data: conversationRow } = await getSupabaseServiceClient()
+          .from("conversations")
+          .select("channel")
+          .eq("organization_id", organizationId)
+          .eq("id", conversationId)
+          .maybeSingle();
+        const uploaded = await uploadOutboundAttachment(
+          organizationId,
+          file,
+          conversationRow?.channel ?? "whatsapp",
+          isVoiceNote,
+        );
+        attachment = {
+          url: uploaded.url,
+          type: uploaded.type,
+          fileName: uploaded.fileName,
+          mimeType: uploaded.mimeType,
+          isVoiceNote: uploaded.isVoiceNote,
+        };
+      }
+      await sendHumanReply(organizationId, conversationId, content, membership.userId, attachment);
     } catch (err) {
       // Ajustement Lot E, Partie 4 (audit) : l'erreur était avalée
       // silencieusement (console.error côté serveur uniquement) — le

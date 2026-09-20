@@ -3,15 +3,19 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { CatalogProductSummary } from "@/application/services/catalog-service";
 import type { PublicationTarget } from "@/application/services/omnichannel-publication-service";
+import type { CatalogVideo } from "@/application/services/catalog-video-service";
 
 export function OmnichannelPublicationComposer({
   action,
   products,
   targets,
+  videos = [],
 }: {
   action: (formData: FormData) => void | Promise<void>;
   products: CatalogProductSummary[];
   targets: PublicationTarget[];
+  /** Vidéos du catalogue NON expirées (hébergées chez Zernio, 7 jours). */
+  videos?: CatalogVideo[];
 }) {
   const [selectedProducts, setSelectedProducts] = useState<string[]>(products.slice(0, 1).map((p) => p.id));
   const [selectedTargets, setSelectedTargets] = useState<string[]>(targets.filter((t) => t.available && t.type !== "telegram").map((t) => t.id));
@@ -21,6 +25,24 @@ export function OmnichannelPublicationComposer({
   const [telegramManualChatId, setTelegramManualChatId] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
+
+  // Garde-fou « 7 jours Zernio » côté écran (le serveur le refait — voir
+  // publishOmnichannel) : une vidéo du catalogue ne peut pas être programmée
+  // au-delà de son échéance, marge de 30 min comprise.
+  const chosenVideo = videos.find((v) => v.url === mediaUrl.trim());
+  // YouTube est téléversé dès la programmation puis publié par YouTube lui-même :
+  // seuls les autres canaux (réseaux via Zernio, Telegram) relisent le fichier au jour J.
+  const youtubeSelected = selectedTargets.some((id) => { const t = targets.find((x) => x.id === id); return t?.type === "social" && t.platform === "youtube"; });
+  const needsFileAtPublishTime = Boolean(telegramManualChatId.trim()) || selectedTargets.some((id) => { const t = targets.find((x) => x.id === id); return !t || t.type !== "social" || t.platform !== "youtube"; });
+  const videoLimitWarning = (() => {
+    if (!chosenVideo || !needsFileAtPublishTime) return null;
+    const expires = new Date(chosenVideo.expiresAt).getTime();
+    const publishAt = schedule && datetime ? new Date(datetime).getTime() : Date.now();
+    if (publishAt > expires - 30 * 60_000) {
+      return `Cette vidéo n'est conservée par Zernio que jusqu'au ${new Date(expires).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}. Choisissez une date antérieure, ou retéléversez la vidéo depuis sa fiche produit.`;
+    }
+    return null;
+  })();
 
   const grouped = useMemo(() => ({
     social: targets.filter((t) => t.type === "social"),
@@ -33,7 +55,7 @@ export function OmnichannelPublicationComposer({
 
   return (
     <form action={action} onSubmit={(event) => {
-      if (!selectedProducts.length || !allCompatible || (schedule && !datetime)) { event.preventDefault(); return; }
+      if (!selectedProducts.length || !allCompatible || (schedule && !datetime) || videoLimitWarning) { event.preventDefault(); return; }
       const form = event.currentTarget;
       const productsInput = form.elements.namedItem("productIds") as HTMLInputElement;
       const targetsInput = form.elements.namedItem("targetIds") as HTMLInputElement;
@@ -77,11 +99,33 @@ export function OmnichannelPublicationComposer({
       <section>
         <p className="cresyva-eyebrow">3 · Média optionnel</p>
         <h2 className="mt-1 font-jakarta text-lg font-extrabold text-navy-900">Ajoutez une vidéo ou un visuel externe si nécessaire</h2>
+        {videos.length > 0 ? (
+          <div className="mt-3">
+            <label className="text-xs font-semibold text-slate-600">Vidéo de votre catalogue</label>
+            <select
+              value={chosenVideo?.id ?? ""}
+              onChange={(e) => {
+                const video = videos.find((v) => v.id === e.target.value);
+                if (video) { setMediaUrl(video.url); setMediaType("video"); } else { setMediaUrl(""); }
+              }}
+              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+            >
+              <option value="">Aucune (ou saisir une adresse ci-dessous)</option>
+              {videos.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {(v.title ?? "Vidéo")} — disponible jusqu&apos;au {new Date(v.expiresAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        {chosenVideo && schedule && youtubeSelected ? <p className="mt-2 text-xs text-slate-500">YouTube : la vidéo est envoyée à YouTube dès la programmation, puis publiée par YouTube à l&apos;heure choisie — la limite de 7 jours ne s&apos;applique pas à ce canal.</p> : null}
+        {videoLimitWarning ? <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">{videoLimitWarning}</p> : null}
         <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_180px]">
           <input value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} type="url" placeholder="https://…" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
           <select value={mediaType} onChange={(e) => setMediaType(e.target.value as "image" | "video")} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"><option value="image">Image</option><option value="video">Vidéo</option></select>
         </div>
-        <p className="mt-1.5 text-xs text-slate-500">Pour YouTube, fournissez une URL vidéo publique (MP4, MOV, WebM ou M4V). Sans cela, YouTube sera refusé tandis que les autres canaux peuvent continuer.</p>
+        <p className="mt-1.5 text-xs text-slate-500">Pour YouTube, fournissez une URL vidéo publique (MP4, MOV, WebM ou M4V). Sans cela, YouTube sera refusé tandis que les autres canaux peuvent continuer. Les vidéos hébergées chez Zernio ne sont conservées que 7 jours : la programmation est limitée à cette échéance.</p>
       </section>
 
       <section>
@@ -96,7 +140,7 @@ export function OmnichannelPublicationComposer({
         {schedule ? <input type="datetime-local" value={datetime} min={new Date(Date.now() + 2 * 60_000).toISOString().slice(0,16)} onChange={(e) => setDatetime(e.target.value)} className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 sm:w-auto" /> : null}
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-5"><p className="text-xs text-slate-500">{selectedProducts.length ? "Le contenu est généré depuis votre catalogue." : "Sélectionnez au moins un produit."}</p><div className="flex gap-2"><a href="/dashboard/marketing" className="adm-btn-secondary">Annuler</a><button type="submit" disabled={!selectedProducts.length || !allCompatible || (schedule && !datetime)} className="adm-btn-primary disabled:cursor-not-allowed disabled:opacity-45">{schedule ? "Programmer sur les canaux" : "Publier sur les canaux"}</button></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-5"><p className="text-xs text-slate-500">{selectedProducts.length ? "Le contenu est généré depuis votre catalogue." : "Sélectionnez au moins un produit."}</p><div className="flex gap-2"><a href="/dashboard/marketing" className="adm-btn-secondary">Annuler</a><button type="submit" disabled={!selectedProducts.length || !allCompatible || (schedule && !datetime) || Boolean(videoLimitWarning)} className="adm-btn-primary disabled:cursor-not-allowed disabled:opacity-45">{schedule ? "Programmer sur les canaux" : "Publier sur les canaux"}</button></div></div>
     </form>
   );
 }

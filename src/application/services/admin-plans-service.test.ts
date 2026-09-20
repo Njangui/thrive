@@ -51,7 +51,7 @@ describe("getPlansOverviewForAdmin", () => {
     const overview = await getPlansOverviewForAdmin();
     const aiCredits = overview.entitlements.find((e) => e.key === "ai_credits");
 
-    expect(aiCredits?.limitsByPlan).toEqual({ starter: -1, business: -1, pro: -1 });
+    expect(aiCredits?.limitsByPlan).toEqual({ free: -1, starter: -1, pro: -1 });
   });
 
   it("un bonus 'numéro dédié' jamais configuré vaut 0, jamais -1/illimité", async () => {
@@ -63,7 +63,7 @@ describe("getPlansOverviewForAdmin", () => {
     const overview = await getPlansOverviewForAdmin();
     const bonus = overview.dedicatedBonuses.find((e) => e.key === "whatsapp_groups_dedicated_bonus");
 
-    expect(bonus?.limitsByPlan).toEqual({ starter: 0, business: 0, pro: 0 });
+    expect(bonus?.limitsByPlan).toEqual({ free: 0, starter: 0, pro: 0 });
   });
 
   it("reflète fidèlement les valeurs réellement configurées en base", async () => {
@@ -71,8 +71,8 @@ describe("getPlansOverviewForAdmin", () => {
       plans: { data: [], error: null },
       plan_entitlements: {
         data: [
+          { plan_key: "free", entitlement_key: "whatsapp_groups", limit_value: 1 },
           { plan_key: "starter", entitlement_key: "whatsapp_groups", limit_value: 2 },
-          { plan_key: "business", entitlement_key: "whatsapp_groups", limit_value: 5 },
           { plan_key: "pro", entitlement_key: "whatsapp_groups", limit_value: 10 },
         ],
         error: null,
@@ -82,7 +82,7 @@ describe("getPlansOverviewForAdmin", () => {
     const overview = await getPlansOverviewForAdmin();
     const groups = overview.entitlements.find((e) => e.key === "whatsapp_groups");
 
-    expect(groups?.limitsByPlan).toEqual({ starter: 2, business: 5, pro: 10 });
+    expect(groups?.limitsByPlan).toEqual({ free: 1, starter: 2, pro: 10 });
   });
 });
 
@@ -160,13 +160,13 @@ describe("upsertPlanEntitlementLimit", () => {
   it("upsert la ligne et écrit un audit log avant/après", async () => {
     configureSupabase({ plan_entitlements: { data: { limit_value: 500 }, error: null } });
 
-    await upsertPlanEntitlementLimit("business", "ai_credits", 750, "admin-1");
+    await upsertPlanEntitlementLimit("free", "ai_credits", 750, "admin-1");
 
     expect(mockWriteAdminAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "PLAN_ENTITLEMENT_UPDATED",
-        beforeState: { planKey: "business", entitlementKey: "ai_credits", limitValue: 500 },
-        afterState: { planKey: "business", entitlementKey: "ai_credits", limitValue: 750 },
+        beforeState: { planKey: "free", entitlementKey: "ai_credits", limitValue: 500 },
+        afterState: { planKey: "free", entitlementKey: "ai_credits", limitValue: 750 },
       }),
     );
   });

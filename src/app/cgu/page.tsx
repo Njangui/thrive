@@ -23,14 +23,16 @@ export default function CguPage() {
         qu&apos;il invite.
       </p>
 
-      <h2>3. Période d&apos;essai, abonnement et paiement</h2>
+      <h2>3. Offre gratuite, abonnements et paiement</h2>
       <p>
-        Une période d&apos;essai gratuite de [À COMPLÉTER — durée] jours est proposée à l&apos;inscription. À
-        l&apos;issue de l&apos;essai, l&apos;accès continu au service nécessite un abonnement payant, selon les
-        plans et tarifs affichés sur la page tarifs au moment de la souscription. Le paiement est traité par notre
-        prestataire de paiement (NotchPay) ; CRESYVA ne stocke aucune donnée de carte bancaire ou de compte Mobile
-        Money. Les abonnements sont [À COMPLÉTER — mensuels/annuels], renouvelés automatiquement sauf résiliation
-        avant la date de renouvellement.
+        Une offre gratuite est proposée dès l&apos;inscription, sans limite de durée et sans carte bancaire. Les
+        fonctionnalités et les limites propres à chaque offre sont détaillées sur la page tarifs ; certaines
+        fonctionnalités sont réservées aux offres payantes, selon les plans et tarifs affichés sur la page tarifs au
+        moment de la souscription. Le Client peut à tout moment repasser à l&apos;offre gratuite depuis son tableau
+        de bord. Le paiement des offres payantes est traité par notre prestataire de paiement (NotchPay) ; CRESYVA ne
+        stocke aucune donnée de carte bancaire ou de compte Mobile Money. Les abonnements payants sont [À COMPLÉTER —
+        mensuels/annuels], renouvelés automatiquement sauf résiliation avant la date de renouvellement. [À COMPLÉTER —
+        conséquences d&apos;un défaut de paiement sur les fonctionnalités payantes.]
       </p>
 
       <h2>4. Résiliation</h2>

@@ -7,6 +7,11 @@ import {
   unassignPhoneNumber,
 } from "@/application/services/admin-numbers-service";
 import { listOrganizationsForAdmin } from "@/application/services/admin-organizations-service";
+import {
+  listPendingPhoneNumberRequests,
+  fulfillPhoneNumberRequest,
+  getDedicatedNumberMonthlyPriceFcfa,
+} from "@/application/services/phone-number-rental-service";
 import { AppError } from "@/lib/errors";
 
 async function addPhoneNumberAction(formData: FormData) {
@@ -63,6 +68,33 @@ async function unassignPhoneNumberAction(formData: FormData) {
   redirect("/admin/numbers?success=" + encodeURIComponent("Numéro retiré — repli dans le pool disponible."));
 }
 
+/**
+ * Traite une demande commerçant (chemin payant, voir
+ * phone-number-rental-service.ts) : assigne le numéro choisi ET démarre
+ * le premier cycle de facturation (échéance à J+1 mois) en un seul
+ * appel, plutôt que d'obliger l'opérateur à faire deux actions séparées
+ * (assigner, puis se souvenir de démarrer la facturation).
+ */
+async function fulfillRequestAction(formData: FormData) {
+  "use server";
+  const admin = await requirePlatformAdmin();
+  const requestId = String(formData.get("requestId") ?? "");
+  const numberId = String(formData.get("numberId") ?? "");
+
+  if (!numberId) {
+    redirect(`/admin/numbers?error=${encodeURIComponent("Choisissez un numéro du pool avant de traiter la demande.")}`);
+    return;
+  }
+
+  try {
+    await fulfillPhoneNumberRequest(requestId, numberId, admin.userId);
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors du traitement de la demande";
+    redirect(`/admin/numbers?error=${encodeURIComponent(message)}`);
+  }
+  redirect("/admin/numbers?success=" + encodeURIComponent("Demande traitée — numéro assigné et facturation démarrée."));
+}
+
 const STATUS_LABELS: Record<string, string> = {
   available: "Disponible",
   assigned: "Assigné",
@@ -76,14 +108,21 @@ export default async function AdminNumbersPage({
 }) {
   const { error, success } = await searchParams;
   await requirePlatformAdmin();
-  const [numbers, organizations] = await Promise.all([listPhoneNumbersForAdmin(), listOrganizationsForAdmin()]);
+  const [numbers, organizations, pendingRequests, priceFcfa] = await Promise.all([
+    listPhoneNumbersForAdmin(),
+    listOrganizationsForAdmin(),
+    listPendingPhoneNumberRequests(),
+    getDedicatedNumberMonthlyPriceFcfa(),
+  ]);
+  const availableNumbers = numbers.filter((n) => n.status === "available");
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-jakarta text-2xl font-bold tracking-tight">Numéros</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Un numéro assigné débloque le bonus &laquo;&nbsp;groupes WhatsApp&nbsp;&raquo; de son plan (section 55).
+          Un numéro assigné débloque le bonus &laquo;&nbsp;groupes WhatsApp&nbsp;&raquo; de son plan, et — s&apos;il vient
+          d&apos;une demande commerçant ci-dessous — démarre un loyer mensuel séparé de son forfait.
         </p>
       </div>
 
@@ -93,6 +132,50 @@ export default async function AdminNumbersPage({
       {success && (
         <p className="rounded-xl border border-success-600/20 bg-success-50 px-4 py-3 text-sm text-success-700">{success}</p>
       )}
+
+      <section>
+        <h2 className="font-jakarta text-lg font-semibold">Prix du numéro dédié</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Loyer mensuel actuel : <span className="font-semibold text-navy-900">{priceFcfa.toLocaleString("fr-FR")} FCFA</span>.
+          Modifiable depuis <a href="/admin/addons" className="text-violet-700 underline">Réglages plateforme (/admin/addons)</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="font-jakarta text-lg font-semibold">Demandes en attente ({pendingRequests.length})</h2>
+        {pendingRequests.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">Aucune demande de numéro dédié en attente.</p>
+        ) : (
+          <div className="mt-3 flex flex-col gap-2">
+            {pendingRequests.map((req) => (
+              <form
+                key={req.id}
+                action={fulfillRequestAction}
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-warning-600/20 bg-warning-50 p-3 text-sm"
+              >
+                <input type="hidden" name="requestId" value={req.id} />
+                <span className="font-medium text-navy-900">{req.organizationName}</span>
+                <span className="text-xs text-slate-500">
+                  demandé le {new Date(req.createdAt).toLocaleDateString("fr-FR")}
+                </span>
+                <select name="numberId" defaultValue="" className="ml-auto rounded-xl border border-navy-900/[0.09] px-2 py-1 text-xs">
+                  <option value="" disabled>
+                    Choisir un numéro du pool…
+                  </option>
+                  {availableNumbers.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.phoneE164}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="rounded-xl bg-violet-600 px-3 py-1 text-xs font-medium text-white">
+                  Assigner &amp; démarrer la facturation
+                </button>
+              </form>
+            ))}
+          </div>
+        )}
+      </section>
 
       <form
         action={addPhoneNumberAction}

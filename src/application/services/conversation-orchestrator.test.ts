@@ -237,3 +237,24 @@ describe("routeMessage — mémoire conversationnelle courte (Lot D, section 21/
     expect(result.replyText).toBe("Bien sûr, je peux vous aider.");
   });
 });
+
+describe("routeMessage — mode déterministe (allowAI: false)", () => {
+  it("répond quand même via la FAQ, sans jamais appeler l'IA", async () => {
+    vi.mocked(matchFaq).mockResolvedValue({ question: "Livrez-vous ?", answer: "Oui, sous 48h." });
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "vous livrez ?", { allowAI: false });
+
+    expect(result.intent).toBe("faq");
+    expect(result.replyText).toBe("Oui, sous 48h.");
+    expect(generateAIReply).not.toHaveBeenCalled();
+  });
+
+  it("rien ne correspond : aucune réponse, aucune escalade supplémentaire, IA jamais appelée", async () => {
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "blablabla", { allowAI: false });
+
+    expect(result.replyText).toBeNull();
+    expect(result.handoffReason).toBeNull();
+    expect(result.aiInvoked).toBe(false);
+    expect(generateAIReply).not.toHaveBeenCalled();
+  });
+});

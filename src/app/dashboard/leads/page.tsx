@@ -109,7 +109,7 @@ export default async function LeadsPage({
               <tr>
                 <th className="px-4 py-2">Contact</th>
                 <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Score IA</th>
+                <th className="px-4 py-2" title="Calculé automatiquement à partir du nombre de messages échangés — aucune IA n'est utilisée pour ce score.">Score d&apos;engagement</th>
                 <th className="px-4 py-2">Source</th>
                 <th className="px-4 py-2" />
               </tr>

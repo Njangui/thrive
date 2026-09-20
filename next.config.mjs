@@ -6,6 +6,16 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+  experimental: {
+    // Par défaut, Next.js 14 refuse tout corps de Server Action > 1 Mo
+    // ("Body exceeded 1MB limit") — ce qui bloquait l'envoi de pièces
+    // jointes/vocaux depuis la messagerie (et les photos produit > 1 Mo).
+    // 4 Mo reste sous la limite de 4,5 Mo par requête des fonctions Vercel :
+    // au-delà, l'envoi échouerait de toute façon côté plateforme. Les
+    // vidéos (bien plus lourdes) ne passent PAS par ici : elles partent
+    // directement du navigateur vers Zernio (voir video-upload-field).
+    serverActions: { bodySizeLimit: "4mb" },
+  },
   images: {
     // Nécessaire pour `next/image` sur les photos produits/logos/bannières
     // stockées dans le bucket Supabase `tenant-media` (voir docs/DEPLOYMENT.md
@@ -49,7 +59,20 @@ const nextConfig = {
       // pas une erreur réseau, un blocage CSP. `wss://*.supabase.co` non
       // ajouté : Supabase Realtime (websocket) n'est utilisé nulle part dans
       // le projet actuellement — à ajouter si un futur lot l'introduit.
-      "connect-src 'self' https://*.supabase.co",
+      //
+      // Vidéos catalogue (Zernio) : le navigateur envoie le fichier
+      // DIRECTEMENT vers l'URL présignée renvoyée par Zernio (un `PUT`
+      // `fetch`/XHR — d'où `connect-src`), sans repasser par une fonction
+      // Vercel (limite de 4,5 Mo par requête, incompatible avec une
+      // vidéo). Hôtes VÉRIFIÉS dans la doc Zernio (guide « Media Uploads »):
+      // l'URL présignée pointe vers `<bucket>.r2.cloudflarestorage.com`
+      // (Cloudflare R2) et l'URL publique vers `media.zernio.com`.
+      "connect-src 'self' https://*.supabase.co https://media.zernio.com https://*.r2.cloudflarestorage.com",
+      // Lecture des vidéos catalogue (Zernio), des messages vocaux/audios
+      // (Supabase Storage) et de l'aperçu d'un vocal en cours d'envoi
+      // (`blob:`). Sans cette directive, `default-src 'self'` bloque
+      // tout <video>/<audio> externe.
+      "media-src 'self' blob: https://*.supabase.co https://media.zernio.com",
       "form-action 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
@@ -64,7 +87,12 @@ const nextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // `microphone=(self)` : l'enregistrement d'un message vocal depuis
+          // la messagerie (getUserMedia) est bloqué par le navigateur si
+          // la politique interdit le micro à l'origine elle-même — avec
+          // l'ancienne valeur `microphone=()`, le bouton vocal ne pouvait
+          // tout simplement pas fonctionner.
+          { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" },
           // `preload` volontairement omis : soumettre un domaine à la liste
           // de préchargement HSTS des navigateurs est difficile à annuler
           // ensuite — décision à prendre explicitement plus tard, pas ici.

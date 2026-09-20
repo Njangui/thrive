@@ -3,6 +3,7 @@ import { requirePlatformAdmin } from "@/application/services/platform-admin-serv
 import {
   listOrganizationsForAdmin,
   listPlansForAdmin,
+  type AdminOrganizationListItem,
   setOrganizationStatus,
   changeOrganizationPlan,
   grantAiCreditsToOrganization,
@@ -11,6 +12,7 @@ import {
 } from "@/application/services/admin-organizations-service";
 import { getPlatformUsageByOrganization } from "@/application/services/admin-observability-service";
 import { AppError } from "@/lib/errors";
+import { subscriptionBadgeLabel, subscriptionDueLine } from "@/lib/subscription-display";
 
 async function toggleStatusAction(formData: FormData) {
   "use server";
@@ -108,12 +110,15 @@ const STATUS_LABELS: Record<string, string> = {
   suspended: "Suspendue",
 };
 
-const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
-  trialing: "Essai",
-  active: "Abonnement actif",
-  past_due: "Impayé",
-  cancelled: "Résilié",
-};
+/** Ligne « Échéance » d'une entreprise — offre gratuite : aucune ; plus jamais un « Essai jusqu'au — » (freemium). */
+function dueLineFor(org: AdminOrganizationListItem) {
+  return subscriptionDueLine({
+    planKey: org.planKey,
+    status: org.subscriptionStatus,
+    currentPeriodEnd: org.currentPeriodEnd,
+    trialEnd: org.trialEnd,
+  });
+}
 
 function formatCredits(status: { includedCredits: number; usedCredits: number; remainingCredits: number }): string {
   if (status.includedCredits === -1) return "Illimité";
@@ -134,6 +139,7 @@ export default async function AdminOrganizationsPage({
     listPlansForAdmin(),
     getPlatformUsageByOrganization(),
   ]);
+  const planNameByKey = new Map(plans.map((p) => [p.key, p.name]));
   const usageByOrg = new Map(usage.map((u) => [u.organizationId, u]));
 
   // Lot 4 (section 53 du master prompt : "recherche ; filtrage"). Filtre
@@ -218,20 +224,17 @@ export default async function AdminOrganizationsPage({
                   {STATUS_LABELS[org.status] ?? org.status}
                 </span>
                 <span className="rounded-full bg-navy-900/[0.06] px-2 py-0.5 text-xs text-slate-500">
-                  {SUBSCRIPTION_STATUS_LABELS[org.subscriptionStatus] ?? org.subscriptionStatus}
+                  {subscriptionBadgeLabel(org.planKey, org.subscriptionStatus)}
                 </span>
               </div>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500 sm:grid-cols-4">
               <p>
-                Plan : <span className="text-navy-900">{org.planKey}</span>
+                Plan : <span className="text-navy-900">{planNameByKey.get(org.planKey) ?? org.planKey}</span>
               </p>
               <p>
-                Essai jusqu&apos;au :{" "}
-                <span className="text-navy-900">
-                  {org.trialEnd ? new Date(org.trialEnd).toLocaleDateString("fr-FR") : "—"}
-                </span>
+                {dueLineFor(org).label} : <span className="text-navy-900">{dueLineFor(org).value}</span>
               </p>
               <p>
                 Créée le : <span className="text-navy-900">{new Date(org.createdAt).toLocaleDateString("fr-FR")}</span>

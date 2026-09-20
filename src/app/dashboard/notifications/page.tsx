@@ -11,6 +11,7 @@ import { isPushConfigured } from "@/application/services/push-service";
 import { AppError } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { PushToggle } from "./push-toggle";
+import { NotificationSoundToggle } from "../_components/notification-watcher";
 
 async function markReadAction(formData: FormData) {
   "use server";
@@ -79,6 +80,8 @@ export default async function NotificationsPage({
           variable d'env), ce composant serveur est le seul pont vers le
           client qui en a besoin. */}
       {isPushConfigured() && <PushToggle organizationId={organizationId} vapidPublicKey={env.VAPID_PUBLIC_KEY!} />}
+
+      <NotificationSoundToggle />
 
       {notifications.length === 0 ? (
         <p className="text-sm text-slate-500">Aucune notification pour l&apos;instant.</p>

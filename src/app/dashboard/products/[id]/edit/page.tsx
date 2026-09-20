@@ -1,10 +1,12 @@
+import { listCatalogVideos } from "@/application/services/catalog-video-service";
+import { CatalogVideosPanel } from "../../../_components/catalog-videos-panel";
 import { redirect, notFound } from "next/navigation";
 import { requireMembership, requireCurrentOrganization } from "@/application/services/auth-service";
 import {
   updateProduct,
   getProductForEdit,
   listProductImages,
-  appendProductImage,
+  appendProductImages,
   removeProductImage,
   moveProductImage,
   setPrimaryProductImage,
@@ -13,9 +15,8 @@ import {
   restockProduct,
   listCategories,
 } from "@/application/services/catalog-service";
-import { resolveImageFromFormData } from "@/application/services/media-service";
+import { resolveImagesFromFormData } from "@/application/services/media-service";
 import { AppError, NotFoundError } from "@/lib/errors";
-import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { PromotionDeadlineField } from "@/app/_components/promotion-deadline-field";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { CategorySelect } from "../../../_components/category-select";
@@ -71,29 +72,29 @@ async function updateProductAction(formData: FormData) {
 // qui écrase l'autre par effet de bord — voir catalog-service.ts).
 // ---------------------------------------------------------------------------
 
-async function addProductImageAction(formData: FormData) {
+async function addProductImagesAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   const productId = String(formData.get("productId") ?? "");
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
-    const url = await resolveImageFromFormData(formData, {
+    const urls = await resolveImagesFromFormData(formData, {
       organizationId,
       mediaType: "product",
-      fileField: "newImageFile",
-      urlField: "newImageUrl",
+      filesField: "newImages",
+      urlsField: "newImageUrls",
     });
-    if (!url) {
-      redirect(`/dashboard/products/${productId}/edit?error=${encodeURIComponent("Choisissez une photo ou collez un lien.")}`);
-    }
-    await appendProductImage(organizationId, productId, url);
+    // Lève une AppError plutôt que d'appeler redirect() ici : redirect() lève NEXT_REDIRECT, que le
+    // catch ci-dessous interceptait (le message affiché devenait « Erreur lors de l'ajout de la photo »).
+    if (urls.length === 0) throw new AppError("Choisissez au moins une photo ou collez au moins un lien.", 400, "validation");
+    await appendProductImages(organizationId, productId, urls);
   } catch (error) {
-    const message = error instanceof AppError ? error.message : "Erreur lors de l'ajout de la photo.";
+    const message = error instanceof AppError ? error.message : "Erreur lors de l'ajout des photos.";
     redirect(`/dashboard/products/${productId}/edit?error=${encodeURIComponent(message)}`);
   }
 
-  redirect(`/dashboard/products/${productId}/edit?success=${encodeURIComponent("Photo ajoutée.")}`);
+  redirect(`/dashboard/products/${productId}/edit?success=${encodeURIComponent("Photo(s) ajoutée(s).")}`);
 }
 
 async function removeProductImageAction(formData: FormData) {
@@ -223,7 +224,12 @@ export default async function EditProductPage({
     throw err;
   }
 
-  const [images, categories] = await Promise.all([listProductImages(organizationId, id), listCategories(organizationId)]);
+  const [images, categories, videos] = await Promise.all([
+    listProductImages(organizationId, id),
+    listCategories(organizationId),
+    // Vidéos expirées incluses : le commerçant doit voir qu'elles ont expiré pour les retéléverser.
+    listCatalogVideos(organizationId, { productId: id, includeExpired: true }),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
@@ -451,12 +457,24 @@ export default async function EditProductPage({
           </ul>
         )}
 
-        <form action={addProductImageAction} className="flex flex-col gap-3 border-t border-navy-900/10 pt-3">
+        <form action={addProductImagesAction} className="flex flex-col gap-3 border-t border-navy-900/10 pt-3">
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="productId" value={product.id} />
-          <ImageUploadField name="newImage" label="Ajouter une photo" />
+          <label className="flex flex-col gap-1 text-sm">
+            Ajouter des photos (plusieurs à la fois)
+            <input type="file" name="newImages" multiple accept="image/*" className="text-sm" />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Ou coller plusieurs liens (un par ligne)
+            <textarea
+              name="newImageUrls"
+              rows={2}
+              placeholder="https://exemple.com/photo1.jpg"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm"
+            />
+          </label>
           <SubmitButton pendingLabel="Ajout..." className="w-fit rounded-xl bg-navy-900/5 px-4 py-2 text-sm font-medium text-navy-900 hover:bg-navy-900/10 disabled:opacity-60">
-            Ajouter cette photo
+            Ajouter ces photos
           </SubmitButton>
         </form>
       </div>
@@ -524,6 +542,8 @@ export default async function EditProductPage({
           </form>
         )}
       </div>
+
+      <CatalogVideosPanel productId={product.id} videos={videos} />
     </div>
   );
 }

@@ -2,7 +2,9 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 
 export interface PlatformOverview {
   organizationsActive: number;
-  organizationsTrialing: number;
+  /** Entreprises sur l'offre gratuite (plan `free`, abonnement actif) — remplace l'ancien compteur « en essai » (freemium). */
+  organizationsFree: number;
+  /** Entreprises sur une offre PAYANTE (plan ≠ `free`) dont l'abonnement est actif. */
   organizationsSubscribed: number;
   organizationsSuspended: number;
   revenueLast30Days: number;
@@ -22,10 +24,68 @@ export interface PlatformOverview {
    * Différent des 4 compteurs ci-dessus, qui sont volontairement des
    * entonnoirs qui se chevauchent (une organisation "abonnée" est aussi
    * "active", par ex.) — un donut a besoin de parts qui s'additionnent à
-   * 100%, donc priorité : suspendue > active > en essai > autre
-   * (past_due/cancelled/statut inattendu).
+   * 100%, donc priorité : suspendue > payante > gratuite > autre
+   * (past_due/cancelled/ancien essai/sans ligne d'abonnement/statut inattendu).
    */
-  organizationsStatusBreakdown: { active: number; trialing: number; suspended: number; other: number };
+  organizationsStatusBreakdown: { paid: number; free: number; suspended: number; other: number };
+}
+
+/**
+ * Compteurs d'abonnement de la vue globale — fonction PURE (testée), extraite de
+ * `getPlatformOverview` pour que la règle de comptage ne dépende d'aucune requête.
+ *
+ * Modèle freemium : le plan d'entrée est `free` (permanent, `status='active'`), il n'y a plus
+ * de période d'essai. Les compteurs se chevauchent volontairement (une organisation payante
+ * est aussi « active »), le donut, lui, est mutuellement exclusif :
+ *  - « actives »    = abonnement `status = 'active'` (gratuit ou payant) ;
+ *  - « gratuites »  = abonnement actif sur le plan `free` ;
+ *  - « abonnées »   = abonnement actif sur un plan PAYANT (`plan_key <> 'free'`). Avant le
+ *    freemium ce compteur valait `plan_key <> 'starter'` (Starter = plan d'entrée pendant
+ *    l'essai) : il aurait aujourd'hui compté les organisations gratuites comme abonnées et
+ *    ignoré les clients Starter, qui paient. Un abonnement `past_due`/`cancelled` ne compte
+ *    plus comme « abonné » : le compteur dit qui paie MAINTENANT ;
+ *  - « suspendues » = organizations.status = 'suspended' — SEULE source pour cette notion,
+ *    orthogonale à l'abonnement (voir admin-organizations-service.ts).
+ * Une organisation sans ligne `organization_subscriptions` (créée avant Lot B) garde le repli
+ * historique de plans-repository.ts (starter / `trialing`) : ni gratuite ni abonnée, elle
+ * tombe dans « autres » du donut.
+ */
+export function summarizeSubscriptions(
+  orgs: { id: string; status: string }[],
+  subs: { organization_id: string; plan_key: string; status: string }[],
+): {
+  active: number;
+  free: number;
+  subscribed: number;
+  suspended: number;
+  breakdown: PlatformOverview["organizationsStatusBreakdown"];
+} {
+  const subsByOrg = new Map(subs.map((s) => [s.organization_id, s]));
+
+  let active = 0;
+  let free = 0;
+  let subscribed = 0;
+  let suspended = 0;
+  const breakdown = { paid: 0, free: 0, suspended: 0, other: 0 };
+
+  for (const o of orgs) {
+    const sub = subsByOrg.get(o.id);
+    const isActive = sub?.status === "active";
+    const isFree = isActive && sub?.plan_key === "free";
+    const isPaid = isActive && sub !== undefined && sub.plan_key !== "free";
+
+    if (isActive) active += 1;
+    if (isFree) free += 1;
+    if (isPaid) subscribed += 1;
+    if (o.status === "suspended") suspended += 1;
+
+    if (o.status === "suspended") breakdown.suspended += 1;
+    else if (isPaid) breakdown.paid += 1;
+    else if (isFree) breakdown.free += 1;
+    else breakdown.other += 1;
+  }
+
+  return { active, free, subscribed, suspended, breakdown };
 }
 
 /**
@@ -33,22 +93,7 @@ export interface PlatformOverview {
  * Lot C est explicite : "pas de dashboard analytics complexe") — quelques
  * compteurs en requêtes parallèles, même philosophie que
  * `dashboard-service.ts` (getDashboardSummary) mais côté plateforme.
- *
- * FUSION Lot B : "actives"/"en essai"/"abonnées" sont désormais dérivées
- * d'`organization_subscriptions` (source de vérité réelle du plan/statut
- * d'abonnement depuis 0012_plans_entitlements.sql), plus de
- * `organizations.plan`/`status` pour ces 3 métriques. Un tenant sans
- * ligne `organization_subscriptions` (créé avant Lot B) est traité comme
- * "starter"/"trialing" par défaut, cohérent avec plans-repository.ts —
- * dupliqué ici en JS (plutôt que N appels à getOrganizationSubscription)
- * car c'est un agrégat, pas une fiche par entreprise.
- *  - "actives"    = organization_subscriptions.status = 'active'
- *  - "en essai"   = organization_subscriptions.status = 'trialing' (ou
- *    absence de ligne, qui vaut "trialing" par défaut)
- *  - "abonnées"   = plan_key <> 'starter'
- *  - "suspendues" = organizations.status = 'suspended' — reste la SEULE
- *    source pour cette notion, orthogonale à l'abonnement, jamais touchée
- *    par Lot B (voir admin-organizations-service.ts).
+ * Les règles de comptage d'abonnement sont dans `summarizeSubscriptions`.
  *  - "usage IA agrégé" = nombre de messages `sender = 'ai'` sur 30 jours
  *    (signal réel disponible, indépendant du système de crédits Lot B).
  */
@@ -70,29 +115,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
 
   if (orgsError) throw new Error(`Erreur lecture organizations: ${orgsError.message}`);
 
-  const subsByOrg = new Map((subs ?? []).map((s) => [s.organization_id, s]));
-
-  let active = 0;
-  let trialing = 0;
-  let subscribed = 0;
-  let suspended = 0;
-
-  const breakdown = { active: 0, trialing: 0, suspended: 0, other: 0 };
-
-  for (const o of orgs ?? []) {
-    const sub = subsByOrg.get(o.id);
-    const status = sub?.status ?? "trialing";
-    const planKey = sub?.plan_key ?? "starter";
-    if (status === "active") active += 1;
-    if (status === "trialing") trialing += 1;
-    if (planKey !== "starter") subscribed += 1;
-    if (o.status === "suspended") suspended += 1;
-
-    if (o.status === "suspended") breakdown.suspended += 1;
-    else if (status === "active") breakdown.active += 1;
-    else if (status === "trialing") breakdown.trialing += 1;
-    else breakdown.other += 1;
-  }
+  const summary = summarizeSubscriptions(orgs ?? [], subs ?? []);
 
   const dayFormatter = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short" });
   const revenueTrend7d = Array.from({ length: 7 }, (_, i) => {
@@ -111,13 +134,13 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   });
 
   return {
-    organizationsActive: active,
-    organizationsTrialing: trialing,
-    organizationsSubscribed: subscribed,
-    organizationsSuspended: suspended,
+    organizationsActive: summary.active,
+    organizationsFree: summary.free,
+    organizationsSubscribed: summary.subscribed,
+    organizationsSuspended: summary.suspended,
     revenueLast30Days: (revenues ?? []).reduce((sum, r) => sum + Number(r.amount), 0),
     aiMessagesLast30Days: aiMessages ?? 0,
     revenueTrend7d,
-    organizationsStatusBreakdown: breakdown,
+    organizationsStatusBreakdown: summary.breakdown,
   };
 }

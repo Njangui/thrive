@@ -38,6 +38,24 @@ export interface OutboundMessage {
    */
   attachmentUrl?: string;
   attachmentType?: "image" | "video" | "audio" | "file";
+  /**
+   * `true` quand l'audio est un message vocal enregistré (et non un fichier
+   * musical) — Telegram le rend alors comme un vrai vocal (`sendVoice`).
+   * Ignoré par les providers qui n'ont pas cette distinction.
+   */
+  isVoiceNote?: boolean;
+  /**
+   * `true` : le provider doit TÉLÉCHARGER `attachmentUrl` lui-même puis
+   * téléverser les octets (multipart), au lieu de donner l'URL au réseau.
+   * Nécessaire pour Telegram, dont l'envoi par URL est limité à 20 Mo et
+   * refuse la plupart des documents (seuls GIF/PDF/ZIP passent) — alors que
+   * le téléversement direct accepte jusqu'à 50 Mo, tout type de fichier.
+   * Ignoré (et sans effet) pour une URL hors liste blanche (voir
+   * lib/remote-media.ts) et pour les providers qui n'en ont pas besoin.
+   */
+  uploadBinary?: boolean;
+  attachmentFileName?: string;
+  attachmentMimeType?: string;
 }
 
 export interface SendMessageResult {

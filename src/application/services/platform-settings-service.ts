@@ -5,7 +5,9 @@ import { writeAdminAuditLog } from "./admin-organizations-service";
 /**
  * Réglages plateforme génériques (clé/valeur jsonb), Lot G — voir
  * 0020_addons.sql pour la table. Premier usage : durée d'essai par
- * défaut (plans-repository.ts::createTrialSubscription). Volontairement
+ * défaut (`trial_days`) — plus lue par le code depuis le passage en
+ * freemium (0061) ; une ligne éventuelle en base est inoffensive.
+ * Aujourd'hui : prix mensuel du numéro WhatsApp dédié. Volontairement
  * générique pour servir de base à de futurs réglages globaux sans
  * migration dédiée à chacun.
  */

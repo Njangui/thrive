@@ -22,6 +22,7 @@ export const ANALYTICS_EVENT_TYPES = [
   "conversation_started",
   "order_created",
   "publication_published",
+  "video_play",
 ] as const;
 
 export type AnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number];
