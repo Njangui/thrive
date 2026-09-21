@@ -528,7 +528,7 @@ export default async function SitePage({
             <h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Votre site professionnel est déjà prêt.</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">Discover utilise le design professionnel de base de votre secteur. La personnalisation complète est disponible à partir de Starter.</p>
           </div>
-          <a href="/dashboard/subscription" className="adm-btn-primary bg-white text-navy-900 hover:bg-white/90">Voir Starter</a>
+          <div className="flex flex-wrap gap-2"><a href="/dashboard/business" className="adm-btn-primary bg-white text-navy-900 hover:bg-white/90">Modifier ma fiche entreprise</a><a href="/dashboard/subscription" className="adm-btn-primary bg-white/10 text-white hover:bg-white/20">Voir Starter</a></div>
         </section>
         <section className="cresyva-info-panel mt-5">
           <div><p className="font-semibold text-navy-900">Design de base actif</p><p className="mt-1 text-sm text-slate-500">Votre catalogue, vos informations, votre identité publique et vos contenus restent disponibles. Seuls les réglages de personnalisation sont verrouillés sur Discover.</p></div>
@@ -626,7 +626,7 @@ export default async function SitePage({
               defaultValue={media.seoTitle ?? ""}
               maxLength={70}
               placeholder="Ex : Salon Élégance — Coiffure à Douala"
-              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400"
             />
           </label>
 
@@ -638,7 +638,7 @@ export default async function SitePage({
               maxLength={160}
               rows={3}
               placeholder="Une ou deux phrases qui donnent envie de cliquer."
-              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400"
             />
           </label>
 
@@ -666,7 +666,7 @@ export default async function SitePage({
               name="socialFacebook"
               defaultValue={media.socialLinks.facebook ?? ""}
               placeholder="https://facebook.com/..."
-              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -676,7 +676,7 @@ export default async function SitePage({
               name="socialInstagram"
               defaultValue={media.socialLinks.instagram ?? ""}
               placeholder="https://instagram.com/..."
-              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -686,7 +686,7 @@ export default async function SitePage({
               name="socialTiktok"
               defaultValue={media.socialLinks.tiktok ?? ""}
               placeholder="https://tiktok.com/@..."
-              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -696,7 +696,7 @@ export default async function SitePage({
               name="socialLinkedin"
               defaultValue={media.socialLinks.linkedin ?? ""}
               placeholder="https://linkedin.com/company/..."
-              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400"
             />
           </label>
         </div>
@@ -823,7 +823,7 @@ export default async function SitePage({
             </div>
 
             <label className="flex items-center gap-2 text-sm font-semibold lg:col-span-2">
-              <input type="checkbox" name="announcementEnabled" defaultChecked={landingConfig.announcementEnabled} className="h-4 w-4 rounded border-navy-900/20" />
+              <input type="checkbox" name="announcementEnabled" defaultChecked={landingConfig.announcementEnabled} className="h-4 w-4 rounded-sm border-navy-900/20" />
               Afficher une barre d&apos;annonce en haut de la page
             </label>
             <label className="text-sm font-semibold lg:col-span-2">
@@ -838,7 +838,7 @@ export default async function SitePage({
             </label>
 
             <label className="flex items-center gap-2 text-sm font-semibold lg:col-span-2">
-              <input type="checkbox" name="showStats" defaultChecked={landingConfig.showStats} className="h-4 w-4 rounded border-navy-900/20" />
+              <input type="checkbox" name="showStats" defaultChecked={landingConfig.showStats} className="h-4 w-4 rounded-sm border-navy-900/20" />
               Afficher les chiffres clés (nombre de produits, catégories, avis…) — calculés automatiquement, jamais inventés
             </label>
 
@@ -922,7 +922,7 @@ export default async function SitePage({
                     type="checkbox"
                     name={`payment_${method}`}
                     defaultChecked={(landingConfig.paymentMethods ?? []).includes(method as PaymentMethodKey)}
-                    className="h-4 w-4 rounded border-navy-900/20"
+                    className="h-4 w-4 rounded-sm border-navy-900/20"
                   />
                   {PAYMENT_METHOD_LABELS[method]}
                 </label>
@@ -951,7 +951,7 @@ export default async function SitePage({
                 <input type="hidden" name="enabled" value={section.enabled ? "false" : "true"} />
                 <SubmitButton
                   pendingLabel="…"
-                  className={`flex h-6 w-6 items-center justify-center rounded border text-xs font-bold ${
+                  className={`flex h-6 w-6 items-center justify-center rounded-sm border text-xs font-bold ${
                     section.enabled ? "border-violet-400 bg-violet-600 text-white" : "border-navy-900/15 bg-white text-transparent"
                   }`}
                 >
@@ -1020,7 +1020,7 @@ export default async function SitePage({
             <select
               name="fontChoice"
               defaultValue={landingConfig.fontChoice}
-              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400"
+              className="rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400"
             >
               {FONT_CHOICES.map((choice) => (
                 <option key={choice} value={choice}>

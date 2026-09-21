@@ -22,8 +22,8 @@ export default async function NewPublicationPage({ searchParams }: { searchParam
     const targetIds = String(formData.get("targetIds") ?? "").split(",").map((v) => v.trim()).filter(Boolean);
     const currentTargets = await listOmnichannelPublicationTargets(organizationId);
     const selectedTargets = currentTargets.filter((target) => targetIds.includes(target.id));
-    const manualTelegram = String(formData.get("telegramManualChatId") ?? "").trim();
-    if (manualTelegram) selectedTargets.push({ id: `telegram:${manualTelegram}`, type: "telegram", platform: "telegram", label: `Telegram · ${manualTelegram}`, accountId: manualTelegram, available: true });
+    // Lot O : les cibles Telegram sont TOUJOURS des destinations enregistrées (quotas
+    // canaux/groupes) — plus de saisie libre d'un identifiant de chat.
 
     // Destination capturée, redirect() appelé APRÈS le try/catch : redirect() lève NEXT_REDIRECT,
     // que le catch interceptait (une publication réussie affichait « NEXT_REDIRECT » comme erreur).
@@ -38,6 +38,7 @@ export default async function NewPublicationPage({ searchParams }: { searchParam
         mediaType: (String(formData.get("mediaType") ?? "image") as "image" | "video"),
         targets: selectedTargets,
         scheduledFor: String(formData.get("scheduledFor") ?? "") || null,
+        firstComment: String(formData.get("firstComment") ?? "") || null,
       });
       const status = result.scheduled ? "scheduled" : "published";
       redirectTo = `/dashboard/marketing?success=${status}&count=${result.published + result.scheduled}&failed=${result.failed.length}`;

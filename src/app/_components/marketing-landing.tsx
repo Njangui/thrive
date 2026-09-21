@@ -4,7 +4,7 @@ import { listPublicCountries, isoCodeToFlagEmoji } from "@/application/services/
 import { joinWaitlistAction } from "./country-waitlist-actions";
 import { CresyvaBrand } from "./cresyva-brand";
 import { MarketingMobileMenu } from "./marketing-mobile-menu";
-import { AfricaAvailabilityMap } from "./africa-availability-map";
+import { LazyAfricaAvailabilityMap } from "./africa-availability-map-lazy";
 import {
   IconArrowRight,
   IconBotAssist,
@@ -201,7 +201,7 @@ export async function MarketingLanding({
   return (
     <div className="mkt-shell">
       {/* HEADER */}
-      <header className="sticky top-0 z-40 border-b border-navy-900/[0.06] bg-white/85 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-navy-900/[0.06] bg-white/85 backdrop-blur-sm">
         <div className="mkt-container flex items-center justify-between py-4">
 <CresyvaBrand href="/" />
           <nav className="hidden items-center gap-7 text-sm font-medium text-navy-900/70 md:flex">
@@ -361,7 +361,7 @@ export async function MarketingLanding({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Disponible actuellement</h3>
 
               <div className="mt-6">
-                <AfricaAvailabilityMap countries={countries} />
+                <LazyAfricaAvailabilityMap countries={countries} />
               </div>
 
               <div className="mt-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2 md:grid-cols-3">
@@ -372,7 +372,7 @@ export async function MarketingLanding({
                       <img
                         src={c.flagUrl}
                         alt=""
-                        className="h-8 w-11 shrink-0 rounded object-cover"
+                        className="h-8 w-11 shrink-0 rounded-sm object-cover"
                       />
                     ) : (
                       <span className="text-3xl leading-none" aria-hidden="true">
@@ -408,12 +408,12 @@ export async function MarketingLanding({
                         type="email"
                         required
                         placeholder="Votre email"
-                        className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                        className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-hidden focus:ring-2 focus:ring-violet-100"
                       />
                       <input
                         name="companyName"
                         placeholder="Nom de l'entreprise (optionnel)"
-                        className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                        className="rounded-xl border border-navy-900/[0.09] px-3 py-2 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-hidden focus:ring-2 focus:ring-violet-100"
                       />
                       <button type="submit" className="mkt-btn-primary !py-2 !text-xs">
                         Être prévenu

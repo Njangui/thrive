@@ -4,6 +4,7 @@ import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tena
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getLandingConfig, type LandingConfig } from "./landing-config-service";
 import { isPromotionCurrentlyOn } from "./catalog-service";
+import { hasFeature } from "./entitlements-service";
 import {
   getStorefrontBlueprint,
   resolveStorefrontSector,
@@ -64,6 +65,10 @@ export interface StorefrontCapabilities {
   hasSocialLinks: boolean;
   hasOpeningHours: boolean;
   hasWhatsApp: boolean;
+  /** Lot O : rendez-vous inclus dans l'offre (Starter+) — sinon aucune page ni section de réservation publique. */
+  bookingEnabled: boolean;
+  /** Lot O : badge « Site propulsé par CRESYVA » retiré (Pro). */
+  brandingRemoved: boolean;
 }
 
 export interface StorefrontNavEntry {
@@ -167,7 +172,7 @@ export const getStorefrontCapabilities = cache(async function getStorefrontCapab
   const supabase = getSupabaseServiceClient();
   const organizationId = tenant.organizationId;
 
-  const [productCount, serviceCount, faqCount, testimonialCount, teamCount, categoryRows, promotionRows, galleryRows] =
+  const [productCount, serviceCount, faqCount, testimonialCount, teamCount, categoryRows, promotionRows, galleryRows, bookingEnabled, brandingRemoved] =
     await Promise.all([
       countRows("products", organizationId, { column: "status", isIn: ["active", "out_of_stock"] }),
       countRows("services", organizationId, { column: "status", equals: "active" }),
@@ -189,6 +194,8 @@ export const getStorefrontCapabilities = cache(async function getStorefrontCapab
         .not("compare_at_price", "is", null)
         .limit(200),
       supabase.from("product_images").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
+      hasFeature(organizationId, "appointments").catch(() => false),
+      hasFeature(organizationId, "remove_branding").catch(() => false),
     ]);
 
   const categoryCount = new Set((categoryRows.data ?? []).map((row) => row.category_id)).size;
@@ -224,6 +231,8 @@ export const getStorefrontCapabilities = cache(async function getStorefrontCapab
     hasSocialLinks: socialLinkCount > 0,
     hasOpeningHours: openingHoursCount > 0,
     hasWhatsApp: Boolean(tenant.whatsappNumber),
+    bookingEnabled,
+    brandingRemoved,
   };
 });
 
@@ -252,7 +261,7 @@ function routeIsAvailable(key: StorefrontRouteKey, capabilities: StorefrontCapab
       // La demande de rendez-vous n'a de sens que si quelqu'un peut la
       // recevoir : sans prestation ni canal de contact, le formulaire
       // enverrait une demande dans le vide.
-      return capabilities.hasServices || capabilities.hasWhatsApp || Boolean(tenant.phone) || Boolean(tenant.email);
+      return capabilities.bookingEnabled && (capabilities.hasServices || capabilities.hasWhatsApp || Boolean(tenant.phone) || Boolean(tenant.email));
     case "faq":
       return capabilities.hasFaq;
     case "contact":

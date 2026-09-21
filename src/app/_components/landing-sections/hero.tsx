@@ -27,7 +27,7 @@ function resolveCtaTarget(
     case "catalog":
       return capabilities.hasProducts ? STOREFRONT_PATHS.catalog : null;
     case "booking":
-      return capabilities.hasServices || capabilities.hasWhatsApp ? STOREFRONT_PATHS.booking : null;
+      return capabilities.bookingEnabled && (capabilities.hasServices || capabilities.hasWhatsApp) ? STOREFRONT_PATHS.booking : null;
     case "promotions":
       return capabilities.hasPromotions ? STOREFRONT_PATHS.promotions : null;
     case "services":

@@ -66,6 +66,8 @@ function makeCapabilities(overrides: Partial<StorefrontCapabilities> = {}): Stor
     hasSocialLinks: false,
     hasOpeningHours: false,
     hasWhatsApp: false,
+    bookingEnabled: true,
+    brandingRemoved: false,
     ...overrides,
   };
 }

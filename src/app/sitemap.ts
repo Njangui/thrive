@@ -94,7 +94,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (capabilities.hasContactDetails || capabilities.hasOpeningHours) {
     addPage(STOREFRONT_PATHS.contact, 0.7, "monthly");
   }
-  if (capabilities.hasServices || capabilities.hasWhatsApp || tenant.phone || tenant.email) {
+  if (capabilities.bookingEnabled && (capabilities.hasServices || capabilities.hasWhatsApp || tenant.phone || tenant.email)) {
     addPage(STOREFRONT_PATHS.booking, 0.8, "monthly");
   }
 

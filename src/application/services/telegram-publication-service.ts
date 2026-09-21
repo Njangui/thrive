@@ -67,7 +67,7 @@ function mapRow(row: Record<string, unknown>): TelegramPublicationItem {
 
 async function sendTelegramPublication(
   organizationId: string,
-  publication: Pick<TelegramPublicationItem, "targetChatId" | "content" | "attachmentUrl" | "attachmentType" | "buttons">,
+  publication: Pick<TelegramPublicationItem, "targetChatId" | "content" | "attachmentUrl" | "attachmentType" | "buttons"> & { botId?: string | null },
 ): Promise<number> {
   // Au JOUR de la publication : la vidéo est relue chez Zernio par notre
   // serveur puis envoyée à Telegram. Si le fichier a expiré (Zernio ne le
@@ -76,7 +76,7 @@ async function sendTelegramPublication(
   if (publication.attachmentUrl) {
     await assertPublicationMediaAvailable(organizationId, [publication.attachmentUrl], null);
   }
-  const provider = await getMessagingProvider(organizationId, "telegram");
+  const provider = await getMessagingProvider(organizationId, "telegram", publication.botId ?? undefined);
   const result = await provider.sendMessage(organizationId, {
     to: publication.targetChatId,
     channel: "telegram",
@@ -271,6 +271,7 @@ export async function processScheduledTelegramPublications(now = new Date()): Pr
         attachmentUrl: row.attachment_url,
         attachmentType: row.attachment_type,
         buttons: row.buttons ?? null,
+        botId: row.bot_id ?? null,
       });
       await supabase.from("telegram_publications").update({ status: "published", telegram_message_id: telegramMessageId }).eq("id", row.id);
       await notifyOrgAdmins({

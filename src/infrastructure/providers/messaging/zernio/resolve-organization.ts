@@ -112,8 +112,19 @@ export async function resolveOrganizationIdBySocialProfile(profileId: string): P
     console.error(`resolveOrganizationIdBySocialProfile(${profileId}) error:`, error.message);
     return null;
   }
+  if (data?.organization_id) return data.organization_id;
 
-  return data?.organization_id ?? null;
+  // Lot O : profils additionnels (un compte TikTok par profil Zernio).
+  const { data: extra, error: extraError } = await supabase
+    .from("zernio_social_profiles")
+    .select("organization_id")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (extraError) {
+    console.error(`resolveOrganizationIdBySocialProfile(${profileId}) extra error:`, extraError.message);
+    return null;
+  }
+  return extra?.organization_id ?? null;
 }
 
 /**

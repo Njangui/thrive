@@ -50,6 +50,19 @@ const DEDICATED_BONUS_CATALOG: { key: string; label: string }[] = [
   { key: "whatsapp_groups_dedicated_bonus", label: "Bonus groupes WhatsApp (numéro dédié assigné, section 55)" },
 ];
 
+/**
+ * Lot O — clés commerciales éditables depuis /admin/plans qui ne sont ni une
+ * jauge, ni un drapeau affiché au commerçant, ni une ligne de la grille
+ * publique. `tiktok_auto_comments` est laissé à 0 sur tous les plans (retiré
+ * à la demande) : le passer à 1 sur un plan le réactive sans changement de code.
+ */
+const EXTRA_ADMIN_ENTITLEMENTS: { key: string; label: string }[] = [
+  { key: "semi_automatic_messaging", label: "Messagerie semi-automatique (FAQ, entreprise, catalogue)" },
+  { key: "follow_ups", label: "Relances clients automatiques (24 h / 48 h)" },
+  { key: "tiktok_auto_comments", label: "Réponse automatique aux commentaires TikTok (retirée — 0 partout)" },
+  { key: "video_retention_days", label: "Conservation des vidéos du catalogue (jours)" },
+];
+
 function isPlanKey(value: string): value is PlanKey {
   return (PLAN_KEYS as readonly string[]).includes(value);
 }
@@ -87,6 +100,7 @@ export async function getPlansOverviewForAdmin(): Promise<AdminPlansOverview> {
   const entitlementCatalog = [
     ...USAGE_GAUGES,
     ...FEATURE_FLAGS,
+    ...EXTRA_ADMIN_ENTITLEMENTS,
     ...PRICING_FEATURES.map((entry) => ({ key: entry.key, label: entry.label })),
   ].filter((entry, index, all) => all.findIndex((candidate) => candidate.key === entry.key) === index);
 

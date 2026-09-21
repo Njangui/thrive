@@ -1,4 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { assertGatedFeature } from "./feature-gate-service";
 import { ValidationError, NotFoundError } from "@/lib/errors";
 
 /**
@@ -69,6 +70,8 @@ export function assertValidAppointmentWindow(startAt: string, endAt: string): vo
 export async function createAppointment(
   input: CreateAppointmentInput,
 ): Promise<{ appointmentId: string }> {
+  // Lot O : rendez-vous verrouillés par l'offre (Starter+), y compris la demande publique.
+  await assertGatedFeature(input.organizationId, "appointments");
   if (!input.contactFullName.trim()) {
     throw new ValidationError("Le nom du client est requis.");
   }
@@ -154,6 +157,7 @@ export async function updateAppointmentStatus(
   organizationId: string,
   status: AppointmentStatus,
 ): Promise<void> {
+  await assertGatedFeature(organizationId, "appointments");
   const supabase = getSupabaseServiceClient();
 
   const { data, error } = await supabase

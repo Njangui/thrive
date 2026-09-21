@@ -8,8 +8,8 @@ import {
 import { mapTelegramUpdateToDomainEvent } from "@/infrastructure/providers/messaging/telegram/mapper";
 import { resolveOrganizationIdByTelegramWebhookToken } from "@/infrastructure/providers/messaging/telegram/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
-import { routeMessage } from "@/application/services/conversation-orchestrator";
-import { escalateToHuman, getAutoReplyMode, notifyUnansweredInboundMessage } from "@/application/services/handoff-service";
+import { handleBotMembershipUpdate } from "@/application/services/telegram-destination-service";
+import { processInboundAutoReply } from "@/application/services/inbound-auto-reply-service";
 import { getMessagingProvider, getStorageProvider } from "@/infrastructure/providers/registry";
 import { buildTenantObjectPath, type MediaType } from "@/application/services/media-service";
 
@@ -35,7 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     console.warn(`Telegram tenant webhook: jeton d'URL inconnu (${token}), ignoré.`);
     return NextResponse.json({ ok: true });
   }
-  const { organizationId, webhookSecret } = resolved;
+  const { organizationId, webhookSecret, botId } = resolved;
 
   const headerValue = request.headers.get("x-telegram-bot-api-secret-token");
   if (!verifyTelegramTenantSecretToken(headerValue, webhookSecret)) {
@@ -70,8 +70,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
 
   try {
-    const attachment = await downloadTelegramAttachmentIfPresent(organizationId, update);
-    const domainEvent = mapTelegramUpdateToDomainEvent(update, organizationId, attachment ?? undefined);
+    // Lot O : le bot vient d'être ajouté / retiré d'un canal ou d'un groupe →
+    // enregistrement (ou désactivation) automatique de la destination.
+    if (update.my_chat_member) {
+      const outcome = await handleBotMembershipUpdate(organizationId, botId, update.my_chat_member);
+      console.info(`Telegram tenant webhook: my_chat_member ${update.my_chat_member.chat.type} → ${outcome} (org ${organizationId})`);
+      await markWebhookEvent(externalEventId, "processed");
+      return NextResponse.json({ ok: true });
+    }
+
+    const attachment = await downloadTelegramAttachmentIfPresent(organizationId, botId, update);
+    const domainEvent = mapTelegramUpdateToDomainEvent(update, organizationId, attachment ?? undefined, botId);
     if (!domainEvent) {
       await markWebhookEvent(externalEventId, "ignored_duplicate");
       return NextResponse.json({ ok: true });
@@ -80,58 +89,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     if (domainEvent.type === "MESSAGE_RECEIVED") {
       const result = await handleInboundMessage(domainEvent);
 
-      // Même garde-fou que le webhook Zernio (section 22/31) : jamais de
-      // réponse automatique pendant une prise en charge humaine.
-      const autoReplyMode = getAutoReplyMode(result.handoffStatus, result.handoffReason);
-      // Vrai dès qu'une réponse est partie OU qu'une escalade a déjà alerté
-      // les admins — sinon on les alerte plus bas (message sans réponse).
-      let handledAutomatically = false;
-
-      if (autoReplyMode !== "none") {
-        const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content, {
-          // `deterministic_only` : voir handoff-service.ts::getAutoReplyMode.
-          allowAI: autoReplyMode === "full",
-        });
-
-        if (routing.handoffReason) {
-          await escalateToHuman(organizationId, result.conversationId, routing.handoffReason);
-          handledAutomatically = true;
-        }
-
-        if (routing.replyText) {
-          const messaging = await getMessagingProvider(organizationId, "telegram");
+      // Lot O : pipeline unique (politique semi-automatique / automatique, FAQ →
+      // infos entreprise → catalogue → IA, escalade, accusé de réception) —
+      // voir inbound-auto-reply-service.ts. Jamais de réponse automatique
+      // pendant une prise en charge humaine (getAutoReplyMode).
+      await processInboundAutoReply({
+        organizationId,
+        conversationId: result.conversationId,
+        content: domainEvent.payload.content,
+        contactFullName: domainEvent.payload.contactFullName,
+        hasAttachment: Boolean(domainEvent.payload.attachment),
+        handoffStatus: result.handoffStatus,
+        handoffReason: result.handoffReason,
+        send: async (reply) => {
+          // Réponse par le bot qui a reçu le message (plusieurs bots par organisation).
+          const messaging = await getMessagingProvider(organizationId, "telegram", botId);
           await messaging.sendMessage(organizationId, {
             to: domainEvent.payload.externalContactId,
             channel: "telegram",
-            content: routing.replyText,
+            content: reply.text,
             externalThreadId: domainEvent.payload.externalThreadId,
-            // Telegram sendMessage ne prend pas de pièce jointe séparée
-            // dans ce lot (texte uniquement) — une image produit
-            // résolue par le routage est donc simplement omise ici
-            // plutôt que d'inventer un envoi non confirmé pour ce canal.
+            // Telegram sendMessage ne prend pas de pièce jointe séparée dans
+            // ce flux (texte uniquement) : l'image produit est omise.
           });
-
-          await supabase.from("messages").insert({
-            organization_id: organizationId,
-            conversation_id: result.conversationId,
-            direction: "outbound",
-            sender: "ai",
-            content: routing.replyText,
-            metadata: { intent: routing.intent, ai_invoked: routing.aiInvoked },
-          });
-          handledAutomatically = true;
-        }
-      }
-
-      if (!handledAutomatically) {
-        await notifyUnansweredInboundMessage(
-          organizationId,
-          result.conversationId,
-          domainEvent.payload.contactFullName,
-          domainEvent.payload.content,
-          Boolean(domainEvent.payload.attachment),
-        );
-      }
+        },
+      });
     }
 
     await markWebhookEvent(externalEventId, "processed");
@@ -147,7 +129,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   return NextResponse.json({ ok: true });
 }
 
-async function downloadTelegramAttachmentIfPresent(organizationId: string, update: import("@/infrastructure/providers/messaging/telegram/types").TelegramUpdate) {
+async function downloadTelegramAttachmentIfPresent(organizationId: string, botId: string, update: import("@/infrastructure/providers/messaging/telegram/types").TelegramUpdate) {
   const message = update.message;
   if (!message) return null;
 
@@ -164,7 +146,7 @@ async function downloadTelegramAttachmentIfPresent(organizationId: string, updat
             : null;
   if (!candidate) return null;
 
-  const messaging = await getMessagingProvider(organizationId, "telegram");
+  const messaging = await getMessagingProvider(organizationId, "telegram", botId);
   if (!messaging.downloadInboundAttachment) throw new Error("Le canal Telegram connecté ne permet pas le téléchargement des pièces jointes.");
   const downloaded = await messaging.downloadInboundAttachment(organizationId, candidate.fileId);
   if (downloaded.data.byteLength > 20 * 1024 * 1024) throw new Error("La pièce jointe Telegram dépasse la limite de 20 Mo prise en charge par CRESYVA.");

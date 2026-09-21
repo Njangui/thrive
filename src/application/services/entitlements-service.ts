@@ -40,6 +40,8 @@ interface CumulativeTableConfig {
    * historique (aucun filtre, toutes les lignes comptent).
    */
   activeStatuses?: string[];
+  /** Lot O : filtre de colonne additionnel (plusieurs quotas dans une même table). */
+  columnFilter?: { column: string; values: string[] };
 }
 
 const CUMULATIVE_TABLE_BY_KEY: Record<string, CumulativeTableConfig> = {
@@ -49,6 +51,17 @@ const CUMULATIVE_TABLE_BY_KEY: Record<string, CumulativeTableConfig> = {
   whatsapp: { table: "whatsapp_accounts", activeStatuses: ["connected"] },
   catalog_products: { table: "products", activeStatuses: ["active", "draft", "out_of_stock", "inactive"] },
   team_members: { table: "memberships" },
+  // Lot O — multi-comptes RÉELS : chaque quota compte les comptes/destinations
+  // effectivement enregistrés (et non plus le nombre ciblé par une action).
+  telegram_bots: { table: "telegram_bots", activeStatuses: ["connected"] },
+  telegram_channels: { table: "telegram_destinations", activeStatuses: ["active"], columnFilter: { column: "chat_type", values: ["channel"] } },
+  telegram_groups: { table: "telegram_destinations", activeStatuses: ["active"], columnFilter: { column: "chat_type", values: ["group"] } },
+  youtube_accounts: { table: "youtube_accounts", activeStatuses: ["connected"] },
+  facebook_pages: { table: "social_accounts", activeStatuses: ["connected"], columnFilter: { column: "platform", values: ["facebook"] } },
+  instagram_accounts: { table: "social_accounts", activeStatuses: ["connected"], columnFilter: { column: "platform", values: ["instagram"] } },
+  linkedin_pages: { table: "social_accounts", activeStatuses: ["connected"], columnFilter: { column: "platform", values: ["linkedin"] } },
+  tiktok_accounts: { table: "social_accounts", activeStatuses: ["connected"], columnFilter: { column: "platform", values: ["tiktok"] } },
+  twitter_accounts: { table: "social_accounts", activeStatuses: ["connected"], columnFilter: { column: "platform", values: ["twitter"] } },
   // NB: 'social_accounts' n'est PAS traité ici en mode cumulatif : il
   // n'existe aujourd'hui aucune table "comptes sociaux connectés" dans le
   // code fourni (provider_connections est une ligne par (org, type,
@@ -151,9 +164,32 @@ export async function canUseFeature(
     // Ne concerne QUE 'whatsapp_groups' (seule clé pour laquelle le
     // master prompt décrit ce bonus, section 55).
     entitlementKey === "whatsapp_groups" ? resolveDedicatedNumberBonus(organizationId, planKey) : Promise.resolve(0),
-    cumulative ? countOrganizationRows(cumulative.table, organizationId, cumulative.activeStatuses) : Promise.resolve(0),
+    cumulative ? countOrganizationRows(cumulative.table, organizationId, cumulative.activeStatuses, cumulative.columnFilter) : Promise.resolve(0),
   ]);
 
   const limit = planLimit + addonBonus + dedicatedNumberBonus;
   return evaluateEntitlement(limit, used, requestedAmount);
+}
+
+/**
+ * Lot O — verrou « fonctionnalité incluse dans l'offre » (0/1 ou plafond
+ * non nul), distinct de `canUseFeature` : ne compare PAS l'usage cumulé.
+ * Sert aux contrôles de type « cette organisation a-t-elle droit à la
+ * page CRM / aux commandes / à l'analytique du site ? » et aux
+ * publications sur un réseau dont le plafond de comptes est cumulatif
+ * (le plafond s'applique alors à la CONNEXION, pas à chaque envoi).
+ * `limit` : -1 illimité, 0 non inclus.
+ */
+export async function isFeatureEnabled(
+  organizationId: string,
+  entitlementKey: string,
+): Promise<{ enabled: boolean; limit: number }> {
+  const planKey = await getOrganizationPlanKey(organizationId);
+  const limit = await getEntitlementLimit(planKey, entitlementKey);
+  return { enabled: limit !== 0, limit };
+}
+
+/** Variante booléenne, pour les gardes de page/service. */
+export async function hasFeature(organizationId: string, entitlementKey: string): Promise<boolean> {
+  return (await isFeatureEnabled(organizationId, entitlementKey)).enabled;
 }

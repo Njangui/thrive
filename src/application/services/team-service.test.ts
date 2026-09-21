@@ -5,6 +5,13 @@ vi.mock("@/infrastructure/providers/registry", () => ({
   getEmailProvider: vi.fn(),
 }));
 
+// Le quota d'équipe (`team_members`) est testé dans entitlements-service.test.ts ;
+// ici on isole la logique d'invitation (le canUseFeature réel lisait la file de
+// résultats du mock Supabase et concluait « limite de 0 membre »).
+vi.mock("./entitlements-service", () => ({
+  canUseFeature: vi.fn(async () => ({ allowed: true, limit: -1, used: 0, remaining: -1 })),
+}));
+
 // Périmètre hérité du Lot O (RAPPORT_FUSION_6.md, section 8) : team-service.ts
 // appelle désormais resolveRequestOrigin() (next/headers) au lieu de lire
 // NEXT_PUBLIC_APP_URL — mocké ici car `headers()` explose hors d'une vraie
@@ -113,12 +120,6 @@ beforeEach(() => {
   updateCalls.length = 0;
   deleteCalls.length = 0;
   mockGetUserById = vi.fn(async (_id: string): Promise<GetUserByIdResult> => ({ data: { user: { email: null } }, error: null }));
-  // Défaut illimité (fail-closed à 0 sinon depuis le passage freemium,
-  // "team_members" étant une clé connue — voir plans-repository.ts). Ce
-  // fichier teste la logique d'invitation/acceptation, jamais l'exécution
-  // du quota lui-même : un test qui veut vraiment le tester repousse sa
-  // propre valeur sur "plan_entitlements" après ce beforeEach.
-  pushResult("plan_entitlements", { data: { limit_value: -1 }, error: null });
 });
 
 describe("inviteMember", () => {

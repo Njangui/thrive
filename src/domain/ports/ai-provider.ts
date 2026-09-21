@@ -20,7 +20,7 @@ export interface AITextResponse {
   usage?: { inputTokens: number; outputTokens: number };
 }
 
-export interface AIStructuredRequest<TSchema = unknown> extends AITextRequest {
+export interface AIStructuredRequest<_TSchema = unknown> extends AITextRequest {
   /** Description JSON-schema-like de la sortie attendue */
   outputSchemaDescription: string;
 }

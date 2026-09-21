@@ -311,7 +311,7 @@ export default async function EditProductPage({
           <select
             name="status"
             defaultValue={product.status}
-            className="rounded-xl border border-navy-900/10 px-4 py-3 outline-none focus:border-violet-400"
+            className="rounded-xl border border-navy-900/10 px-4 py-3 outline-hidden focus:border-violet-400"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>

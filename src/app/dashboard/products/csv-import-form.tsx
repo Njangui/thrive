@@ -78,8 +78,8 @@ export function CsvImportForm({ organizationId }: { organizationId: string }) {
         Colonnes : name, price, category, description, stock, status, image_urls, specifications.
       </p>
       <p className="text-xs text-slate-500">
-        <code className="rounded bg-navy-900/5 px-1">image_urls</code> : plusieurs photos séparées par «&nbsp;|&nbsp;»
-        (une seule aussi acceptée). <code className="rounded bg-navy-900/5 px-1">specifications</code> : «&nbsp;
+        <code className="rounded-sm bg-navy-900/5 px-1">image_urls</code> : plusieurs photos séparées par «&nbsp;|&nbsp;»
+        (une seule aussi acceptée). <code className="rounded-sm bg-navy-900/5 px-1">specifications</code> : «&nbsp;
         Libellé:Valeur|Libellé2:Valeur2&nbsp;».
       </p>
       <button

@@ -32,6 +32,8 @@ import { TelegramClient } from "./telegram/client";
 import { ConsoleLogNotificationAdapter } from "./notification/console-log/adapter";
 import { CompositeSocialAdapter } from "./social/composite-adapter";
 import { YouTubeSocialAdapter } from "./social/youtube/adapter";
+import { YouTubeMultiAccountAdapter } from "./social/youtube/multi-adapter";
+import { listOrganizationZernioProfileIds } from "@/application/services/social-account-registry-service";
 import { YouTubeClient } from "./social/youtube/client";
 
 /**
@@ -181,6 +183,48 @@ export async function getNotificationProvider(_organizationId?: string): Promise
  */
 export async function getMessagingProvider(organizationId: string, providerName?: string, providerAccountId?: string): Promise<MessagingProvider> {
   const supabase = getSupabaseServiceClient();
+
+  // Lot O — messagerie unifiée : Messenger / Instagram passent par la boîte
+  // Zernio du compte social précis (registre `social_accounts`), jamais par
+  // une ligne `provider_connections` de messagerie.
+  if (providerName === "facebook" || providerName === "instagram") {
+    if (!providerAccountId) throw new Error(`Compte ${providerName} requis pour envoyer un message.`);
+    const { data: socialAccount, error: socialError } = await supabase
+      .from("social_accounts")
+      .select("profile_id, account_id, status, platform")
+      .eq("organization_id", organizationId)
+      .eq("account_id", providerAccountId)
+      .maybeSingle();
+    if (socialError) throw new Error(`Erreur lecture du compte social: ${socialError.message}`);
+    if (!socialAccount || socialAccount.status !== "connected" || socialAccount.platform !== providerName) {
+      throw new Error(`Le compte ${providerName} ${providerAccountId} n'est plus connecté.`);
+    }
+    const apiKey = await resolveCredential(organizationId, "messaging", "zernio");
+    return new ZernioAdapter(new ZernioClient(apiKey), socialAccount.profile_id, socialAccount.account_id);
+  }
+
+  // Lot O — plusieurs bots Telegram par organisation : le bot précis est celui de
+  // la conversation / de la publication (`providerAccountId` = telegram_bots.id) ;
+  // à défaut, le bot principal.
+  if (providerName === "telegram") {
+    let botQuery = supabase
+      .from("telegram_bots")
+      .select("id, credential_reference")
+      .eq("organization_id", organizationId)
+      .eq("status", "connected");
+    botQuery = providerAccountId
+      ? botQuery.eq("id", providerAccountId)
+      : botQuery.order("is_primary", { ascending: false }).order("created_at", { ascending: true }).limit(1);
+    const { data: bots, error: botError } = await botQuery;
+    if (botError) throw new Error(`Erreur lecture des bots Telegram: ${botError.message}`);
+    const bot = bots?.[0];
+    if (!bot?.credential_reference) {
+      throw new Error(`Aucun bot Telegram connecté${providerAccountId ? " (bot introuvable ou déconnecté)" : ""} pour l'organization ${organizationId}.`);
+    }
+    const { data: token, error: tokenError } = await supabase.rpc("vault_read_secret", { secret_id: bot.credential_reference });
+    if (tokenError || !token) throw new Error("Jeton du bot Telegram illisible (Vault).");
+    return new TelegramMessagingAdapter(new TelegramMessagingClient(token as string));
+  }
 
   let query = supabase
     .from("provider_connections")
@@ -385,32 +429,66 @@ export async function getAIProvider(organizationId: string): Promise<AIProviderB
 
 export async function getSocialPublishingProvider(organizationId: string): Promise<SocialPublishingProvider> {
   const supabase = getSupabaseServiceClient();
-  const { data: connections, error } = await supabase
-    .from("provider_connections")
-    .select("provider_name, status, metadata, credential_reference")
-    .eq("organization_id", organizationId)
-    .eq("provider_type", "social")
-    .eq("status", "connected");
-  if (error) throw new Error(`Erreur lecture connexions sociales: ${error.message}`);
-  if (!connections || connections.length === 0) throw new Error(`Aucun canal social connecté pour l'organisation ${organizationId}.`);
+  const [{ data: zernioConnections, error: zernioError }, { data: youtubeRows, error: youtubeError }] = await Promise.all([
+    supabase
+      .from("provider_connections")
+      .select("provider_name, status, metadata")
+      .eq("organization_id", organizationId)
+      .eq("provider_type", "social")
+      .eq("provider_name", "zernio")
+      .eq("status", "connected"),
+    // Lot O : plusieurs chaînes YouTube par organisation (table dédiée).
+    supabase
+      .from("youtube_accounts")
+      .select("channel_id, title, username, credential_reference")
+      .eq("organization_id", organizationId)
+      .eq("status", "connected"),
+  ]);
+  if (zernioError) throw new Error(`Erreur lecture connexions sociales: ${zernioError.message}`);
+  if (youtubeError) throw new Error(`Erreur lecture comptes YouTube: ${youtubeError.message}`);
 
   const adapters: Array<{ name: string; adapter: SocialPublishingProvider; platforms: Set<string> }> = [];
-  for (const connection of connections) {
-    if (connection.provider_name === "zernio") {
-      const apiKey = await resolveCredential(organizationId, "social", "zernio");
-      const metadata = (connection.metadata ?? {}) as { profileId?: string };
-      adapters.push({ name: "zernio", adapter: new ZernioSocialAdapter(new ZernioSocialClient(apiKey), metadata.profileId), platforms: new Set(["facebook", "instagram", "linkedin", "tiktok", "twitter", "threads", "reddit", "pinterest", "bluesky", "google_business", "snapchat", "discord"]) });
-    }
-    if (connection.provider_name === "youtube" && connection.credential_reference) {
-      const { data: secret } = await supabase.rpc("vault_read_secret", { secret_id: connection.credential_reference });
-      if (!secret) continue;
-      const tokens = JSON.parse(secret as string) as { access_token: string; refresh_token: string; expires_at: number };
-      const metadata = (connection.metadata ?? {}) as { channelId?: string; title?: string; username?: string };
-      const account = { accountId: metadata.channelId ?? "youtube", platform: "youtube", username: metadata.username ?? metadata.title ?? "YouTube" };
-      adapters.push({ name: "youtube", adapter: new YouTubeSocialAdapter(new YouTubeClient(tokens), account), platforms: new Set(["youtube"]) });
-    }
+
+  if (zernioConnections && zernioConnections.length > 0) {
+    const apiKey = await resolveCredential(organizationId, "social", "zernio");
+    // Lot O : le profil principal + les profils additionnels (un compte TikTok par profil).
+    const profileIds = await listOrganizationZernioProfileIds(organizationId);
+    adapters.push({
+      name: "zernio",
+      adapter: new ZernioSocialAdapter(new ZernioSocialClient(apiKey), profileIds),
+      platforms: new Set(["facebook", "instagram", "linkedin", "twitter", "tiktok", "threads", "reddit", "pinterest", "bluesky", "googlebusiness", "telegram", "snapchat", "discord"]),
+    });
   }
-  if (adapters.length === 0) throw new Error("Aucun canal social utilisable n'est connecté.");
+
+  const youtubeAccounts: Array<{ account: { accountId: string; platform: string; username: string }; adapter: SocialPublishingProvider }> = [];
+  for (const row of youtubeRows ?? []) {
+    if (!row.credential_reference) continue;
+    const { data: secret } = await supabase.rpc("vault_read_secret", { secret_id: row.credential_reference });
+    if (!secret) continue;
+    const tokens = JSON.parse(secret as string) as { access_token: string; refresh_token: string; expires_at: number };
+    const account = { accountId: row.channel_id as string, platform: "youtube", username: (row.username ?? row.title ?? "YouTube") as string };
+    youtubeAccounts.push({ account, adapter: new YouTubeSocialAdapter(new YouTubeClient(tokens), account) });
+  }
+  if (youtubeAccounts.length > 0) {
+    adapters.push({ name: "youtube", adapter: new YouTubeMultiAccountAdapter(youtubeAccounts), platforms: new Set(["youtube"]) });
+  }
+
+  if (adapters.length === 0) throw new Error(`Aucun canal social connecté pour l'organisation ${organizationId}.`);
   if (adapters.length === 1) return adapters[0]!.adapter;
   return new CompositeSocialAdapter(adapters);
+}
+/**
+ * Lot O — point d'entrée unique pour répondre sur le canal d'une
+ * conversation : traduit `channel` (whatsapp | telegram | facebook |
+ * instagram) en fournisseur + compte. Corrige au passage les relances
+ * automatiques WhatsApp, qui demandaient un fournisseur nommé « whatsapp »
+ * alors que la connexion s'appelle « zernio ».
+ */
+export async function getMessagingProviderForChannel(
+  organizationId: string,
+  channel: string,
+  providerAccountId?: string | null,
+): Promise<MessagingProvider> {
+  const providerName = channel === "whatsapp" ? "zernio" : channel;
+  return getMessagingProvider(organizationId, providerName, providerAccountId ?? undefined);
 }

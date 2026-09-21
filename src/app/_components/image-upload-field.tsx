@@ -85,7 +85,7 @@ export function ImageUploadField({
         placeholder="https://..."
         defaultValue={currentUrl ?? ""}
         onChange={(event) => setPreviewUrl(event.target.value || currentUrl || null)}
-        className={mode === "url" ? "rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-none focus:border-violet-400" : "hidden"}
+        className={mode === "url" ? "rounded-xl border border-navy-900/10 px-4 py-3 text-sm outline-hidden focus:border-violet-400" : "hidden"}
       />
 
       {helpText && <p className="text-xs text-slate-500">{helpText}</p>}

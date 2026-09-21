@@ -2,12 +2,12 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/infrastructure/supabase/browser-client";
 import { AuthShell } from "@/app/_components/auth-shell";
 
 function ResetForm() {
-  const router = useRouter(); const params = useSearchParams(); const next = params.get("next")?.startsWith("/") && !params.get("next")?.startsWith("//") ? params.get("next") : null;
+  const params = useSearchParams(); const next = params.get("next")?.startsWith("/") && !params.get("next")?.startsWith("//") ? params.get("next") : null;
   const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState(""); const [pending, setPending] = useState(false); const [error, setError] = useState<string | null>(null); const [done, setDone] = useState(false);
   async function submit(e: React.FormEvent) { e.preventDefault(); setError(null); if (password.length < 6) return setError("Le mot de passe doit contenir au moins 6 caractères."); if (password !== confirm) return setError("Les mots de passe ne correspondent pas."); setPending(true); const { error } = await getSupabaseBrowserClient().auth.updateUser({ password }); if (error) { setPending(false); setError(error.message); return; } setDone(true); setPending(false); }
   if (done) return <div className="auth-success"><span>✓</span><div><strong>Mot de passe mis à jour</strong><p>Votre compte est sécurisé. Vous pouvez maintenant accéder à votre espace.</p><Link href={next ?? "/dashboard"} className="auth-inline-link">Continuer →</Link></div></div>;

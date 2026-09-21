@@ -7,7 +7,6 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { env } from "@/lib/env";
 import {
   computeCommissionAmountFcfa,
-  computeDiscountedAmountFcfa,
   computeHoldReleaseAt,
   exceedsClickVelocity,
   isConversionEligible,
@@ -20,7 +19,6 @@ import {
   type PayoutMethod,
 } from "@/domain/entities/affiliate";
 import {
-  AFFILIATE_COOKIE_NAME,
   generateReferralCode,
   hashForFraudDetection,
   signReferralToken,

@@ -159,6 +159,8 @@ export interface CommentReceivedEvent extends DomainEventBase {
     platform?: string;
     externalCommentId: string;
     authorName?: string;
+    /** Lot O : identifiant plateforme de l'auteur (détection des commentaires du compte lui-même). */
+    authorExternalId?: string;
     content: string;
   };
 }

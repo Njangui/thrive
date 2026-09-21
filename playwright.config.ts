@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Tests end-to-end (navigateur réel, pas de mock) — séparés des tests
  * unitaires (`vitest run`, `src/**\/*.test.ts`) et des tests d'intégration
- * DB (`vitest run --config vitest.integration.config.ts`,
+ * DB (`vitest run --config vitest.integration.config.mts`,
  * `tests/integration/**`). Trois couches distinctes, trois commandes
  * distinctes, cohérent avec la séparation déjà en place dans ce projet.
  *

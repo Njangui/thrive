@@ -33,7 +33,6 @@ export default async function ProductsPage({
       supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
       supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "active").gt("current_stock", 0),
       supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "out_of_stock"),
-      supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "draft"),
     ]),
   ]);
 
@@ -55,7 +54,6 @@ export default async function ProductsPage({
   const total = counts[0].count ?? 0;
   const active = counts[1].count ?? 0;
   const out = counts[2].count ?? 0;
-  const drafts = counts[3].count ?? 0;
   const items = products ?? [];
 
   const pageUrl = (nextPage: number) => {

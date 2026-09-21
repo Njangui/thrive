@@ -8,6 +8,22 @@ import { StorefrontImage } from "./storefront/storefront-image";
 import { IconStar } from "./storefront/storefront-icons";
 import { Container } from "./storefront/storefront-ui";
 
+/**
+ * Lot O : la réservation en ligne est réservée à Starter+ — `/rendez-vous`
+ * répond 404 sans l'offre (voir `capabilities.bookingEnabled`). Les CTA
+ * « Prendre rendez-vous » des vitrines sectorielles retombent alors sur la
+ * page Contact plutôt que de pointer vers une page inexistante.
+ */
+function bookingHref(site: StorefrontSite) {
+  return site.capabilities.bookingEnabled ? STOREFRONT_PATHS.booking : STOREFRONT_PATHS.contact;
+}
+
+function locationLabel(address: string | null, fallback: string) {
+  const parts = (address ?? "").split(",").map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return fallback;
+  return parts.length > 2 ? parts.slice(-2).join(" · ") : parts.join(" · ");
+}
+
 function Initials({ name }: { name: string }) {
   return <span className="sector-avatar" aria-hidden>{name.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase()}</span>;
 }
@@ -49,8 +65,8 @@ export function RealEstateHome({
   services: ServiceSummary[];
   testimonials: TestimonialSummary[];
 }) {
-  const heroImage = site.heroMediaUrl ?? products[0]?.imageUrl ?? site.tenant.bannerUrl ?? "/images/tenant-realestate-hero.svg";
-  const storyImage = site.tenant.bannerUrl ?? products[0]?.imageUrl ?? "/images/tenant-realestate-hero.svg";
+  const heroImage = site.heroMediaUrl ?? products[0]?.imageUrl ?? site.tenant.bannerUrl ?? "/images/showcase/realestate-hero.svg";
+  const storyImage = site.tenant.bannerUrl ?? products[0]?.imageUrl ?? "/images/showcase/demo/realestate-story.jpg";
   const stats = site.stats.slice(0, 4);
   const demoStats = [
     { key: "demo1", value: "120+", label: "biens en vitrine" },
@@ -62,16 +78,16 @@ export function RealEstateHome({
   const propertyTypes = categories.slice(0, 4);
   const serviceItems = services.slice(0, 6);
   const demoProperties = [
-    { name: "Appartement moderne — Bastos", price: "125 000 FCFA / mois", type: "Appartement", image: "/images/demo/realestate-villa.svg" },
-    { name: "Villa familiale — Odza", price: "85 000 000 FCFA", type: "Villa", image: "/images/demo/realestate-apartment.svg" },
-    { name: "Terrain résidentiel — Nkolbisson", price: "18 500 000 FCFA", type: "Terrain", image: "/images/demo/realestate-land.svg" },
-    { name: "Duplex contemporain — Essos", price: "62 000 000 FCFA", type: "Duplex", image: "/images/demo/realestate-duplex.svg" },
+    { name: "Appartement moderne — Bastos", price: "125 000 FCFA / mois", type: "Appartement", image: "/images/showcase/demo/realestate-1.jpg" },
+    { name: "Villa familiale — Odza", price: "85 000 000 FCFA", type: "Villa", image: "/images/showcase/demo/realestate-2.jpg" },
+    { name: "Terrain résidentiel — Nkolbisson", price: "18 500 000 FCFA", type: "Terrain", image: "/images/showcase/demo/realestate-3.jpg" },
+    { name: "Duplex contemporain — Essos", price: "62 000 000 FCFA", type: "Duplex", image: "/images/showcase/demo/realestate-4.jpg" },
   ];
   const demoTypes = [
-    { name: "Maisons", image: "/images/demo/realestate-villa.svg" },
-    { name: "Appartements", image: "/images/demo/realestate-apartment.svg" },
-    { name: "Terrains", image: "/images/demo/realestate-land.svg" },
-    { name: "Bureaux", image: "/images/demo/realestate-duplex.svg" },
+    { name: "Maisons", image: "/images/showcase/demo/realestate-1.jpg" },
+    { name: "Appartements", image: "/images/showcase/demo/realestate-2.jpg" },
+    { name: "Terrains", image: "/images/showcase/demo/realestate-3.jpg" },
+    { name: "Bureaux", image: "/images/showcase/demo/realestate-4.jpg" },
   ];
   const demoTestimonials = [
     { name: "Client exemple", text: "Une recherche plus claire et un accompagnement simple du premier contact à la visite." },
@@ -85,13 +101,20 @@ export function RealEstateHome({
       <Container className="re-hero-inner">
         <div className="re-hero-copy">
           <span className="re-eyebrow">AGENCE IMMOBILIÈRE</span>
-          <h1>{site.config.heroTitle?.trim() || "Trouvez le bien qui correspond à vos rêves"}</h1>
+          <h1>{site.config.heroTitle?.trim() ? site.config.heroTitle.trim() : <>Trouvez le bien qui <span className="re-hero-accent">correspond à vos rêves</span></>}</h1>
           <p>{site.config.heroSubtitle?.trim() || site.tenant.description || "Découvrez une sélection de biens immobiliers avec les informations essentielles pour avancer dans votre projet."}</p>
           <div className="re-hero-highlights">
             {site.highlights.slice(0, 3).map((item) => <div key={item.title}><span className="re-highlight-icon">✓</span><span><strong>{item.title}</strong><small>{item.subtitle}</small></span></div>)}
           </div>
         </div>
         <div className="re-hero-visual-note"><strong>Biens disponibles</strong><span>{site.capabilities.productCount}</span></div>
+        <div className="re-hero-floating-card">
+          <span className="re-floating-kicker">SÉLECTION · {site.tenant.name.toUpperCase()}</span>
+          <strong>{featured.length ? `${featured.length} biens à découvrir` : "Une sélection soigneusement présentée"}</strong>
+          <small>{site.capabilities.productCount > 0 ? "Mis à jour depuis votre catalogue" : "Votre catalogue apparaîtra ici"}</small>
+          <span className="re-floating-arrow">↗</span>
+        </div>
+        <div className="re-hero-side-label">{site.tenant.name.toUpperCase()} <span>—</span> {locationLabel(site.tenant.address, "VOTRE DESTINATION")}</div>
       </Container>
       <div className="re-search-card">
         <div className="re-search-tabs"><button className="active">Acheter</button><button>Louer</button><button>Investir</button></div>
@@ -142,7 +165,7 @@ export function RealEstateHome({
 
     <section className="re-stats">
       <Container className="re-stats-inner">
-        <div><span className="re-eyebrow">EN QUELQUES CHIFFRES</span><h2>Une agence de confiance au service de vos projets</h2><p>Des données issues de l’activité réelle de cette entreprise.</p></div>
+        <div><span className="re-eyebrow">{stats.length ? "EN QUELQUES CHIFFRES" : "UNE PRÉSENTATION POSSIBLE"}</span><h2>Une agence qui donne immédiatement envie d’aller plus loin.</h2><p>{stats.length ? "Des indicateurs issus de l’activité réelle de cette entreprise." : "Cette zone se personnalise automatiquement dès que l’entreprise renseigne ses indicateurs."}</p></div>
         <div className="re-stat-grid">{(stats.length ? stats : demoStats).map((s) => <div key={s.key}><strong>{s.value}</strong><span>{s.label}{stats.length ? "" : " · Exemple"}</span></div>)}</div>
       </Container>
     </section>
@@ -173,7 +196,7 @@ export function RetailHome({
   promotions: StorefrontProduct[];
   testimonials: TestimonialSummary[];
 }) {
-  const heroImage = site.heroMediaUrl ?? products[0]?.imageUrl ?? site.tenant.bannerUrl ?? "/images/demo/retail-hero.svg";
+  const heroImage = site.heroMediaUrl ?? products[0]?.imageUrl ?? site.tenant.bannerUrl ?? "/images/showcase/retail-hero.svg";
   const editorialImage = products[1]?.imageUrl ?? site.tenant.bannerUrl ?? "/images/demo/retail-story.svg";
   const newArrivals = products.slice(0, 6);
   const promoItems = promotions.slice(0, 4);
@@ -188,7 +211,6 @@ export function RetailHome({
     { name: "Cliente exemple", text: "Une sélection facile à parcourir et un contact direct quand j’ai besoin d’aide." },
     { name: "Client exemple", text: "Le catalogue donne immédiatement une idée des produits et des prix." },
   ];
-  const stats = site.stats.slice(0, 3);
 
   return <div className="sector-retail-home">
     <section className="boutique-hero">
@@ -199,7 +221,7 @@ export function RetailHome({
       <Container className="boutique-hero-inner">
         <div className="boutique-hero-copy">
           <span className="boutique-eyebrow">{site.blueprint.eyebrow.toUpperCase()} · {site.tenant.name.toUpperCase()}</span>
-          <h1>{site.config.heroTitle?.trim() || "Votre style. Votre sélection. Votre boutique."}</h1>
+          <h1>{site.config.heroTitle?.trim() || <>Votre univers.<br/><em>Votre sélection.</em></>}</h1>
           <p>{site.config.heroSubtitle?.trim() || site.tenant.description || "Une sélection pensée pour celles et ceux qui aiment les belles pièces, les choix simples et un service proche."}</p>
           <div className="boutique-hero-actions">
             <Link href={STOREFRONT_PATHS.catalog} className="boutique-primary">Explorer la boutique <span>↗</span></Link>
@@ -213,6 +235,7 @@ export function RetailHome({
           <span>COLLECTION</span><strong>{newArrivals.length ? "Nouvelle sélection" : "La boutique"}</strong><small>{newArrivals.length ? `${newArrivals.length} pièces à découvrir` : "Découvrez notre catalogue"}</small>
         </div>
       </Container>
+      <div className="boutique-hero-ticket"><span>ÉDITION</span><strong>{site.tenant.name}</strong><small>{newArrivals.length ? `${newArrivals.length} pièces en ligne` : "Nouvelle collection"}</small></div>
       <div className="boutique-scroll">DÉFILER <span>↓</span></div>
     </section>
 
@@ -280,7 +303,7 @@ export function BeautyHome({
   testimonials: TestimonialSummary[];
   team: { userId: string; fullName: string | null; avatarUrl: string | null; role: string }[];
 }) {
-  const heroImage = site.heroMediaUrl ?? gallery[0]?.url ?? site.tenant.bannerUrl ?? services.find((s) => s.imageUrl)?.imageUrl ?? "/images/tenant-beauty-hero.svg";
+  const heroImage = site.heroMediaUrl ?? gallery[0]?.url ?? site.tenant.bannerUrl ?? services.find((s) => s.imageUrl)?.imageUrl ?? "/images/showcase/beauty-hero.svg";
   const storyImage = gallery[1]?.url ?? gallery[0]?.url ?? site.tenant.bannerUrl ?? "/images/tenant-default-story.svg";
   const featuredServices = services.slice(0, 6);
   const galleryItems = gallery.slice(0, 6);
@@ -320,7 +343,7 @@ export function BeautyHome({
           <h1>{site.config.heroTitle?.trim() || "Prenez soin de vous"}</h1>
           <p>{site.config.heroSubtitle?.trim() || site.tenant.description || `Un moment pour vous, chez ${site.tenant.name}. Des prestations pensées pour vous faire ressortir du salon en vous sentant mieux.`}</p>
           <div className="beauty-hero-actions">
-            <Link href={STOREFRONT_PATHS.booking} className="beauty-primary-button">Prendre rendez-vous <span>↗</span></Link>
+            <Link href={bookingHref(site)} className="beauty-primary-button">Prendre rendez-vous <span>↗</span></Link>
             <Link href={STOREFRONT_PATHS.services} className="beauty-ghost-button">Voir les prestations</Link>
           </div>
           <div className="beauty-trust-row">
@@ -331,7 +354,7 @@ export function BeautyHome({
           <span>VOTRE MOMENT</span>
           <strong>Commencez par choisir votre soin.</strong>
           <small>{featuredServices.length ? `${featuredServices.length} prestations actuellement publiées` : "Prestations disponibles sur demande"}</small>
-          {rating && <div className="beauty-rating"><Stars rating={Number(rating.value) || 5} /><b>{rating.value}/5</b></div>}
+          {rating && <div className="beauty-rating"><Stars rating={Number(rating.value) || null} /><b>{rating.value}/5</b></div>}
         </div>
       </Container>
       <div className="beauty-hero-scroll">DÉCOUVRIR <span>↓</span></div>
@@ -356,7 +379,7 @@ export function BeautyHome({
     <section className="beauty-ritual section-pad">
       <Container className="beauty-ritual-grid">
         <div className="beauty-ritual-media">{storyImage && <StorefrontImage src={storyImage} alt="" sizes="(min-width: 900px) 48vw, 100vw" fallbackLabel="" />}<span className="beauty-ritual-badge">PRENEZ<br/><em>LE TEMPS</em></span></div>
-        <div className="beauty-ritual-copy"><span className="beauty-kicker">NOTRE APPROCHE</span><h2>Un rendez-vous qui commence avant même votre arrivée.</h2><p>{site.tenant.description || `${site.tenant.name} crée une parenthèse où chaque détail compte : accueil, écoute, geste précis et résultat soigné.`}</p><div className="beauty-ritual-list"><div><b>01</b><span><strong>Écouter</strong><small>Comprendre votre besoin avant de commencer.</small></span></div><div><b>02</b><span><strong>Prendre soin</strong><small>Des gestes et un cadre pensés pour votre confort.</small></span></div><div><b>03</b><span><strong>Vous révéler</strong><small>Un résultat adapté à votre style et à vos envies.</small></span></div></div><Link href={STOREFRONT_PATHS.booking} className="beauty-dark-button">Réserver mon moment ↗</Link></div>
+        <div className="beauty-ritual-copy"><span className="beauty-kicker">NOTRE APPROCHE</span><h2>Un rendez-vous qui commence avant même votre arrivée.</h2><p>{site.tenant.description || `${site.tenant.name} crée une parenthèse où chaque détail compte : accueil, écoute, geste précis et résultat soigné.`}</p><div className="beauty-ritual-list"><div><b>01</b><span><strong>Écouter</strong><small>Comprendre votre besoin avant de commencer.</small></span></div><div><b>02</b><span><strong>Prendre soin</strong><small>Des gestes et un cadre pensés pour votre confort.</small></span></div><div><b>03</b><span><strong>Vous révéler</strong><small>Un résultat adapté à votre style et à vos envies.</small></span></div></div><Link href={bookingHref(site)} className="beauty-dark-button">Réserver mon moment ↗</Link></div>
       </Container>
     </section>
 
@@ -374,7 +397,7 @@ export function BeautyHome({
           { name: "Styliste", role: "Beauté & finition" },
         ].map((member) => <div key={member.name} className="beauty-team-card demo-team-card"><div className="beauty-demo-person"><Initials name={member.name}/></div><div><strong>{member.name}</strong><small>{member.role} · Exemple</small></div></div>)}</div></Container></section>
 
-    <section className="beauty-final-cta"><Container className="beauty-final-inner"><div><span className="beauty-kicker">VOTRE PROCHAIN RENDEZ-VOUS</span><h2>Et si vous vous accordiez enfin ce moment ?</h2></div><Link href={STOREFRONT_PATHS.booking} className="beauty-light-button">Prendre rendez-vous ↗</Link></Container></section>
+    <section className="beauty-final-cta"><Container className="beauty-final-inner"><div><span className="beauty-kicker">VOTRE PROCHAIN RENDEZ-VOUS</span><h2>Et si vous vous accordiez enfin ce moment ?</h2></div><Link href={bookingHref(site)} className="beauty-light-button">Prendre rendez-vous ↗</Link></Container></section>
   </div>;
 }
 
@@ -392,7 +415,7 @@ export function ProfessionalServicesHome({
   testimonials: TestimonialSummary[];
   team: { userId: string; fullName: string | null; avatarUrl: string | null; role: string }[];
 }) {
-  const heroImage = site.heroMediaUrl ?? services.find((s) => s.imageUrl)?.imageUrl ?? site.tenant.bannerUrl ?? "/images/tenant-professional-hero.svg";
+  const heroImage = site.heroMediaUrl ?? services.find((s) => s.imageUrl)?.imageUrl ?? site.tenant.bannerUrl ?? "/images/showcase/professional-hero.svg";
   const featuredServices = services.slice(0, 6);
   const featuredCategories = categories.slice(0, 4);
   const demoServices = [
@@ -424,7 +447,7 @@ export function ProfessionalServicesHome({
           <h1>{site.config.heroTitle?.trim() || "Un accompagnement clair, du début à la fin"}</h1>
           <p>{site.config.heroSubtitle?.trim() || site.tenant.description || `${site.tenant.name} transforme vos besoins en solutions concrètes, avec un cadre clair et un interlocuteur dédié.`}</p>
           <div className="pro-actions">
-            <Link href={STOREFRONT_PATHS.booking} className="pro-primary-button">Demander un rendez-vous <span>↗</span></Link>
+            <Link href={bookingHref(site)} className="pro-primary-button">Demander un rendez-vous <span>↗</span></Link>
             <Link href={STOREFRONT_PATHS.services} className="pro-outline-button">Voir nos services</Link>
           </div>
           <div className="pro-trust-row">{site.highlights.slice(0, 3).map((h) => <div key={h.title}><span>✓</span><strong>{h.title}<small>{h.subtitle}</small></strong></div>)}</div>
@@ -433,7 +456,7 @@ export function ProfessionalServicesHome({
           <span>VOTRE PROJET</span>
           <strong>Parlons d&apos;abord du besoin.</strong>
           <p>Un premier échange permet de cadrer votre demande avant toute proposition.</p>
-          {rating && <div className="pro-rating"><Stars rating={Number(rating.value) || 5} /><b>{rating.value}/5</b></div>}
+          {rating && <div className="pro-rating"><Stars rating={Number(rating.value) || null} /><b>{rating.value}/5</b></div>}
         </div>
       </Container>
       <div className="pro-hero-scroll">DÉCOUVRIR <span>↓</span></div>
@@ -455,7 +478,7 @@ export function ProfessionalServicesHome({
     <section className="pro-method section-pad">
       <Container className="pro-method-grid">
         <div className="pro-method-visual"><div className="pro-method-orbit"><span>CLARTÉ</span><span>EXPERTISE</span><span>CONFIANCE</span><i>↗</i></div><div className="pro-method-caption">UNE MÉTHODE SIMPLE<br/><em>POUR DES DÉCISIONS PLUS CLAIRES</em></div></div>
-        <div className="pro-method-copy"><span className="pro-kicker">NOTRE APPROCHE</span><h2>Votre projet mérite un cadre, pas une succession de surprises.</h2><p>{site.tenant.description || `${site.tenant.name} privilégie un accompagnement lisible : comprendre la demande, définir le périmètre, avancer avec un interlocuteur identifié et garder les prochaines étapes visibles.`}</p><div className="pro-steps"><div><b>01</b><span><strong>Comprendre</strong><small>Votre besoin, vos contraintes et le résultat attendu.</small></span></div><div><b>02</b><span><strong>Cadrer</strong><small>Une prestation et un périmètre compréhensibles avant d&apos;avancer.</small></span></div><div><b>03</b><span><strong>Accompagner</strong><small>Un suivi clair jusqu&apos;à la livraison ou la prochaine étape.</small></span></div></div><Link href={STOREFRONT_PATHS.booking} className="pro-dark-button">Parler de mon projet ↗</Link></div>
+        <div className="pro-method-copy"><span className="pro-kicker">NOTRE APPROCHE</span><h2>Votre projet mérite un cadre, pas une succession de surprises.</h2><p>{site.tenant.description || `${site.tenant.name} privilégie un accompagnement lisible : comprendre la demande, définir le périmètre, avancer avec un interlocuteur identifié et garder les prochaines étapes visibles.`}</p><div className="pro-steps"><div><b>01</b><span><strong>Comprendre</strong><small>Votre besoin, vos contraintes et le résultat attendu.</small></span></div><div><b>02</b><span><strong>Cadrer</strong><small>Une prestation et un périmètre compréhensibles avant d&apos;avancer.</small></span></div><div><b>03</b><span><strong>Accompagner</strong><small>Un suivi clair jusqu&apos;à la livraison ou la prochaine étape.</small></span></div></div><Link href={bookingHref(site)} className="pro-dark-button">Parler de mon projet ↗</Link></div>
       </Container>
     </section>
 
@@ -469,7 +492,7 @@ export function ProfessionalServicesHome({
           { name: "Expert métier", role: "Expertise" },
         ].map((member) => <div key={member.name} className="pro-team-card demo-team-card"><div className="pro-demo-person"><Initials name={member.name}/></div><div><strong>{member.name}</strong><small>{member.role} · Exemple</small></div></div>)}</div></Container></section>
 
-    <section className="pro-final-cta"><Container className="pro-final-inner"><div><span className="pro-kicker">VOTRE PROCHAINE ÉTAPE</span><h2>Vous avez un besoin ? Commençons par en parler.</h2><p>Un premier échange suffit pour comprendre votre demande et identifier la suite.</p></div><Link href={STOREFRONT_PATHS.booking} className="pro-light-button">Demander un rendez-vous ↗</Link></Container></section>
+    <section className="pro-final-cta"><Container className="pro-final-inner"><div><span className="pro-kicker">VOTRE PROCHAINE ÉTAPE</span><h2>Vous avez un besoin ? Commençons par en parler.</h2><p>Un premier échange suffit pour comprendre votre demande et identifier la suite.</p></div><Link href={bookingHref(site)} className="pro-light-button">Demander un rendez-vous ↗</Link></Container></section>
   </div>;
 }
 
@@ -488,7 +511,7 @@ export function DefaultBusinessHome({
   testimonials: TestimonialSummary[];
 }) {
   const hasRealContent = products.length > 0 || categories.length > 0 || services.length > 0 || testimonials.length > 0 || Boolean(site.tenant.bannerUrl);
-  const heroImage = site.heroMediaUrl ?? site.tenant.bannerUrl ?? "/images/tenant-default-hero.svg";
+  const heroImage = site.heroMediaUrl ?? site.tenant.bannerUrl ?? "/images/showcase/default-hero.svg";
   const storyImage = site.tenant.bannerUrl ?? "/images/tenant-default-story.svg";
   const featuredProducts = products.slice(0, 4);
   const featuredCategories = categories.slice(0, 4);
@@ -522,6 +545,7 @@ export function DefaultBusinessHome({
             {site.highlights.slice(0, 3).map((h) => <div key={h.title}><span>✓</span><strong>{h.title}<small>{h.subtitle}</small></strong></div>)}
           </div>
         </div>
+        <div className="default-hero-orbit" aria-hidden><span>VOTRE MARQUE</span><span>VOTRE OFFRE</span><span>VOTRE HISTOIRE</span></div>
         <div className="default-hero-card">
           <span>{hasRealContent ? "À découvrir" : "Exemple de présentation"}</span>
           <strong>{products.length || "3"}</strong>
@@ -570,14 +594,14 @@ export function RestaurantHome({
   categories: StorefrontCategory[];
   testimonials: TestimonialSummary[];
 }) {
-  const heroImage = site.heroMediaUrl ?? site.tenant.bannerUrl ?? "/images/tenant-restaurant-hero.svg";
-  const storyImage = site.tenant.bannerUrl ?? "/images/tenant-restaurant-hero.svg";
+  const heroImage = site.heroMediaUrl ?? site.tenant.bannerUrl ?? "/images/showcase/restaurant-hero.svg";
+  const storyImage = site.tenant.bannerUrl ?? "/images/showcase/demo/restaurant-story.jpg";
   const rating = site.stats.find((s) => s.key === "rating");
   const demoCategories = [
-    { name: "Plats principaux", count: "14 plats", image: "/images/demo/restaurant-steak.svg" },
-    { name: "Entrées", count: "8 plats", image: "/images/demo/restaurant-salad.svg" },
-    { name: "Desserts", count: "6 plats", image: "/images/demo/restaurant-dessert.svg" },
-    { name: "Boissons", count: "10 choix", image: "/images/demo/restaurant-drink.svg" },
+    { name: "Plats principaux", count: "14 plats", image: "/images/showcase/demo/restaurant-1.jpg" },
+    { name: "Entrées", count: "8 plats", image: "/images/showcase/demo/restaurant-2.jpg" },
+    { name: "Desserts", count: "6 plats", image: "/images/showcase/demo/restaurant-3.jpg" },
+    { name: "Boissons", count: "10 choix", image: "/images/showcase/demo/restaurant-4.jpg" },
   ];
   const demoTestimonials = [
     { name: "Client exemple", text: "Une belle expérience, une carte claire et une ambiance qui donne envie de revenir." },
@@ -588,17 +612,17 @@ export function RestaurantHome({
     <section className="rest-hero">
       <div className="rest-hero-copy">
         <span className="rest-kicker">🍴 CUISINE LOCALE & INTERNATIONALE</span>
-        <h1>{site.config.heroTitle?.trim() || "Une expérience culinaire unique"}</h1>
+        <h1>{site.config.heroTitle?.trim() ? site.config.heroTitle.trim() : <>Une expérience culinaire <span className="rest-hero-accent">unique</span></>}</h1>
         <p>{site.config.heroSubtitle?.trim() || site.tenant.description || "Le goût, le partage et une cuisine généreuse dans un cadre chaleureux."}</p>
-        <div className="rest-actions"><Link href={STOREFRONT_PATHS.booking} className="rest-orange-button">Réserver une table <span>→</span></Link><Link href={STOREFRONT_PATHS.catalog} className="rest-outline-button">Découvrir notre menu <span>→</span></Link></div>
+        <div className="rest-actions"><Link href={bookingHref(site)} className="rest-orange-button">Réserver une table <span>→</span></Link><Link href={STOREFRONT_PATHS.catalog} className="rest-outline-button">Découvrir notre menu <span>→</span></Link></div>
         <div className="rest-benefits">{site.highlights.slice(0,3).map((h) => <div key={h.title}><span>♡</span><strong>{h.title}<small>{h.subtitle}</small></strong></div>)}</div>
       </div>
-      <div className="rest-hero-image">{heroImage && <StorefrontImage src={heroImage} alt="" priority sizes="(min-width: 900px) 55vw, 100vw" fallbackLabel=""/>}<div className="rest-hero-slogan">Bien plus qu’un repas,<br/><em>une expérience !</em></div><div className="rest-rating"><Stars rating={5}/><strong>{rating?.value || "5/5"}</strong><small>{rating?.label || "Exemple de présentation"}</small></div></div>
+      <div className="rest-hero-image">{heroImage && <StorefrontImage src={heroImage} alt="" priority sizes="(min-width: 900px) 55vw, 100vw" fallbackLabel=""/>}<div className="rest-hero-slogan">Bien plus qu’un repas,<br/><em>une expérience !</em></div><div className="rest-rating">{rating ? <><Stars rating={Number(rating.value) || null}/><strong>{rating.value}/5</strong><small>{rating.label}</small></> : <><strong className="rest-rating-empty">VOTRE AVIS CLIENT</strong><small>La note apparaîtra ici dès qu’elle est renseignée.</small></>}</div><div className="rest-hero-stamp"><span>CUISINE</span><strong>PASSION</strong><small>depuis toujours</small></div><div className="rest-hero-location">{locationLabel(site.tenant.address, site.tenant.name.toUpperCase())}</div></div>
     </section>
 
     <section className="rest-menu section-pad"><Container className="rest-menu-grid"><div className="rest-menu-intro"><span className="rest-kicker-light">NOTRE MENU</span><h2>Des saveurs pour tous les goûts</h2><p>Découvrez notre carte, nos spécialités et les informations utiles pour choisir votre prochaine expérience à table.</p><Link href={STOREFRONT_PATHS.catalog} className="rest-outline-light">Voir tout le menu →</Link></div><div className="rest-category-grid">{categories.length ? categories.slice(0,4).map((c) => <Link key={c.id} href={categoryPath(c.slug)} className="rest-category-card"><StorefrontImage src={c.imageUrl} alt={c.name} sizes="20vw" fallbackLabel=""/><div><strong>{c.name}</strong><span>{c.productCount} {c.productCount > 1 ? "plats" : "plat"}</span><em>Découvrir →</em></div></Link>) : demoCategories.map((c) => <Link key={c.name} href={STOREFRONT_PATHS.catalog} className="rest-category-card demo-rest-category"><StorefrontImage src={c.image} alt="" sizes="20vw" fallbackLabel=""/><div><strong>{c.name}</strong><span>{c.count}</span><em>Exemple →</em></div></Link>)}</div></Container></section>
 
-    <section className="rest-story section-pad"><Container className="rest-story-grid"><div className="rest-story-media">{storyImage && <StorefrontImage src={storyImage} alt="" sizes="(min-width: 900px) 42vw, 100vw"/>}<span>▶<small>Découvrez notre restaurant</small></span></div><div className="rest-story-copy"><span className="rest-kicker-light">À PROPOS</span><h2>Une histoire de passion et de partage</h2><p>{site.tenant.description || `${site.tenant.name} est une maison pensée pour faire voyager les papilles et créer des moments chaleureux.`}</p><ul><li>✦ Cuisine authentique et créative</li><li>✦ Cadre moderne et chaleureux</li><li>✦ Équipe passionnée et à votre écoute</li></ul><Link href={STOREFRONT_PATHS.contact} className="rest-outline-light">En savoir plus →</Link><b>Le goût<br/>du partage</b></div></Container></section>
+    <section className="rest-story section-pad"><Container className="rest-story-grid"><div className="rest-story-media">{storyImage && <StorefrontImage src={storyImage} alt="" sizes="(min-width: 900px) 42vw, 100vw"/>}</div><div className="rest-story-copy"><span className="rest-kicker-light">À PROPOS</span><h2>Une histoire de passion et de partage</h2><p>{site.tenant.description || `${site.tenant.name} est une maison pensée pour faire voyager les papilles et créer des moments chaleureux.`}</p><ul><li>✦ Cuisine authentique et créative</li><li>✦ Cadre moderne et chaleureux</li><li>✦ Équipe passionnée et à votre écoute</li></ul><Link href={STOREFRONT_PATHS.contact} className="rest-outline-light">En savoir plus →</Link><b>Le goût<br/>du partage</b></div></Container></section>
 
     <section className="rest-testimonials section-pad"><Container><div className="rest-testimonial-head"><div><span className="rest-kicker-light">TÉMOIGNAGES</span><h2>Ce que nos clients disent</h2><p>Votre satisfaction est notre plus belle récompense.</p></div><span>‹ &nbsp; ›</span></div><div className="rest-testimonial-grid">{testimonials.length ? testimonials.slice(0,3).map((t) => <figure key={t.id}><Initials name={t.authorName}/><blockquote>« {t.content} »</blockquote><figcaption><strong>{t.authorName}</strong><Stars rating={t.rating}/></figcaption></figure>) : demoTestimonials.map((t) => <figure key={t.name} className="demo-testimonial"><Initials name={t.name}/><blockquote>« {t.text} »</blockquote><figcaption><strong>{t.name}</strong><small>Exemple de témoignage</small></figcaption></figure>)}</div></Container></section>
   </div>;

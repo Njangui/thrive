@@ -276,3 +276,23 @@ jamais une vérification de sécurité.
 - [ ] Exécuter `npm run seed:demo` pour valider la démo "Mode Élégance"
       de bout en bout avant toute démonstration commerciale — jamais
       encore exécuté à ce jour (voir `docs/ROADMAP.md`)
+
+## Lot O — Freemium v2 (multi-comptes, verrous, messagerie, diffusions)
+
+**Ordre impératif** : sauvegarder la base → appliquer `0066_fapshi_payment_provider.sql` puis `0067_freemium_v2_multi_accounts.sql` (après 0065) → déployer le code.
+Le code lit des clés de plan (`automatic_messaging`, `semi_automatic_messaging`, `crm`, `orders`…) en *fail-closed* : sans la
+migration, les réponses automatiques seraient coupées. La migration est idempotente et reprend l'existant (bots Telegram,
+comptes YouTube, dernier compte social) dans les nouvelles tables.
+
+- [ ] Programmer `/api/cron/process-first-comments` (GET, `Authorization: Bearer <CRON_SECRET>`, toutes les 5 à 10 min) —
+      premiers commentaires TikTok en attente de l'URL de la vidéo (filet de sécurité du webhook `post.tiktok.url_resolved`).
+- [ ] `/api/cron/process-broadcasts` traite désormais AUSSI les diffusions vers des contacts (même fréquence : 5 à 15 min).
+- [ ] Liste complète des crons (8) : `process-telegram-publications` (1–5 min), `process-broadcasts` (5–15 min),
+      `process-follow-ups` (15 min, GET), `process-payment-reconciliation` (15–30 min), `process-phone-number-renewals` (1–4 h),
+      `process-subscription-renewals` (1–4 h), `release-affiliate-holds` (quotidien), `process-first-comments` (5–10 min).
+- [ ] Bots Telegram déjà connectés : cliquer **Actualiser** (Canaux → Telegram) pour ajouter `my_chat_member` aux mises à jour
+      reçues — sans cela, l'enregistrement automatique des canaux/groupes ne se déclenche pas (l'ajout manuel fonctionne).
+- [ ] Zernio (dashboard webhooks) : événements `message.received` (WhatsApp, Messenger, Instagram), `comment.received`,
+      `account.connected/disconnected`, `post.*` et `post.tiktok.url_resolved` si disponible pour le compte.
+- [ ] Aucune nouvelle variable d'environnement.
+- [ ] Domaine/badge : `custom_domain` (Starter+) et `remove_branding` (Pro) se pilotent depuis `/admin/plans`.

@@ -123,12 +123,16 @@ export function CatalogVideosPanel({
         <h3 className="mt-1 adm-heading-2">Vidéos de présentation</h3>
       </div>
 
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="note">
-        <p className="font-semibold">Zernio ne conserve vos vidéos que 7 jours.</p>
+      <div className={`rounded-xl border p-3 text-sm ${videos.some((v) => v.storageClass === "temporary") ? "border-amber-300 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} role="note">
+        <p className="font-semibold">
+          {videos.some((v) => v.storageClass === "temporary") ? "Certaines vidéos sont hébergées temporairement (7 jours)." : "Vos vidéos sont conservées selon votre offre."}
+        </p>
         <p className="mt-1 text-xs leading-5">
-          Passé ce délai, l&apos;envoi temporaire expire : la vidéo disparaît automatiquement de votre catalogue et de votre page d&apos;accueil, et
-          aucune publication vidéo ne peut être programmée au-delà de cette échéance (Zernio recommande de programmer dans les 7 jours suivant
-          l&apos;envoi). Pour la prolonger, retéléversez simplement la vidéo.
+          Conservation : Discover 7 jours, Starter 30 jours, Pro 90 jours. Passé l&apos;échéance indiquée sur chaque vidéo, elle disparaît de votre catalogue et de votre
+          page d&apos;accueil, et aucune publication vidéo ne peut être programmée au-delà. Pour la prolonger, retéléversez simplement la vidéo.
+          {videos.some((v) => v.storageClass === "temporary")
+            ? " Une vidéo « temporaire » n'a pas obtenu de stockage permanent chez Zernio : sa durée est limitée à 7 jours quelle que soit votre offre."
+            : ""}
         </p>
       </div>
 

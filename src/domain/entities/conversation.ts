@@ -34,6 +34,8 @@ export const HandoffReasonSchema = z.enum([
   "unknown_information",
   "requires_human_action",
   "ai_unavailable",
+  // Lot O : offre semi-automatique (Discover) — le message sort de la FAQ, des infos entreprise et du catalogue.
+  "semi_automatic",
 ]);
 
 export type HandoffReason = z.infer<typeof HandoffReasonSchema>;

@@ -31,7 +31,7 @@ export function TelegramPublicationComposer({ action }: { action: (formData: For
               maxLength={4096}
               rows={9}
               placeholder="Écrivez votre publication…"
-              className="mt-2 min-h-52 w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-navy-900 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+              className="mt-2 min-h-52 w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-navy-900 outline-hidden transition focus:border-primary focus:ring-4 focus:ring-primary/10"
             />
           </label>
 
@@ -41,7 +41,7 @@ export function TelegramPublicationComposer({ action }: { action: (formData: For
               name="attachmentUrl"
               type="url"
               placeholder="https://…"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-hidden focus:border-primary focus:ring-4 focus:ring-primary/10"
             />
             <input type="hidden" name="attachmentType" value="image" />
             <p className="mt-1.5 text-xs text-slate-500">Le média doit être accessible publiquement par Telegram.</p>
@@ -61,7 +61,7 @@ export function TelegramPublicationComposer({ action }: { action: (formData: For
               name="targetChatId"
               required
               placeholder="@ma_boutique ou -1001234567890"
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-hidden focus:border-primary focus:ring-4 focus:ring-primary/10"
             />
           </label>
 
@@ -70,7 +70,7 @@ export function TelegramPublicationComposer({ action }: { action: (formData: For
             <input
               name="targetLabel"
               placeholder="Canal principal"
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-hidden focus:border-primary focus:ring-4 focus:ring-primary/10"
             />
           </label>
 
@@ -88,7 +88,7 @@ export function TelegramPublicationComposer({ action }: { action: (formData: For
                 value={datetime}
                 min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
                 onChange={(e) => setDatetime(e.target.value)}
-                className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-hidden focus:border-primary focus:ring-4 focus:ring-primary/10"
               />
             )}
           </div>

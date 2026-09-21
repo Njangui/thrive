@@ -24,11 +24,7 @@ export function DomainSearchField({ organizationId }: { organizationId: string }
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     const label = value.trim().toLowerCase();
-    if (!label) {
-      setResults(null);
-      setError(null);
-      return;
-    }
+    if (!label) return;
 
     debounceRef.current = setTimeout(() => {
       startTransition(async () => {
@@ -56,7 +52,16 @@ export function DomainSearchField({ organizationId }: { organizationId: string }
           type="text"
           name="domainName"
           value={value}
-          onChange={(e) => setValue(e.target.value.replace(/\.[a-z]*$/i, ""))}
+          onChange={(e) => {
+            const next = e.target.value.replace(/\.[a-z]*$/i, "");
+            setValue(next);
+            // Champ vidé : on efface le résultat précédent ici (gestionnaire d'événement),
+            // pas dans l'effet de recherche (setState synchrone en effet = rendu en cascade).
+            if (!next.trim()) {
+              setResults(null);
+              setError(null);
+            }
+          }}
           placeholder="boutique-fatou"
           required
           className="mt-1 rounded-xl border border-navy-900/15 px-3 py-2 text-sm text-navy-900"

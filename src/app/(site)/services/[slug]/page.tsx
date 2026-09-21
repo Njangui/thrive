@@ -62,7 +62,7 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
       )
     : null;
 
-  const bookingHref = capabilities.hasServices ? STOREFRONT_PATHS.booking : null;
+  const bookingHref = capabilities.hasServices && capabilities.bookingEnabled ? STOREFRONT_PATHS.booking : null;
 
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(origin, [
     { label: "Accueil", href: "/" },

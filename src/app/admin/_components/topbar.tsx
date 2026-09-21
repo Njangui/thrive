@@ -21,7 +21,7 @@ export function AdminTopbar({ role, email }: { role: string; email: string | nul
   const initial = (email ?? "A").trim().charAt(0).toUpperCase();
 
   return (
-    <header className="flex items-center gap-3 border-b border-navy-900/[0.06] bg-white/80 px-4 py-3 backdrop-blur sm:px-6">
+    <header className="flex items-center gap-3 border-b border-navy-900/[0.06] bg-white/80 px-4 py-3 backdrop-blur-sm sm:px-6">
       <AdminMobileNav />
 
       <form action="/admin/organizations" method="GET" className="relative hidden max-w-sm flex-1 sm:block">
@@ -30,7 +30,7 @@ export function AdminTopbar({ role, email }: { role: string; email: string | nul
           type="text"
           name="q"
           placeholder="Rechercher une entreprise..."
-          className="w-full rounded-xl border border-navy-900/10 bg-[#F8FAFC] py-2.5 pl-9 pr-3 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100"
+          className="w-full rounded-xl border border-navy-900/10 bg-[#F8FAFC] py-2.5 pl-9 pr-3 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-violet-100"
         />
       </form>
 

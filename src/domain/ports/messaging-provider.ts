@@ -15,7 +15,7 @@ export interface OutboundMessage {
   // (infrastructure/providers/messaging/telegram/*) — INDÉPENDANT de
   // Zernio : chaque tenant connecte son propre bot (@BotFather), aucun
   // import croisé avec messaging/zernio/*. Voir docs/TELEGRAM_INTEGRATION.md.
-  channel: "whatsapp" | "sms" | "telegram";
+  channel: "whatsapp" | "sms" | "telegram" | "facebook" | "instagram";
   content: string;
   /**
    * Id de conversation côté provider (ex: Zernio conversationId), quand on

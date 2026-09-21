@@ -6,7 +6,6 @@ import {
   listStorefrontProducts,
   listStorefrontCategories,
   resolvePrimaryImageUrl,
-  type CatalogProductSummary,
   type StorefrontProduct,
   type StorefrontCategory,
 } from "./catalog-service";

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SVGProps } from "react";
 import { CresyvaBrand } from "./cresyva-brand";

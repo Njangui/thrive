@@ -157,7 +157,7 @@
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-danger-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-danger-700 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .adm-input {
-    @apply w-full rounded-xl border border-navy-900/10 bg-white px-3.5 py-2.5 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100;
+    @apply w-full rounded-xl border border-navy-900/10 bg-white px-3.5 py-2.5 text-sm text-navy-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-hidden focus:ring-2 focus:ring-violet-100;
   }
   .adm-table {
     @apply w-full text-left text-sm;
@@ -255,7 +255,7 @@
   .auth-preview-topbar b { @apply ml-auto text-[10px] font-semibold text-slate-500; }
   .auth-preview-body { @apply grid grid-cols-[42px_1fr] overflow-hidden rounded-[16px] bg-[#F8FAFC]; }
   .auth-preview-sidebar { @apply flex flex-col gap-3 bg-navy-900 p-3; }
-  .auth-preview-sidebar i { @apply block h-2 rounded bg-white/15; }
+  .auth-preview-sidebar i { @apply block h-2 rounded-sm bg-white/15; }
   .auth-preview-sidebar i:first-child { @apply bg-violet-500; }
   .auth-preview-main { @apply min-w-0 p-4; }
   .auth-preview-heading { @apply flex items-center justify-between; }
@@ -335,7 +335,7 @@
   .onb-actions > * { @apply flex-1; }
   .onb-submit { @apply min-h-11; }
   .onb-upload-card { @apply flex items-center gap-3 rounded-2xl bg-violet-50 p-4; }
-  .onb-upload-icon { @apply flex h-10 w-10 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm; }
+  .onb-upload-icon { @apply flex h-10 w-10 items-center justify-center rounded-xl bg-white text-violet-600 shadow-xs; }
   .onb-upload-card b { @apply text-sm; }
   .onb-upload-card p { @apply mt-0.5 text-xs text-slate-500; }
   .onb-two-col { @apply grid grid-cols-1 gap-4 sm:grid-cols-2; }
@@ -618,10 +618,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
     @apply text-[10px] font-bold uppercase tracking-[.17em] text-primary;
   }
   .cresyva-btn-primary {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:bg-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:bg-primary-600 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2;
   }
   .cresyva-btn-ghost-dark {
-    @apply inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+    @apply inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary;
   }
   .cresyva-kpi {
     @apply min-w-0 rounded-2xl border border-slate-200 bg-white p-4;
@@ -1118,8 +1118,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .rest-story { background:#fff; }
 .rest-story-grid { display:grid; grid-template-columns:.98fr 1.2fr; gap:40px; align-items:center; }
 .rest-story-media { position:relative; overflow:hidden; aspect-ratio:1.25; border-radius:10px; background:#eae3d8; }
-.rest-story-media > span { position:absolute; left:50%; top:50%; z-index:2; transform:translate(-50%,-50%); display:grid; place-items:center; width:50px; height:50px; border-radius:50%; background:#fff; color:#df7e32; font-size:.75rem; box-shadow:0 8px 25px rgba(0,0,0,.18); }
-.rest-story-media small { position:absolute; top:62px; left:50%; transform:translateX(-50%); width:140px; color:#fff; font-size:.5rem; text-align:center; white-space:nowrap; text-shadow:0 2px 5px rgba(0,0,0,.5); }
 .rest-story-copy { position:relative; }
 .rest-story-copy p { margin-top:13px; max-width:520px; color:#777e7a; font-size:.67rem; line-height:1.8; }
 .rest-story-copy ul { display:grid; gap:8px; margin-top:18px; color:#59625f; font-size:.58rem; }
@@ -1430,7 +1428,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .rest-category-card:hover{transform:translateY(-5px);box-shadow:0 18px 40px rgba(34,30,20,.12)}
 .rest-category-card>img{height:190px;object-fit:cover}
 .rest-story-media{box-shadow:0 20px 50px rgba(30,35,27,.12)}
-.rest-story-media>span{box-shadow:0 10px 25px rgba(0,0,0,.12)}
 .rest-testimonial-grid figure{transition:transform .2s ease,box-shadow .2s ease}
 .rest-testimonial-grid figure:hover{transform:translateY(-3px);box-shadow:0 16px 34px rgba(25,30,25,.08)}
 
@@ -1521,3 +1518,516 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .demo-type-image img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
 .demo-type-card:hover .demo-type-image img{transform:scale(1.04)}
 .demo-type-image span{position:absolute;top:10px;left:10px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.9);color:#0f5f55;font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+
+
+/* ================================================================
+   V17 — FINITIONS VISUELLES / REFERENCE FIDELITY
+   Cette couche ne change pas les données métier : elle affine seulement
+   la hiérarchie, les proportions, les états interactifs et les fallbacks.
+   ================================================================ */
+
+/* Navigation : même langage premium sur les 5 templates */
+.sf-site[data-sector="real_estate"] .sf-header-overlay,
+.sf-site[data-sector="restaurant"] .sf-header-overlay,
+.sf-site[data-sector="retail"] .sf-header-overlay,
+.sf-site[data-sector="beauty"] .sf-header-overlay,
+.sf-site[data-sector="professional_services"] .sf-header-overlay,
+.sf-site[data-sector="default"] .sf-header-overlay {
+  position:absolute;
+  inset:0 0 auto;
+  width:100%;
+  background:linear-gradient(180deg,rgba(5,16,22,.34),rgba(5,16,22,.04));
+  border-bottom-color:rgba(255,255,255,.12);
+  backdrop-filter:none;
+}
+.sf-site[data-sector="real_estate"] .sf-header-overlay nav a,
+.sf-site[data-sector="restaurant"] .sf-header-overlay nav a,
+.sf-site[data-sector="retail"] .sf-header-overlay nav a,
+.sf-site[data-sector="beauty"] .sf-header-overlay nav a,
+.sf-site[data-sector="professional_services"] .sf-header-overlay nav a,
+.sf-site[data-sector="default"] .sf-header-overlay nav a { color:rgba(255,255,255,.82); }
+.sf-site[data-sector="real_estate"] .sf-header-overlay nav a:hover,
+.sf-site[data-sector="real_estate"] .sf-header-overlay nav a[aria-current="page"],
+.sf-site[data-sector="restaurant"] .sf-header-overlay nav a:hover,
+.sf-site[data-sector="restaurant"] .sf-header-overlay nav a[aria-current="page"],
+.sf-site[data-sector="retail"] .sf-header-overlay nav a:hover,
+.sf-site[data-sector="retail"] .sf-header-overlay nav a[aria-current="page"],
+.sf-site[data-sector="beauty"] .sf-header-overlay nav a:hover,
+.sf-site[data-sector="beauty"] .sf-header-overlay nav a[aria-current="page"],
+.sf-site[data-sector="professional_services"] .sf-header-overlay nav a:hover,
+.sf-site[data-sector="professional_services"] .sf-header-overlay nav a[aria-current="page"],
+.sf-site[data-sector="default"] .sf-header-overlay nav a:hover,
+.sf-site[data-sector="default"] .sf-header-overlay nav a[aria-current="page"] { color:#fff; }
+.sf-site[data-sector="real_estate"] .sf-header-overlay > div > a,
+.sf-site[data-sector="restaurant"] .sf-header-overlay > div > a,
+.sf-site[data-sector="retail"] .sf-header-overlay > div > a,
+.sf-site[data-sector="beauty"] .sf-header-overlay > div > a,
+.sf-site[data-sector="professional_services"] .sf-header-overlay > div > a,
+.sf-site[data-sector="default"] .sf-header-overlay > div > a { color:#fff; }
+
+/* Immobilier : accent textuel proche de la maquette de référence. */
+.re-hero-accent { color:#19d3ad; }
+.re-hero-bg img,
+.rest-hero-image img,
+.boutique-hero-media img,
+.beauty-hero-media img,
+.pro-hero-media img,
+.default-hero-media img { transform:scale(1.002); backface-visibility:hidden; }
+.re-hero-bg img { object-position:center 54%; }
+.re-hero-overlay { background:linear-gradient(90deg,rgba(3,27,37,.97) 0%,rgba(3,27,37,.84) 40%,rgba(3,27,37,.26) 68%,rgba(3,27,37,.04) 100%); }
+.re-hero-copy { padding-bottom:6px; }
+.re-hero h1 { text-wrap:balance; }
+.re-hero p { max-width:585px; }
+.re-search-card:focus-within { box-shadow:0 28px 75px rgba(5,31,40,.22); }
+.re-search-tabs button { cursor:pointer; }
+.re-search-tabs button:focus-visible,
+.re-search-button:focus-visible,
+.re-green-button:focus-visible,
+.rest-orange-button:focus-visible,
+.rest-outline-button:focus-visible,
+.boutique-product-card:focus-visible,
+.beauty-service-card:focus-visible,
+.pro-service-card:focus-visible { outline:3px solid rgba(0,209,160,.34); outline-offset:3px; }
+
+/* Restaurant : orange réservé aux actions et micro-accents, comme la référence. */
+.rest-hero-accent { color:#ef8c35; }
+.rest-hero-image::after { background:linear-gradient(90deg,rgba(6,34,29,.28),rgba(6,34,29,.03) 45%,rgba(0,0,0,.27)); }
+.rest-hero-slogan { max-width:180px; }
+.rest-menu-grid,.rest-story-grid,.rest-testimonial-grid { min-width:0; }
+.rest-category-card { box-shadow:0 10px 28px rgba(34,30,20,.045); }
+
+/* Boutique : image-first, texte respirant, pas de surcharge. */
+.boutique-hero-shade { background:linear-gradient(90deg,#171714 0%,#171714 29%,rgba(23,23,20,.86) 44%,rgba(23,23,20,.30) 72%,rgba(23,23,20,.08) 100%); }
+.boutique-hero-copy { text-wrap:balance; }
+.boutique-hero h1 { max-width:690px; }
+.boutique-product-media img,
+.boutique-category-card img,
+.boutique-editorial-media img { backface-visibility:hidden; }
+.boutique-product-media { box-shadow:inset 0 0 0 1px rgba(23,23,20,.05); }
+.boutique-product-card:focus-visible,.boutique-category-card:focus-visible { outline:3px solid rgba(216,155,93,.35); outline-offset:4px; }
+
+/* Beauté : douceur sans tomber dans le « rose générique ». */
+.beauty-hero-wash { background:linear-gradient(90deg,rgba(40,28,37,.84),rgba(40,28,37,.38) 58%,rgba(40,28,37,.08)); }
+.beauty-hero-copy h1,.pro-hero-copy h1 { text-wrap:balance; }
+.beauty-service-image,.beauty-gallery-item,.beauty-ritual-media { background:#eee3e7; }
+
+/* Services professionnels : davantage de densité éditoriale et moins d'effet dashboard. */
+.pro-hero-overlay { background:linear-gradient(90deg,rgba(7,13,24,.94),rgba(7,13,24,.74) 48%,rgba(7,13,24,.18)); }
+.pro-hero-copy h1 { max-width:720px; }
+.pro-method-visual { box-shadow:0 24px 55px rgba(16,24,39,.12); }
+
+/* Tous les templates : transitions plus discrètes et états clavier propres. */
+.sector-realestate-home a,
+.sector-restaurant-home a,
+.sector-retail-home a,
+.sector-beauty-home a,
+.sector-professional-home a,
+.sector-default-home a { -webkit-tap-highlight-color:transparent; }
+.sector-realestate-home a:focus-visible,
+.sector-restaurant-home a:focus-visible,
+.sector-retail-home a:focus-visible,
+.sector-beauty-home a:focus-visible,
+.sector-professional-home a:focus-visible,
+.sector-default-home a:focus-visible { outline:3px solid rgba(0,209,160,.32); outline-offset:4px; }
+
+@media (max-width:640px){
+  .re-hero-overlay { background:linear-gradient(180deg,rgba(3,27,37,.72),rgba(3,27,37,.96)); }
+  .re-hero h1 { font-size:clamp(2.35rem,10vw,3.5rem); }
+  .rest-hero h1 { text-wrap:pretty; }
+  .boutique-hero-shade { background:linear-gradient(180deg,rgba(23,23,20,.62),rgba(23,23,20,.96)); }
+  .beauty-hero-wash,.pro-hero-overlay { background:linear-gradient(180deg,rgba(40,28,37,.45),rgba(40,28,37,.95)); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sector-realestate-home *,
+  .sector-restaurant-home *,
+  .sector-retail-home *,
+  .sector-beauty-home *,
+  .sector-professional-home *,
+  .sector-default-home * { scroll-behavior:auto !important; transition-duration:.01ms !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; }
+}
+
+/* ================================================================
+   CRESYVA — SECTOR ART-DIRECTION PASS V18
+   A final visual layer: stronger composition, editorial rhythm,
+   premium micro-interactions and mobile-safe hero details.
+   ================================================================ */
+
+/* ---------- shared visual language ---------- */
+.sector-realestate-home,.sector-retail-home,.sector-restaurant-home,.sector-beauty-home,.sector-professional-home,.sector-default-home{isolation:isolate}
+.sector-realestate-home a,.sector-retail-home a,.sector-restaurant-home a,.sector-beauty-home a,.sector-professional-home a,.sector-default-home a{-webkit-tap-highlight-color:transparent}
+@media (prefers-reduced-motion:no-preference){
+  .sector-realestate-home .re-hero-bg img,.sector-retail-home .boutique-hero-media img,.sector-restaurant-home .rest-hero-image img,.sector-beauty-home .beauty-hero-media img,.sector-professional-home .pro-hero-media img,.sector-default-home .default-hero-media img{animation:cx-hero-breathe 16s ease-in-out infinite alternate}
+  .sector-realestate-home .re-hero-floating-card,.sector-retail-home .boutique-hero-ticket,.sector-restaurant-home .rest-hero-stamp,.sector-default-home .default-hero-orbit{animation:cx-float-in 900ms cubic-bezier(.16,1,.3,1) both}
+}
+@keyframes cx-hero-breathe{from{transform:scale(1.015)}to{transform:scale(1.055)}}
+@keyframes cx-float-in{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:none}}
+
+/* ---------- REAL ESTATE / private-client editorial ---------- */
+.re-hero{overflow:hidden}
+.re-hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle at 72% 24%,rgba(25,211,173,.14),transparent 24%),linear-gradient(180deg,rgba(0,0,0,.04),transparent 38%,rgba(0,0,0,.16))}
+.re-hero-inner{position:relative;z-index:3}
+.re-hero-floating-card{position:absolute;right:0;bottom:112px;width:220px;padding:17px 18px;border:1px solid rgba(255,255,255,.2);border-radius:14px;background:rgba(3,27,37,.72);backdrop-filter:blur(16px);box-shadow:0 25px 60px rgba(0,0,0,.18);color:#fff}
+.re-floating-kicker{display:block;color:#20d6b0;font-size:8px;font-weight:900;letter-spacing:.16em}
+.re-hero-floating-card strong{display:block;margin-top:8px;font-size:14px;line-height:1.15}
+.re-hero-floating-card small{display:block;margin-top:7px;color:rgba(255,255,255,.58);font-size:9px;line-height:1.45}
+.re-floating-arrow{position:absolute;right:15px;top:15px;color:#20d6b0;font-size:14px}
+.re-hero-side-label{position:absolute;right:-50px;top:46%;z-index:4;transform:rotate(90deg);transform-origin:center;color:rgba(255,255,255,.58);font-size:7px;font-weight:900;letter-spacing:.2em;white-space:nowrap}
+.re-hero-side-label span{color:#20d6b0;margin-inline:8px}
+.re-property-card{transition:transform .35s cubic-bezier(.16,1,.3,1),box-shadow .35s ease}
+.re-property-card:hover{transform:translateY(-7px);box-shadow:0 22px 50px rgba(6,39,46,.11)}
+.re-type-card{position:relative}
+.re-type-card::after{content:"↗";position:absolute;right:12px;top:12px;display:grid;place-items:center;width:26px;height:26px;border:1px solid rgba(255,255,255,.5);border-radius:50%;color:#fff;background:rgba(3,27,37,.32);font-size:11px;opacity:0;transition:opacity .2s,transform .2s}
+.re-type-card:hover::after{opacity:1;transform:translate(2px,-2px)}
+
+/* ---------- RESTAURANT / sensory dining ---------- */
+.rest-hero{position:relative;overflow:hidden}
+.rest-hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle at 85% 45%,rgba(239,140,53,.16),transparent 24%)}
+.rest-hero-copy,.rest-hero-image{position:relative;z-index:2}
+.rest-hero-stamp{position:absolute;left:8%;bottom:9%;z-index:4;display:grid;place-items:center;width:92px;height:92px;border:1px solid rgba(255,255,255,.68);border-radius:50%;background:rgba(6,34,29,.35);backdrop-filter:blur(8px);color:#fff;text-align:center;transform:rotate(-10deg)}
+.rest-hero-stamp span,.rest-hero-stamp small{font-size:6px;letter-spacing:.18em;font-weight:800}
+.rest-hero-stamp strong{margin:3px 0;font-family:Georgia,serif;font-size:14px;letter-spacing:.02em}
+.rest-hero-location{position:absolute;right:7%;bottom:6%;z-index:4;color:rgba(255,255,255,.72);font-size:7px;font-weight:900;letter-spacing:.2em}
+.rest-hero-location i{color:#ef8c35;font-style:normal;margin-inline:5px}
+.rest-category-card{transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease}
+.rest-category-card:hover{transform:translateY(-6px);box-shadow:0 22px 45px rgba(33,45,36,.12)}
+.rest-story-media img{transition:transform .8s cubic-bezier(.16,1,.3,1)}
+.rest-story-media:hover img{transform:scale(1.04)}
+
+/* ---------- RETAIL / fashion-editorial ---------- */
+.boutique-hero{position:relative;overflow:hidden}
+.boutique-hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(15,15,14,.62),transparent 55%),radial-gradient(circle at 78% 22%,rgba(255,255,255,.16),transparent 20%)}
+.boutique-hero-inner{position:relative;z-index:3}
+.boutique-hero-ticket{position:absolute;right:max(7vw,28px);bottom:108px;z-index:4;width:155px;padding:14px 16px;border-left:1px solid rgba(255,255,255,.5);background:rgba(18,18,16,.46);backdrop-filter:blur(12px);color:#fff}
+.boutique-hero-ticket span{display:block;font-size:7px;letter-spacing:.2em;opacity:.65}
+.boutique-hero-ticket strong{display:block;margin-top:7px;font-family:Georgia,serif;font-size:17px;font-weight:500}
+.boutique-hero-ticket small{display:block;margin-top:4px;font-size:8px;opacity:.62}
+.boutique-category-card{transition:transform .35s cubic-bezier(.16,1,.3,1),box-shadow .35s ease}
+.boutique-category-card:hover{transform:translateY(-7px);box-shadow:0 24px 55px rgba(20,20,17,.11)}
+.boutique-product-card .boutique-product-arrow{transition:transform .25s ease,background .25s ease}
+.boutique-product-card:hover .boutique-product-arrow{transform:translate(3px,-3px)}
+.boutique-editorial-media{overflow:hidden}
+.boutique-editorial-media img{transition:transform .8s cubic-bezier(.16,1,.3,1)}
+.boutique-editorial-media:hover img{transform:scale(1.035)}
+
+/* ---------- BEAUTY / quiet luxury ---------- */
+.beauty-hero{position:relative;overflow:hidden}
+.beauty-hero::after{content:"";position:absolute;inset:auto 0 0;height:28%;z-index:1;pointer-events:none;background:linear-gradient(transparent,rgba(26,16,22,.42))}
+.beauty-hero-inner{position:relative;z-index:3}
+.beauty-hero-card{border-color:rgba(255,255,255,.25);box-shadow:0 30px 80px rgba(24,10,20,.2)}
+.beauty-service-card{background:#fff}
+.beauty-service-image{position:relative}
+.beauty-service-image::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 60%,rgba(39,22,31,.18))}
+.beauty-gallery-item{overflow:hidden}
+.beauty-gallery-item img{transition:transform .7s cubic-bezier(.16,1,.3,1)}
+.beauty-gallery-item:hover img{transform:scale(1.045)}
+
+/* ---------- PROFESSIONAL SERVICES / institutional premium ---------- */
+.pro-hero{position:relative;overflow:hidden}
+.pro-hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle at 78% 30%,rgba(56,189,248,.16),transparent 25%),linear-gradient(90deg,rgba(7,13,24,.2),transparent 55%)}
+.pro-hero-inner{position:relative;z-index:3}
+.pro-hero-card{border-color:rgba(255,255,255,.22);box-shadow:0 28px 75px rgba(3,12,28,.24)}
+.pro-service-card{transition:transform .32s cubic-bezier(.16,1,.3,1),box-shadow .32s ease}
+.pro-service-card:hover{transform:translateY(-6px);box-shadow:0 24px 50px rgba(16,24,39,.12)}
+.pro-domain-card{position:relative;overflow:hidden}
+.pro-domain-card::after{content:"";position:absolute;inset:auto -25px -45px auto;width:100px;height:100px;border:1px solid rgba(29,78,216,.12);border-radius:50%;transition:transform .35s ease}
+.pro-domain-card:hover::after{transform:scale(1.5)}
+
+/* ---------- GENERIC / brand-first fallback ---------- */
+.default-hero{position:relative;overflow:hidden}
+.default-hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle at 78% 24%,rgba(0,209,160,.18),transparent 24%),linear-gradient(90deg,rgba(6,13,23,.9),rgba(6,13,23,.54) 55%,rgba(6,13,23,.18))}
+.default-hero-inner{position:relative;z-index:3}
+.default-hero-orbit{position:absolute;right:8%;top:27%;z-index:4;width:180px;height:180px;border:1px solid rgba(255,255,255,.18);border-radius:50%;color:rgba(255,255,255,.64);font-size:7px;font-weight:900;letter-spacing:.15em;pointer-events:none}
+.default-hero-orbit::before,.default-hero-orbit::after{content:"";position:absolute;border:1px solid rgba(0,209,160,.3);border-radius:50%}
+.default-hero-orbit::before{inset:17px;transform:rotate(18deg)}
+.default-hero-orbit::after{inset:39px;transform:rotate(-25deg)}
+.default-hero-orbit span{position:absolute;white-space:nowrap}
+.default-hero-orbit span:nth-child(1){top:22px;left:62px}
+.default-hero-orbit span:nth-child(2){right:-21px;top:84px;transform:rotate(90deg)}
+.default-hero-orbit span:nth-child(3){bottom:23px;left:47px}
+.default-product-card,.default-category-card,.default-service-card{transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease}
+.default-product-card:hover,.default-category-card:hover,.default-service-card:hover{transform:translateY(-6px);box-shadow:0 24px 50px rgba(15,23,42,.1)}
+
+/* ---------- small-screen safeguards ---------- */
+@media (max-width:900px){
+  .re-hero-floating-card,.re-hero-side-label,.boutique-hero-ticket,.default-hero-orbit{display:none}
+  .rest-hero-stamp{width:74px;height:74px;left:5%;bottom:7%}
+  .rest-hero-stamp strong{font-size:12px}
+  .rest-hero-location{font-size:6px;right:5%;bottom:5%}
+}
+@media (max-width:640px){
+  .rest-hero-stamp{left:18px;bottom:18px}
+  .rest-hero-location{right:18px;bottom:20px}
+  .sector-realestate-home .re-hero-bg img,.sector-retail-home .boutique-hero-media img,.sector-restaurant-home .rest-hero-image img,.sector-beauty-home .beauty-hero-media img,.sector-professional-home .pro-hero-media img,.sector-default-home .default-hero-media img{animation:none}
+}
+
+/* ================================================================
+   CRESYVA — ART DIRECTION PASS V19
+   Last-mile polish: stronger brand ownership, editorial framing,
+   quieter luxury, honest empty states and better small-screen rhythm.
+   ================================================================ */
+
+.sf-site {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A subtle photographic grain substitute: keeps fallback artwork from
+   looking like a flat illustration without adding another dependency. */
+.re-hero::after,
+.rest-hero::after,
+.boutique-hero::after,
+.beauty-hero::before,
+.pro-hero::after,
+.default-hero::after {
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:2;
+  pointer-events:none;
+  opacity:.16;
+  background-image:radial-gradient(rgba(255,255,255,.28) .6px, transparent .7px);
+  background-size:4px 4px;
+  mix-blend-mode:soft-light;
+}
+
+.re-hero-inner,
+.rest-hero-copy,
+.rest-hero-image,
+.boutique-hero-inner,
+.beauty-hero-inner,
+.pro-hero-inner,
+.default-hero-inner { isolation:isolate; }
+
+/* Real estate: make the hero feel like a property journal cover. */
+.re-hero-copy::after {
+  content:"";
+  display:block;
+  width:54px;
+  height:1px;
+  margin-top:30px;
+  background:linear-gradient(90deg,#20d6b0,rgba(32,214,176,0));
+}
+.re-hero-floating-card { border-radius:4px; }
+.re-hero-floating-card strong { font-family:Georgia,serif; font-weight:500; font-size:18px; }
+.re-hero-visual-note { border-radius:4px; }
+.re-property-grid .sector-property-card { border-radius:2px; overflow:hidden; }
+.re-property-grid .sector-property-body { position:relative; }
+.re-property-grid .sector-property-body::before {
+  content:"";
+  display:block;
+  width:26px;
+  height:1px;
+  margin-bottom:13px;
+  background:#16b894;
+}
+.re-stat-grid > div { position:relative; }
+.re-stat-grid > div::after {
+  content:"";
+  position:absolute;
+  left:0;
+  top:50%;
+  width:2px;
+  height:30px;
+  transform:translateY(-50%);
+  background:#19d3ad;
+  opacity:.65;
+}
+
+/* Restaurant: stronger hospitality signature and less UI-like cards. */
+.rest-kicker,
+.rest-kicker-light { letter-spacing:.2em; }
+.rest-hero-copy::after {
+  content:"";
+  display:block;
+  width:70px;
+  height:1px;
+  margin-top:34px;
+  background:#ef8c35;
+}
+.rest-rating { min-width:150px; }
+.rest-rating-empty { color:#fff; font-family:Georgia,serif; font-size:13px; font-weight:500; letter-spacing:.03em; }
+.rest-category-card { border-radius:2px; overflow:hidden; }
+.rest-category-card > div { background:rgba(255,255,255,.97); }
+.rest-story-copy > b { letter-spacing:.02em; }
+
+/* Retail: fashion-editorial hierarchy. */
+.boutique-hero-copy h1 em {
+  color:#d9a16d;
+  font-style:normal;
+}
+.boutique-hero-copy::after {
+  content:"";
+  display:block;
+  width:52px;
+  height:1px;
+  margin-top:34px;
+  background:#d9a16d;
+}
+.boutique-hero-ticket { border-radius:0; }
+.boutique-category-card,
+.boutique-product-card { border-radius:0; }
+.boutique-section-head h2::after,
+.boutique-editorial-copy h2::after {
+  content:"";
+  display:block;
+  width:38px;
+  height:1px;
+  margin-top:18px;
+  background:#c98d58;
+}
+.boutique-product-info h3 { letter-spacing:-.025em; }
+
+/* Beauty: quiet luxury — less decoration, more materiality. */
+.beauty-hero-copy h1::after {
+  content:"";
+  display:block;
+  width:48px;
+  height:1px;
+  margin-top:28px;
+  background:#f2bfd0;
+}
+.beauty-service-card,
+.beauty-gallery-item { border-radius:2px; }
+.beauty-service-card:hover { box-shadow:0 28px 60px rgba(44,20,32,.12); }
+.beauty-ritual-badge { box-shadow:0 16px 40px rgba(34,15,27,.16); }
+
+/* Professional services: editorial authority rather than SaaS-dashboard UI. */
+.pro-hero-copy h1::after {
+  content:"";
+  display:block;
+  width:50px;
+  height:1px;
+  margin-top:28px;
+  background:#8fd8ff;
+}
+.pro-service-card,
+.pro-domain-card { border-radius:2px; }
+.pro-proof-mark { border-radius:0 !important; }
+.pro-method-visual { border-radius:2px; overflow:hidden; }
+
+/* Generic: strong enough to feel intentional, neutral enough for any sector. */
+.default-hero-copy h1::after {
+  content:"";
+  display:block;
+  width:50px;
+  height:1px;
+  margin-top:28px;
+  background:#00d1a0;
+}
+.default-category-card,
+.default-product-card,
+.default-service-card,
+.default-testimonial-grid figure { border-radius:2px; }
+.default-final { position:relative; overflow:hidden; }
+.default-final::after {
+  content:"";
+  position:absolute;
+  width:420px;
+  height:420px;
+  right:-180px;
+  top:-210px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:50%;
+  pointer-events:none;
+}
+
+/* Make example states visually explicit without making the page look like
+   a template editor. */
+.demo-property-card,
+.demo-rest-category,
+.demo-retail-category,
+.demo-boutique-product,
+.demo-beauty-service,
+.demo-pro-service,
+.demo-pro-domain,
+.demo-team-card,
+.default-demo-card,
+.default-demo-testimonial { position:relative; }
+.demo-property-card::before,
+.demo-rest-category::before,
+.demo-retail-category::before,
+.demo-boutique-product::before,
+.demo-beauty-service::before,
+.demo-pro-service::before,
+.demo-pro-domain::before,
+.demo-team-card::before,
+.default-demo-card::before,
+.default-demo-testimonial::before {
+  content:"APERÇU";
+  position:absolute;
+  z-index:8;
+  top:10px;
+  right:10px;
+  padding:5px 7px;
+  background:rgba(255,255,255,.9);
+  color:#334155;
+  font-size:7px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:.13em;
+  border-radius:999px;
+  box-shadow:0 4px 12px rgba(15,23,42,.08);
+}
+.demo-property-card::before,
+.demo-rest-category::before,
+.demo-retail-category::before,
+.demo-boutique-product::before,
+.demo-beauty-service::before,
+.demo-pro-service::before,
+.demo-pro-domain::before,
+.demo-team-card::before,
+.default-demo-card::before,
+.default-demo-testimonial::before { pointer-events:none; }
+
+/* Section rhythm: a 1px editorial rule gives the long landing pages a
+   deliberate magazine cadence. */
+.re-featured,
+.re-services,
+.re-stats,
+.re-testimonials,
+.re-type-section,
+.boutique-categories,
+.boutique-products,
+.boutique-editorial,
+.boutique-testimonials,
+.beauty-services,
+.beauty-ritual,
+.beauty-gallery,
+.beauty-experience,
+.beauty-testimonials,
+.pro-services,
+.pro-domains,
+.pro-method,
+.pro-proof,
+.pro-testimonials,
+.pro-team,
+.default-intro,
+.default-catalog,
+.default-featured,
+.default-story,
+.default-services,
+.default-testimonials {
+  position:relative;
+}
+
+@media (max-width:640px) {
+  .re-hero-copy::after,
+  .rest-hero-copy::after,
+  .boutique-hero-copy::after,
+  .beauty-hero-copy h1::after,
+  .pro-hero-copy h1::after,
+  .default-hero-copy h1::after { margin-top:22px; }
+  .re-hero-visual-note { display:none; }
+  .rest-rating { min-width:0; max-width:150px; }
+  .demo-property-card::before,
+  .demo-rest-category::before,
+  .demo-retail-category::before,
+  .demo-boutique-product::before,
+  .demo-beauty-service::before,
+  .demo-pro-service::before,
+  .demo-pro-domain::before,
+  .demo-team-card::before,
+  .default-demo-card::before,
+  .default-demo-testimonial::before { top:8px; right:8px; }
+}

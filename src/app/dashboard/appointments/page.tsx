@@ -9,6 +9,8 @@ import {
 } from "@/application/services/appointment-service";
 import { AppError } from "@/lib/errors";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { isGatedFeatureEnabled } from "@/application/services/feature-gate-service";
+import { UpgradeNotice } from "@/app/dashboard/_components/upgrade-notice";
 
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
   scheduled: "Prévu",
@@ -97,6 +99,7 @@ export default async function AppointmentsPage({
 }) {
   const { error, success } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
+  if (!(await isGatedFeatureEnabled(organizationId, "appointments"))) return <UpgradeNotice feature="appointments" />;
   const appointments = await listAppointments(organizationId);
 
   return (
@@ -191,7 +194,7 @@ export default async function AppointmentsPage({
                       <select
                         name="status"
                         defaultValue={appt.status}
-                        className="rounded-xl border border-navy-900/10 px-2 py-1 text-xs outline-none focus:border-violet-400"
+                        className="rounded-xl border border-navy-900/10 px-2 py-1 text-xs outline-hidden focus:border-violet-400"
                       >
                         {APPOINTMENT_STATUSES.map((s) => (
                           <option key={s} value={s}>

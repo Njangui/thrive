@@ -19,9 +19,12 @@ import {
   resolveOrganizationIdBySocialProfile,
 } from "@/infrastructure/providers/messaging/zernio/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
-import { routeMessage } from "@/application/services/conversation-orchestrator";
-import { escalateToHuman, getAutoReplyMode, notifyUnansweredInboundMessage } from "@/application/services/handoff-service";
-import { getMessagingProvider } from "@/infrastructure/providers/registry";
+import { processInboundAutoReply } from "@/application/services/inbound-auto-reply-service";
+import { handleTikTokUrlResolvedWebhook } from "@/application/services/first-comment-service";
+import { processCommentAutoReply } from "@/application/services/comment-auto-reply-service";
+import { evaluateInboxChannel } from "@/application/services/inbox-channel-policy";
+import { resolveOrganizationIdBySocialAccount, setSocialAccountStatus } from "@/application/services/social-account-registry-service";
+import { getMessagingProviderForChannel } from "@/infrastructure/providers/registry";
 import { activateGroupFromInboundConversation } from "@/application/services/whatsapp-group-service";
 import { handlePostStatusWebhook } from "@/application/services/marketing-service";
 import { handleAccountStatusChanged } from "@/application/services/provider-connection-service";
@@ -90,6 +93,18 @@ export async function POST(request: Request) {
     // Comme pour un tenant non résolu juste en dessous (section 38 :
     // toujours 200, jamais de retry inutile), on ignore proprement plutôt
     // que de laisser remonter l'exception.
+    // Lot O : `post.tiktok.url_resolved` — l'URL de la vidéo TikTok est connue, le premier
+    // commentaire en attente peut partir. Traité avant tout le reste (forme du payload non confirmée).
+    if ((rawEvent.event as string) === "post.tiktok.url_resolved") {
+      try {
+        const outcome = await handleTikTokUrlResolvedWebhook(rawEvent as unknown as Record<string, unknown>);
+        console.info(`Zernio webhook: post.tiktok.url_resolved → ${outcome.posted} commentaire(s) posté(s), ${outcome.failed} échec(s).`);
+      } catch (error) {
+        console.error("Zernio webhook: premier commentaire TikTok impossible:", error);
+      }
+      continue;
+    }
+
     if (!isZernioPostEvent(rawEvent) && !rawEvent.account?.id) {
       console.info(
         `Zernio webhook: événement "${rawEvent.event}" (${externalEventId}) sans "account" exploitable (ex: test webhook du dashboard), ignoré.`,
@@ -114,15 +129,16 @@ export async function POST(request: Request) {
           rawEvent.post?._id ?? rawEvent.post?.id ?? rawEvent.postId ?? "",
         )
       : isSocialAccountEvent
-        ? rawEvent.account.profileId
-          ? await resolveOrganizationIdBySocialProfile(rawEvent.account.profileId)
-          : null
+        ? (await resolveOrganizationIdBySocialAccount(rawEvent.account.id)) ??
+          (rawEvent.account.profileId ? await resolveOrganizationIdBySocialProfile(rawEvent.account.profileId) : null)
         : // CORRECTIF Lot 3 : account.connected/disconnected doivent rester
           // routables quel que soit le statut ACTUEL de la ligne (c'est
           // justement ce que l'event change) — voir resolve-organization.ts.
           rawEvent.event === "account.connected" || rawEvent.event === "account.disconnected"
           ? await resolveOrganizationIdByZernioAccountAnyStatus(rawEvent.account.id)
-          : await resolveOrganizationIdByZernioAccount(rawEvent.account.id);
+          : (await resolveOrganizationIdByZernioAccount(rawEvent.account.id)) ??
+            // Lot O : comptes Messenger / Instagram (registre social_accounts).
+            (await resolveOrganizationIdBySocialAccount(rawEvent.account.id));
 
     if (!organizationId) {
       console.warn(`Zernio webhook: aucun tenant résolu pour l'événement ${rawEvent.event} (${externalEventId}), ignoré.`);
@@ -189,78 +205,46 @@ export async function POST(request: Request) {
       }
 
       if (domainEvent.type === "MESSAGE_RECEIVED") {
+        // Lot O — messagerie unifiée : WhatsApp, Messenger et Instagram
+        // arrivent par la même boîte Zernio. Un canal non inclus dans l'offre
+        // (ou un compte inconnu) est ignoré AVANT toute écriture.
+        const inboundChannel = domainEvent.payload.channel;
+        const inboxDecision = await evaluateInboxChannel(organizationId, inboundChannel, domainEvent.payload.providerAccountId);
+        if (!inboxDecision.allowed) {
+          console.info(`Zernio webhook: message ${inboundChannel} ignoré (org ${organizationId}) — ${inboxDecision.reason}`);
+          await markWebhookEvent(externalEventId, "ignored_duplicate");
+          continue;
+        }
+
         const result = await handleInboundMessage(domainEvent);
 
-        // CORRECTIF Lot 3 (audit master prompt §31) : le message est
-        // toujours enregistré (ci-dessus, CRM/historique intacts pour
-        // l'admin) mais l'IA ne doit JAMAIS répondre automatiquement
-        // pendant une prise en charge humaine — voir
-        // handoff-service.ts::shouldAutoRespond pour le raisonnement
-        // complet sur le bug corrigé ici.
-        const autoReplyMode = getAutoReplyMode(result.handoffStatus, result.handoffReason);
-        // Vrai dès qu'une réponse est partie OU qu'une escalade a déjà
-        // alerté les admins — sinon, on les alerte nous-mêmes plus bas
-        // (message client resté sans réponse).
-        let handledAutomatically = false;
-
-        if (autoReplyMode !== "none") {
-          // Le ConversationOrchestrator est le SEUL point d'entrée vers une
-          // réponse (section 17/45 doc 2) : règles/FAQ/catalogue/business
-          // data d'abord, IA en dernier recours. Ne jamais appeler l'IA
-          // directement ici — voir docs/GAP_ANALYSIS.md section L.
-          const routing = await routeMessage(organizationId, result.conversationId, domainEvent.payload.content, {
-            // `deterministic_only` : conversation en attente d'humain
-            // uniquement parce que l'IA était indisponible — FAQ/catalogue
-            // restent permis, jamais l'IA (voir getAutoReplyMode).
-            allowAI: autoReplyMode === "full",
-          });
-
-          if (routing.handoffReason) {
-            await escalateToHuman(organizationId, result.conversationId, routing.handoffReason);
-            handledAutomatically = true; // escalateToHuman notifie déjà les admins
-          }
-
-          if (routing.replyText) {
-            const messaging = await getMessagingProvider(organizationId, "zernio", domainEvent.payload.providerAccountId);
+        // Le message est toujours enregistré (CRM/historique) ; la réponse
+        // automatique suit la politique de l'offre et le réglage du compte —
+        // voir inbound-auto-reply-service.ts. Jamais d'IA pendant une prise
+        // en charge humaine (handoff-service.ts::getAutoReplyMode).
+        await processInboundAutoReply({
+          organizationId,
+          conversationId: result.conversationId,
+          content: domainEvent.payload.content,
+          contactFullName: domainEvent.payload.contactFullName,
+          hasAttachment: Boolean(domainEvent.payload.attachment),
+          handoffStatus: result.handoffStatus,
+          handoffReason: result.handoffReason,
+          autoReplyAllowed: inboxDecision.autoReply,
+          send: async (reply) => {
+            const messaging = await getMessagingProviderForChannel(organizationId, inboundChannel, domainEvent.payload.providerAccountId);
             await messaging.sendMessage(organizationId, {
               to: domainEvent.payload.phoneE164 ?? domainEvent.payload.externalContactId,
-              channel: "whatsapp",
-              content: routing.replyText,
-              // CONFIRMÉ : répondre via Zernio exige le conversationId, pas
-              // juste un numéro — voir adapter.ts.
+              channel: inboundChannel as "whatsapp" | "telegram" | "facebook" | "instagram",
+              content: reply.text,
+              // CONFIRMÉ : répondre via Zernio exige le conversationId, pas juste un numéro.
               externalThreadId: domainEvent.payload.externalThreadId,
-              // Lot 3 (audit master prompt §28) : image du produit joint au
-              // message quand le routage en a résolu une (product_discovery/
-              // product_query) — toujours une image produit à ce stade,
-              // jamais un autre type de fichier.
-              attachmentUrl: routing.replyImageUrl ?? undefined,
-              attachmentType: routing.replyImageUrl ? "image" : undefined,
+              // Image produit jointe quand le routage en a résolu une.
+              attachmentUrl: reply.imageUrl ?? undefined,
+              attachmentType: reply.imageUrl ? "image" : undefined,
             });
-
-            await supabase.from("messages").insert({
-              organization_id: organizationId,
-              conversation_id: result.conversationId,
-              direction: "outbound",
-              // `sender: "ai"` couvre toute réponse automatique (FAQ, catalogue,
-              // business data ou vrai LLM) — le détail exact est dans
-              // `metadata.intent` pour l'observabilité (section 48).
-              sender: "ai",
-              content: routing.replyText,
-              metadata: { intent: routing.intent, ai_invoked: routing.aiInvoked },
-            });
-            handledAutomatically = true;
-          }
-        }
-
-        if (!handledAutomatically) {
-          await notifyUnansweredInboundMessage(
-            organizationId,
-            result.conversationId,
-            domainEvent.payload.contactFullName,
-            domainEvent.payload.content,
-            Boolean(domainEvent.payload.attachment),
-          );
-        }
+          },
+        });
       }
 
       // Lot 5 — synchronisation temps réel des commentaires (ferme le
@@ -272,7 +256,23 @@ export async function POST(request: Request) {
       // la volée en filet de sécurité si besoin (voir social-post-
       // tracking-service.ts).
       if (domainEvent.type === "COMMENT_RECEIVED") {
-        await handleIncomingComment(domainEvent);
+        const storedComment = await handleIncomingComment(domainEvent);
+        // Lot O : réponse automatique (Facebook / Instagram), même pipeline que
+        // la messagerie. Best-effort : une erreur ne doit jamais faire échouer
+        // l'accusé de réception du webhook (le commentaire est déjà enregistré).
+        if (storedComment) {
+          await processCommentAutoReply({
+            organizationId,
+            commentId: storedComment.commentId,
+            platform: domainEvent.payload.platform ?? "",
+            accountId: domainEvent.payload.providerAccountId,
+            providerPostId: domainEvent.payload.providerPostId,
+            externalCommentId: domainEvent.payload.externalCommentId,
+            authorExternalId: domainEvent.payload.authorExternalId,
+            authorName: domainEvent.payload.authorName,
+            content: domainEvent.payload.content,
+          }).catch((error) => console.error("Zernio webhook: réponse automatique au commentaire impossible:", error));
+        }
       }
 
       // CORRECTIF Lot 3 (audit master prompt §44) : message.failed
@@ -294,6 +294,8 @@ export async function POST(request: Request) {
       // provider-connection-service.ts.
       if (domainEvent.type === "PROVIDER_ACCOUNT_STATUS_UPDATED") {
         await handleAccountStatusChanged(organizationId, domainEvent.payload.accountId, domainEvent.payload.status);
+        // Lot O : le registre des comptes suit l'état réel (quotas cumulés exacts).
+        await setSocialAccountStatus(domainEvent.payload.accountId, domainEvent.payload.status === "connected" ? "connected" : "disconnected");
       }
 
       await markWebhookEvent(externalEventId, "processed");

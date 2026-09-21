@@ -1,5 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { getMessagingProvider } from "@/infrastructure/providers/registry";
+import { hasFeature } from "./entitlements-service";
+import { getMessagingProviderForChannel } from "@/infrastructure/providers/registry";
 import { generateAIReply } from "./ai-response-service";
 import { notifyOrgAdmins } from "./notification-service";
 
@@ -37,8 +38,18 @@ async function hasRecentInboundSince(supabase: ReturnType<typeof getSupabaseServ
  * volontairement déterministe : score observé -> délai fixe. L'IA n'est
  * jamais appelée pour décider QUI relancer.
  */
+/** Lot O : relances automatiques = fonctionnalité du CRM complet (Starter+). Mémoïsé par exécution. */
+async function orgHasFollowUps(cache: Map<string, boolean>, organizationId: string): Promise<boolean> {
+  const cached = cache.get(organizationId);
+  if (cached !== undefined) return cached;
+  const enabled = await hasFeature(organizationId, "follow_ups").catch(() => false);
+  cache.set(organizationId, enabled);
+  return enabled;
+}
+
 export async function scheduleDueFollowUps(now = new Date()): Promise<number> {
   const supabase = getSupabaseServiceClient();
+  const followUpsByOrg = new Map<string, boolean>();
   const cutoff = new Date(now.getTime() - HIGH_DELAY_MS).toISOString();
 
   const { data: leads, error } = await supabase
@@ -52,6 +63,7 @@ export async function scheduleDueFollowUps(now = new Date()): Promise<number> {
 
   let scheduled = 0;
   for (const lead of leads ?? []) {
+    if (!(await orgHasFollowUps(followUpsByOrg, lead.organization_id))) continue;
     const lastContact = lead.last_contact_at ? new Date(lead.last_contact_at).getTime() : 0;
     const tier = (lead.score ?? 0) >= HIGH_ENGAGEMENT_SCORE ? "engaged_24h" : "standard_48h";
     const dueAt = new Date(lastContact + (tier === "engaged_24h" ? HIGH_DELAY_MS : STANDARD_DELAY_MS));
@@ -118,8 +130,14 @@ export async function processDueFollowUps(now = new Date()): Promise<FollowUpRun
   if (error) throw new Error(`Erreur lecture relances: ${error.message}`);
 
   const result: FollowUpRunResult = { scheduled: 0, sent: 0, skipped: 0, failed: 0 };
+  const followUpsByOrg = new Map<string, boolean>();
 
   for (const task of tasks ?? []) {
+    if (!(await orgHasFollowUps(followUpsByOrg, task.organization_id))) {
+      await supabase.from("automated_followups").update({ status: "skipped", error_message: "Relances automatiques non incluses dans l'offre" }).eq("id", task.id);
+      result.skipped++;
+      continue;
+    }
     const lead = task.leads as unknown as {
       contact_id: string;
       score: number | null;
@@ -134,7 +152,7 @@ export async function processDueFollowUps(now = new Date()): Promise<FollowUpRun
 
     const { data: conversation } = await supabase
       .from("conversations")
-      .select("id, external_thread_id, channel, last_message_at")
+      .select("id, external_thread_id, channel, last_message_at, provider_account_id")
       .eq("organization_id", task.organization_id)
       .eq("contact_id", lead.contact_id)
       .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -169,7 +187,7 @@ export async function processDueFollowUps(now = new Date()): Promise<FollowUpRun
     }
 
     try {
-      const messaging = await getMessagingProvider(task.organization_id, conversation.channel);
+      const messaging = await getMessagingProviderForChannel(task.organization_id, conversation.channel, (conversation as { provider_account_id?: string | null }).provider_account_id);
       const sent = await messaging.sendMessage(task.organization_id, {
         to: lead.contacts?.phone_e164 ?? conversation.external_thread_id,
         channel: conversation.channel as "whatsapp" | "telegram",

@@ -65,7 +65,8 @@ export interface RouteMessageOptions {
 
 export async function routeMessage(
   organizationId: string,
-  conversationId: string,
+  /** `null` = commentaire public (aucun historique de conversation, aucune mémoire de produits). */
+  conversationId: string | null,
   message: string,
   options: RouteMessageOptions = {},
 ): Promise<OrchestrationResult> {
@@ -103,7 +104,7 @@ export async function routeMessage(
     );
     // Lot D : mémorise les produits montrés pour qu'une référence comme
     // "celle à 25 000" soit compréhensible par l'IA au tour suivant.
-    await rememberMentionedProducts(organizationId, conversationId, products.map((p) => p.id));
+    if (conversationId) await rememberMentionedProducts(organizationId, conversationId, products.map((p) => p.id));
     log("product_discovery", false, null);
     return { intent: "product_discovery", replyText: reply, aiInvoked: false, handoffReason: null, replyImageUrl: products[0]?.imageUrl ?? null };
   }
@@ -122,7 +123,7 @@ export async function routeMessage(
         `${tenantOrigin}/produits`,
       );
       // Lot D : idem — mémorise les résultats montrés pour ce mot-clé.
-      await rememberMentionedProducts(organizationId, conversationId, matches.map((p) => p.id));
+      if (conversationId) await rememberMentionedProducts(organizationId, conversationId, matches.map((p) => p.id));
       log("product_query", false, null);
       return { intent: "product_query", replyText: reply, aiInvoked: false, handoffReason: null, replyImageUrl: matches[0]?.imageUrl ?? null };
     }
@@ -171,7 +172,7 @@ export async function routeMessage(
     // Lot D : résout les derniers produits mentionnés dans CETTE conversation
     // et les injecte dans le contexte IA (nom/prix/description uniquement,
     // jamais l'historique complet des messages).
-    const recentProducts = await getRecentlyMentionedProducts(organizationId, conversationId);
+    const recentProducts = conversationId ? await getRecentlyMentionedProducts(organizationId, conversationId) : [];
     const aiReply = await generateAIReply(organizationId, message, recentProducts);
     log("ai", true, null);
     return { intent: "ai", replyText: aiReply.text, aiInvoked: true, handoffReason: null, replyImageUrl: null };

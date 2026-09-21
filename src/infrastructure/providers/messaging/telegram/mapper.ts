@@ -19,9 +19,17 @@ export function mapTelegramUpdateToDomainEvent(
   raw: TelegramUpdate,
   organizationId: string,
   attachment?: { url: string; type: "image" | "video" | "audio" | "file"; fileName?: string; mimeType?: string; fileId?: string },
+  /** Lot O : identifiant (`telegram_bots.id`) du bot qui a reçu l'update — les réponses repartent par CE bot. */
+  providerAccountId?: string,
 ): DomainEvent | null {
   const message = raw.message;
   if (!message || (!message.text && !message.caption && !attachment) || !message.chat) {
+    return null;
+  }
+  // Lot O : seules les conversations PRIVÉES avec le bot sont des conversations
+  // clients. Les canaux et groupes sont des destinations de publication (table
+  // telegram_destinations) : leurs messages ne créent ni contact ni conversation.
+  if (message.chat.type !== "private") {
     return null;
   }
 
@@ -43,6 +51,7 @@ export function mapTelegramUpdateToDomainEvent(
       content: message.text ?? message.caption ?? `Le client a envoyé une pièce jointe Telegram${attachment?.fileName ? ` : ${attachment.fileName}` : "."}`,
       externalMessageId: String(message.message_id),
       channel: "telegram",
+      ...(providerAccountId ? { providerAccountId } : {}),
       ...(attachment ? { attachment } : {}),
     },
   };

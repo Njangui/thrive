@@ -22,7 +22,7 @@ export default async function ServicesPage() {
   // des prestations, contrairement à la section d'accueil qui en montre 6.
   const services = await listActiveServicesForStorefront(tenant.organizationId, 100);
 
-  const ctaHref = capabilities.hasServices
+  const ctaHref = capabilities.hasServices && capabilities.bookingEnabled
     ? STOREFRONT_PATHS.booking
     : whatsappHref ?? STOREFRONT_PATHS.contact;
 

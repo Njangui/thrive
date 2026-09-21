@@ -1,7 +1,9 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { env } from "@/lib/env";
-import { YouTubeClient, type YouTubeOAuthTokens } from "@/infrastructure/providers/social/youtube/client";
+import { NotFoundError, QuotaExceededError } from "@/lib/errors";
+import { canUseFeature } from "./entitlements-service";
+import { YouTubeClient } from "@/infrastructure/providers/social/youtube/client";
 
 const SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/yt-analytics.readonly"];
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -15,7 +17,7 @@ function readState(state: string) {
   const [organizationId, timestamp, nonce, signature] = parts;
   const raw = `${organizationId}.${timestamp}.${nonce}`;
   if (sign(raw) !== signature || Date.now() - Number(timestamp) > STATE_TTL_MS) throw new Error("La demande de connexion YouTube a expiré. Recommencez.");
-  return organizationId;
+  return organizationId as string;
 }
 
 function googleConfig() {
@@ -45,18 +47,92 @@ export async function completeYouTubeOAuth(code: string, state: string) {
   const youtube = new YouTubeClient({ access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000 });
   const channel = await youtube.getMine();
   const supabase = getSupabaseServiceClient();
+
+  // Lot O — plusieurs chaînes par organisation. Reconnecter une chaîne déjà
+  // enregistrée ne consomme pas de quota ; une NOUVELLE chaîne est refusée
+  // avant tout stockage de jeton si l'offre est atteinte.
+  const { data: existing, error: existingError } = await supabase
+    .from("youtube_accounts")
+    .select("id, credential_reference")
+    .eq("organization_id", organizationId)
+    .eq("channel_id", channel.id)
+    .maybeSingle();
+  if (existingError) throw new Error(`Lecture des chaînes YouTube impossible : ${existingError.message}`);
+  if (!existing) {
+    const entitlement = await canUseFeature(organizationId, "youtube_accounts", 1);
+    if (!entitlement.allowed) {
+      throw new QuotaExceededError(`La limite de chaînes YouTube de votre offre est atteinte (${entitlement.limit}).`);
+    }
+  }
+
   const secret = JSON.stringify({ access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000 });
-  const { data: secretId, error: secretError } = await supabase.rpc("vault_create_secret", { secret_value: secret, secret_name: `youtube:${organizationId}` });
+  const { data: secretId, error: secretError } = await supabase.rpc("vault_create_secret", { secret_value: secret, secret_name: `youtube:${organizationId}:${channel.id}:${Date.now()}` });
   if (secretError || !secretId) throw new Error(`Impossible de sécuriser la connexion YouTube : ${secretError?.message ?? "secret absent"}`);
 
-  const { error } = await supabase.from("provider_connections").upsert({ organization_id: organizationId, provider_type: "social", provider_name: "youtube", status: "connected", credential_reference: secretId, metadata: { channelId: channel.id, title: channel.title, username: channel.customUrl ?? channel.title } }, { onConflict: "organization_id,provider_type,provider_name" });
-  if (error) throw new Error(`Impossible d'enregistrer la connexion YouTube : ${error.message}`);
+  const { error } = await supabase.from("youtube_accounts").upsert(
+    {
+      organization_id: organizationId,
+      channel_id: channel.id,
+      title: channel.title,
+      username: channel.customUrl ?? channel.title,
+      credential_reference: secretId,
+      status: "connected",
+      connected_at: new Date().toISOString(),
+    },
+    { onConflict: "organization_id,channel_id" },
+  );
+  if (error) {
+    await supabase.rpc("vault_delete_secret", { secret_id: secretId });
+    throw new Error(`Impossible d'enregistrer la connexion YouTube : ${error.message}`);
+  }
+  // Reconnexion : l'ancien secret est remplacé, jamais laissé orphelin dans Vault.
+  if (existing?.credential_reference) {
+    await supabase.rpc("vault_delete_secret", { secret_id: existing.credential_reference }).then(undefined, () => undefined);
+  }
   return channel;
 }
 
-export async function getYouTubeConnection(organizationId: string) {
+export interface YouTubeAccountSummary {
+  id: string;
+  channelId: string;
+  title: string | null;
+  username: string | null;
+  connectedAt: string;
+}
+
+export async function listYouTubeAccounts(organizationId: string): Promise<YouTubeAccountSummary[]> {
   const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase.from("provider_connections").select("status, metadata, credential_reference").eq("organization_id", organizationId).eq("provider_type", "social").eq("provider_name", "youtube").maybeSingle();
-  if (error) throw new Error(`Erreur lecture connexion YouTube : ${error.message}`);
-  return { connected: data?.status === "connected", metadata: (data?.metadata ?? {}) as { channelId?: string; title?: string; username?: string }, credentialReference: data?.credential_reference ?? null };
+  const { data, error } = await supabase
+    .from("youtube_accounts")
+    .select("id, channel_id, title, username, connected_at")
+    .eq("organization_id", organizationId)
+    .eq("status", "connected")
+    .order("connected_at", { ascending: true });
+  if (error) throw new Error(`Erreur lecture des chaînes YouTube : ${error.message}`);
+  return (data ?? []).map((row) => ({ id: row.id as string, channelId: row.channel_id as string, title: row.title as string | null, username: row.username as string | null, connectedAt: row.connected_at as string }));
+}
+
+/** Déconnecte UNE chaîne : jeton supprimé de Vault, ligne conservée (historique des publications) au statut `disconnected`. */
+export async function disconnectYouTubeAccount(organizationId: string, accountRowId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("youtube_accounts")
+    .select("id, credential_reference")
+    .eq("id", accountRowId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (error) throw new Error(`Lecture de la chaîne YouTube impossible : ${error.message}`);
+  if (!data) throw new NotFoundError("Chaîne YouTube introuvable.");
+  if (data.credential_reference) {
+    await supabase.rpc("vault_delete_secret", { secret_id: data.credential_reference }).then(undefined, () => undefined);
+  }
+  const { error: updateError } = await supabase.from("youtube_accounts").update({ status: "disconnected", credential_reference: null }).eq("id", accountRowId).eq("organization_id", organizationId);
+  if (updateError) throw new Error(`Déconnexion YouTube impossible : ${updateError.message}`);
+}
+
+/** Compatibilité : première chaîne connectée (anciens appelants mono-compte). */
+export async function getYouTubeConnection(organizationId: string) {
+  const accounts = await listYouTubeAccounts(organizationId);
+  const first = accounts[0];
+  return { connected: Boolean(first), metadata: { channelId: first?.channelId, title: first?.title ?? undefined, username: first?.username ?? undefined } as { channelId?: string; title?: string; username?: string }, credentialReference: null as string | null };
 }

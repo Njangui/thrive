@@ -88,7 +88,7 @@ export async function TenantLanding({
   const videos = await listActiveStorefrontVideos(tenant.organizationId, { limit: 3 });
   const videosAnchor = (["products", "gallery", "services", "hero"] as const).find((type) => enabledSections.includes(type));
 
-  const hasBookingSection = enabledSections.includes("booking");
+  const hasBookingSection = enabledSections.includes("booking") && site.capabilities.bookingEnabled;
 
   // Les vitrines sectorielles sont des templates complets :
   // on conserve les mêmes données dynamiques, mais la composition, les
@@ -208,6 +208,7 @@ export async function TenantLanding({
             return data?.type === "faq" ? <FaqSection key="faq" faqs={data.faqs} site={site} /> : null;
           }
           case "booking": {
+            if (!site.capabilities.bookingEnabled) return null;
             const data = dataByType.get("booking");
             return data?.type === "booking" ? (
               <BookingSection key="booking" site={site} services={data.services} feedback={bookingFeedback} />

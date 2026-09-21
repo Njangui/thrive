@@ -39,8 +39,15 @@ export default async function AcceptInvitePage({
     redirect(`/login?next=${encodeURIComponent(`/invite/accept?token=${token}`)}`);
   }
 
+  let result: Awaited<ReturnType<typeof acceptInvitation>> | null = null;
+  let failureMessage = "Impossible d'accepter cette invitation.";
   try {
-    const result = await acceptInvitation(token, user.id, user.email ?? null);
+    result = await acceptInvitation(token, user.id, user.email ?? null);
+  } catch (error) {
+    if (error instanceof AppError) failureMessage = error.message;
+  }
+
+  if (result) {
     return (
       <Centered>
         <h1 className="font-jakarta text-2xl font-bold tracking-tight text-navy-900">
@@ -52,27 +59,26 @@ export default async function AcceptInvitePage({
         </Link>
       </Centered>
     );
-  } catch (error) {
-    const message = error instanceof AppError ? error.message : "Impossible d'accepter cette invitation.";
-    return (
-      <Centered>
-        <p className="adm-alert-danger">{message}</p>
-        {/* Repasse sécurité P0 (section 7) : le cas le plus probable pour
-            arriver ici est un email de session qui ne correspond pas à
-            l'email invité — proposer de se déconnecter puis de se
-            reconnecter directement sur cette même invitation, sinon
-            l'utilisateur reste bloqué dans son compte actuel sans savoir
-            comment repartir se connecter avec la bonne adresse. */}
-        <SignOutButton
-          className="mt-4 inline-block text-sm text-violet-600 hover:underline"
-          redirectTo={`/login?next=${encodeURIComponent(`/invite/accept?token=${token}`)}`}
-        />
-        <Link href="/dashboard" className="mt-2 block text-sm adm-muted hover:underline">
-          Aller au tableau de bord
-        </Link>
-      </Centered>
-    );
   }
+
+  return (
+    <Centered>
+      <p className="adm-alert-danger">{failureMessage}</p>
+      {/* Repasse sécurité P0 (section 7) : le cas le plus probable pour
+          arriver ici est un email de session qui ne correspond pas à
+          l'email invité — proposer de se déconnecter puis de se
+          reconnecter directement sur cette même invitation, sinon
+          l'utilisateur reste bloqué dans son compte actuel sans savoir
+          comment repartir se connecter avec la bonne adresse. */}
+      <SignOutButton
+        className="mt-4 inline-block text-sm text-violet-600 hover:underline"
+        redirectTo={`/login?next=${encodeURIComponent(`/invite/accept?token=${token}`)}`}
+      />
+      <Link href="/dashboard" className="mt-2 block text-sm adm-muted hover:underline">
+        Aller au tableau de bord
+      </Link>
+    </Centered>
+  );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

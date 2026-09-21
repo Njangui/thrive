@@ -87,6 +87,17 @@ export class CompositeSocialAdapter implements SocialPublishingProvider {
   async replyToComment(providerPostId: string, accountId: string, commentId: string, message: string) { const provider = this.providers.find((p) => p.adapter.providerName !== "youtube")?.adapter; if (!provider) throw new Error("Aucun connecteur de commentaires disponible."); return provider.replyToComment(providerPostId, accountId, commentId, message); }
   async hideComment(providerPostId: string, accountId: string, commentId: string) { const provider = this.providers.find((p) => p.adapter.providerName !== "youtube")?.adapter; if (!provider) throw new Error("Action indisponible."); return provider.hideComment(providerPostId, accountId, commentId); }
   async unhideComment(providerPostId: string, accountId: string, commentId: string) { const provider = this.providers.find((p) => p.adapter.providerName !== "youtube")?.adapter; if (!provider) throw new Error("Action indisponible."); return provider.unhideComment(providerPostId, accountId, commentId); }
+  /** Lot O — premier commentaire / épinglage : délégués au connecteur qui les supporte (Zernio). */
+  async postTopLevelComment(providerPostId: string, accountId: string, message: string): Promise<{ commentId?: string }> {
+    const adapter = this.providers.find((p) => p.adapter.providerName !== "youtube" && p.adapter.postTopLevelComment)?.adapter;
+    if (!adapter?.postTopLevelComment) throw new Error("Aucun connecteur ne permet de publier un commentaire de premier niveau.");
+    return adapter.postTopLevelComment(providerPostId, accountId, message);
+  }
+  async pinComment(providerPostId: string, accountId: string, commentId: string): Promise<void> {
+    const adapter = this.providers.find((p) => p.adapter.providerName !== "youtube" && p.adapter.pinComment)?.adapter;
+    if (!adapter?.pinComment) throw new Error("Aucun connecteur ne permet d'épingler un commentaire.");
+    await adapter.pinComment(providerPostId, accountId, commentId);
+  }
 }
 
 type SocialPostTargetLike = { platform: string; accountId: string };

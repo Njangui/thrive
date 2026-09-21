@@ -79,7 +79,7 @@ export type AutoReplyMode = "full" | "deterministic_only" | "none";
  */
 export function getAutoReplyMode(handoffStatus: string, handoffReason: string | null | undefined): AutoReplyMode {
   if (handoffStatus === "ai") return "full";
-  if (handoffStatus === "pending_human" && handoffReason === "ai_unavailable") return "deterministic_only";
+  if (handoffStatus === "pending_human" && (handoffReason === "ai_unavailable" || handoffReason === "semi_automatic")) return "deterministic_only";
   return "none";
 }
 

@@ -57,14 +57,33 @@ export const USAGE_GAUGES: { key: string; label: string; mode: "cumulative" | "c
   { key: "catalog_products", label: "Produits du catalogue", mode: "cumulative" },
   { key: "team_members", label: "Membres de l’équipe", mode: "cumulative" },
   { key: "whatsapp_groups", label: "Groupes WhatsApp", mode: "cumulative" },
+  // Lot O — multi-comptes réels : jauges « N / limite » sur les comptes et
+  // destinations effectivement enregistrés.
+  { key: "telegram_bots", label: "Bots Telegram", mode: "cumulative" },
+  { key: "telegram_channels", label: "Canaux Telegram", mode: "cumulative" },
+  { key: "telegram_groups", label: "Groupes Telegram", mode: "cumulative" },
+  { key: "youtube_accounts", label: "Comptes YouTube", mode: "cumulative" },
+  { key: "facebook_pages", label: "Pages Facebook", mode: "cumulative" },
+  { key: "instagram_accounts", label: "Comptes Instagram", mode: "cumulative" },
+  { key: "linkedin_pages", label: "Pages LinkedIn", mode: "cumulative" },
+  { key: "tiktok_accounts", label: "Comptes TikTok", mode: "cumulative" },
   { key: "broadcast_contacts", label: "Contacts par campagne de diffusion", mode: "capped" },
-  { key: "social_accounts", label: "Comptes réseaux sociaux par publication", mode: "capped" },
 ];
 
 export const FEATURE_FLAGS: { key: string; label: string }[] = [
   { key: "whatsapp", label: "WhatsApp (messagerie)" },
   { key: "facebook_messenger", label: "Messages Facebook Messenger" },
   { key: "instagram_messages", label: "Messages Instagram" },
+  { key: "automatic_messaging", label: "Messagerie automatique avec IA" },
+  { key: "crm", label: "CRM complet (pipeline, score, relances)" },
+  { key: "orders", label: "Commandes" },
+  { key: "appointments", label: "Rendez-vous" },
+  { key: "site_analytics", label: "Analytique du site" },
+  { key: "custom_domain", label: "Domaine personnalisé" },
+  { key: "remove_branding", label: "Retrait du badge CRESYVA" },
+  { key: "facebook_auto_comments", label: "Réponse automatique aux commentaires Facebook" },
+  { key: "instagram_auto_comments", label: "Réponse automatique aux commentaires Instagram" },
+  { key: "unified_comments", label: "Commentaires unifiés" },
   { key: "linkedin", label: "Publications LinkedIn" },
   { key: "tiktok", label: "Publications TikTok" },
 ];

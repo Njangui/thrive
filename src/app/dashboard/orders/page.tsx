@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { listOrdersForOrg, ORDER_STATUSES, type OrderStatus } from "@/application/services/order-service";
 import { ORDER_STATUS_LABELS as STATUS_LABELS, ORDER_STATUS_STYLES as STATUS_STYLES } from "../_components/order-status";
+import { isGatedFeatureEnabled } from "@/application/services/feature-gate-service";
+import { UpgradeNotice } from "@/app/dashboard/_components/upgrade-notice";
 
 const PAGE_SIZE = 50;
 
@@ -16,6 +18,7 @@ export default async function OrdersPage({
 }) {
   const { page: pageParam, status: statusParam } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
+  if (!(await isGatedFeatureEnabled(organizationId, "orders"))) return <UpgradeNotice feature="orders" />;
 
   const page = Math.max(1, Number(pageParam) || 1);
   const status = statusParam && isOrderStatus(statusParam) ? statusParam : undefined;

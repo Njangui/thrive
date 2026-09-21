@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-interface QueryResult {
-  data?: unknown;
-  error?: { message: string } | null;
-}
-
 const mockFrom = vi.fn();
 vi.mock("@/infrastructure/supabase/server-client", () => ({
   getSupabaseServiceClient: () => ({ from: mockFrom }),

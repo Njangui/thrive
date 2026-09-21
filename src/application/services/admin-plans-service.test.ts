@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 describe("getPlansOverviewForAdmin", () => {
-  it("une clé d'entitlement jamais configurée est traitée comme fail-closed (0), jamais comme illimitée par accident (passage freemium)", async () => {
+  it("une clé commerciale connue jamais configurée est fail-closed (0, non incluse), jamais illimitée par accident", async () => {
     configureSupabase({
       plans: { data: [{ key: "starter", name: "Starter", price_fcfa: 5000, description: null }], error: null },
       plan_entitlements: { data: [], error: null },

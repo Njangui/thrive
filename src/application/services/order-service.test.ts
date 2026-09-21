@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./marketing-service", () => ({ pauseScheduledPostsForProduct: vi.fn(async () => {}) }));
+vi.mock("./feature-gate-service", () => ({
+  assertGatedFeature: vi.fn(async () => {}),
+  isGatedFeatureEnabled: vi.fn(async () => true),
+  buildUpgradeMessage: vi.fn(() => "non inclus"),
+}));
 vi.mock("./notification-service", () => ({ notifyOrgAdmins: vi.fn(async () => {}) }));
 vi.mock("./analytics-service", () => ({ trackEvent: vi.fn(async () => {}) }));
 

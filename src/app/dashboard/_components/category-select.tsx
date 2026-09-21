@@ -33,7 +33,7 @@ export function CategorySelect({
       <select
         name="categoryId"
         defaultValue={defaultValue ?? ""}
-        className="rounded-xl border border-navy-900/10 px-4 py-3 outline-none focus:border-violet-400"
+        className="rounded-xl border border-navy-900/10 px-4 py-3 outline-hidden focus:border-violet-400"
       >
         <option value="">Aucune catégorie</option>
         {categories.map((c) => (

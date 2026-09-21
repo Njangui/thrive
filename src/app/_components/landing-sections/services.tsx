@@ -69,7 +69,7 @@ export function ServicesSection({
 
   // Jamais de lien mort : ancre de réservation si la section existe sur
   // cette page, sinon la page rendez-vous, sinon WhatsApp.
-  const ctaHref = hasBookingSection ? "#booking" : site.capabilities.hasServices ? STOREFRONT_PATHS.booking : whatsappHref ?? STOREFRONT_PATHS.contact;
+  const ctaHref = hasBookingSection ? "#booking" : site.capabilities.hasServices && site.capabilities.bookingEnabled ? STOREFRONT_PATHS.booking : whatsappHref ?? STOREFRONT_PATHS.contact;
 
   return (
     <Section>

@@ -1,3 +1,10 @@
+import {
+  getSocialAccountByAccountId,
+  listOrganizationSocialAccounts,
+  listOrganizationZernioProfileIds,
+  syncSocialAccountsFromZernio,
+  upsertSocialAccount,
+} from "./social-account-registry-service";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { resolveCredential } from "@/infrastructure/providers/secrets-resolver";
 import { ZernioSocialClient } from "@/infrastructure/providers/social/zernio/client";
@@ -157,32 +164,93 @@ export async function ensureZernioProfile(organizationId: string, organizationNa
 }
 
 export async function getZernioAccounts(organizationId: string): Promise<ZernioChannelAccount[]> {
-  const profileId = await getExistingProfileId(organizationId);
-  if (!profileId) return [];
+  // Lot O : profil principal + profils additionnels (un compte TikTok par profil).
+  const profileIds = await listOrganizationZernioProfileIds(organizationId);
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
-  const response = await client.listAccounts(profileId);
-  const socialAccounts = response.accounts
-    .filter((account) => account.platform !== "whatsapp")
-    .map((account) => ({
-      accountId: account._id,
-      platform: account.platform,
-      username: account.username ?? null,
-      status: "connected" as const,
-    }));
+  const socialAccounts: ZernioChannelAccount[] = [];
+  for (const profileId of profileIds) {
+    const response = await client.listAccounts(profileId);
+    for (const account of response.accounts) {
+      if (account.platform === "whatsapp") continue;
+      socialAccounts.push({ accountId: account._id, platform: account.platform, username: account.username ?? null, status: "connected" as const });
+    }
+  }
   const whatsappAccounts = await getZernioWhatsAppAccounts(organizationId);
   return [...socialAccounts, ...whatsappAccounts];
+}
+
+/** Clés de plan cumulatives (table `social_accounts`) des réseaux à comptes multiples. */
+export const SOCIAL_ACCOUNT_QUOTA_KEY: Record<string, string> = {
+  facebook: "facebook_pages",
+  instagram: "instagram_accounts",
+  linkedin: "linkedin_pages",
+  tiktok: "tiktok_accounts",
+};
+
+/**
+ * Lot O — profil Zernio à utiliser pour connecter un compte `platform`.
+ * Zernio limite certaines plateformes à UN compte par profil (TikTok :
+ * « one account per profile », docs.zernio.com) : on réutilise le premier
+ * profil de l'organisation qui n'a pas encore de compte de cette plateforme,
+ * sinon on en crée un nouveau (enregistré dans `zernio_social_profiles`
+ * pour le routage des webhooks). Une reconnexion réutilise le profil du
+ * compte concerné.
+ */
+export async function pickProfileForPlatform(
+  organizationId: string,
+  organizationName: string,
+  platform: string,
+  reconnectAccountId?: string,
+): Promise<string> {
+  const mainProfileId = await ensureZernioProfile(organizationId, organizationName);
+  // Réaligne le registre local (organisations antérieures au registre) — best effort.
+  await syncSocialAccountsFromZernio(organizationId).catch((error) => console.warn("pickProfileForPlatform: synchronisation impossible:", error));
+
+  if (reconnectAccountId) {
+    const account = await getSocialAccountByAccountId(reconnectAccountId);
+    if (account && account.organizationId === organizationId) return account.profileId;
+  }
+
+  const knownProfileIds = await listOrganizationZernioProfileIds(organizationId);
+  const profileIds = knownProfileIds.includes(mainProfileId) ? knownProfileIds : [mainProfileId, ...knownProfileIds];
+  const usedProfileIds = new Set((await listOrganizationSocialAccounts(organizationId, { platform })).map((account) => account.profileId));
+  const free = profileIds.find((profileId) => !usedProfileIds.has(profileId));
+  if (free) return free;
+
+  const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
+  const created = await client.createProfile({
+    name: `${organizationName.trim() || "CRESYVA"} · ${platform} ${profileIds.length + 1}`.slice(0, 80),
+    description: `Profil additionnel CRESYVA — ${platform}`,
+    color: "#009979",
+  });
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase.from("zernio_social_profiles").insert({ organization_id: organizationId, profile_id: created.profile._id, label: platform });
+  if (error) throw new Error(`Enregistrement du profil additionnel Zernio impossible: ${error.message}`);
+  return created.profile._id;
 }
 
 export async function getZernioConnectUrl(
   organizationId: string,
   organizationName: string,
   platform: ZernioPlatform,
-  options?: { onboarding?: "api" | "business_app" },
+  options?: { onboarding?: "api" | "business_app"; reconnectAccountId?: string },
 ): Promise<string> {
-  const profileId = await ensureZernioProfile(organizationId, organizationName);
+  // Plafond cumulatif vérifié AVANT d'ouvrir l'OAuth (une reconnexion ne consomme pas de quota).
+  const quotaKey = SOCIAL_ACCOUNT_QUOTA_KEY[platform];
+  if (quotaKey && !options?.reconnectAccountId) {
+    const entitlement = await canUseFeature(organizationId, quotaKey, 1);
+    if (!entitlement.allowed) {
+      throw new QuotaExceededError(
+        entitlement.limit === 0
+          ? `${platform} n'est pas inclus dans votre offre.`
+          : `La limite de ${platform} de votre offre est atteinte (${entitlement.limit}).`,
+      );
+    }
+  }
+  const profileId = await pickProfileForPlatform(organizationId, organizationName, platform, options?.reconnectAccountId);
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
   const redirectUrl = `${env.NEXT_PUBLIC_APP_URL}/dashboard/channels/callback`;
-  const response = await client.getConnectUrl(platform, profileId, redirectUrl, options);
+  const response = await client.getConnectUrl(platform, profileId, redirectUrl, options?.onboarding ? { onboarding: options.onboarding } : undefined);
   return response.authUrl;
 }
 
@@ -277,6 +345,9 @@ export async function persistZernioOAuthConnection(
     providerType = "messaging";
   } else if (mainProfileId && mainProfileId === profileId) {
     providerType = "social";
+  } else if (await isAdditionalSocialProfile(organizationId, profileId)) {
+    // Lot O : profil additionnel (un compte TikTok par profil Zernio).
+    providerType = "social";
   } else {
     throw new Error("Connexion Zernio invalide ou expirée. Relancez la connexion depuis Canaux.");
   }
@@ -329,27 +400,19 @@ export async function persistZernioOAuthConnection(
     return;
   }
 
-  const platformEntitlement: Record<string, string> = {
-    facebook: "facebook_pages",
-    instagram: "instagram_accounts",
-    linkedin: "linkedin_pages",
-    tiktok: "tiktok_accounts",
-  };
-  const entitlementKey = platformEntitlement[platform];
-  if (entitlementKey) {
-    const entitlement = await canUseFeature(organizationId, entitlementKey, 1);
-    if (!entitlement.allowed) throw new QuotaExceededError(`La limite de ${platform} de votre offre est atteinte.`);
-
-    // Compte les comptes réellement connectés sur ce profil Zernio, en
-    // excluant celui qui vient d'être renvoyé par OAuth pour permettre une
-    // reconnexion propre du même compte.
-    const zernio = new ZernioSocialClient(await getZernioApiKey(organizationId));
-    const existingAccounts = await zernio.listAccounts(profileId);
-    const samePlatformOtherAccounts = existingAccounts.accounts.filter((account) => account.platform === platform && account._id !== accountId).length;
-    if (samePlatformOtherAccounts + 1 > entitlement.limit && entitlement.limit !== -1) {
+  // Lot O — plafond CUMULATIF des comptes (registre `social_accounts`). Une
+  // reconnexion d'un compte déjà enregistré ne consomme pas de quota ; sinon
+  // le garde-fou refuse ce nouveau compte (l'appelant l'a déjà refusé avant
+  // l'OAuth : ceci couvre une connexion concurrente ou un rejeu du callback).
+  const quotaKey = SOCIAL_ACCOUNT_QUOTA_KEY[platform];
+  const knownAccount = await getSocialAccountByAccountId(accountId);
+  if (quotaKey && !(knownAccount && knownAccount.organizationId === organizationId)) {
+    const entitlement = await canUseFeature(organizationId, quotaKey, 1);
+    if (!entitlement.allowed) {
       throw new QuotaExceededError(`La limite de ${platform} de votre offre est atteinte (${entitlement.limit}).`);
     }
   }
+  await upsertSocialAccount({ organizationId, platform, accountId, profileId, username: username ?? null });
 
   const supabase = getSupabaseServiceClient();
   const { data: current } = await supabase
@@ -366,9 +429,22 @@ export async function persistZernioOAuthConnection(
       provider_type: providerType,
       provider_name: "zernio",
       status: "connected",
-      metadata: { ...previous, profileId, accountId, platform, username: username ?? null },
+      // Le profil PRINCIPAL reste celui de la ligne (jamais écrasé par un profil additionnel).
+      metadata: { ...previous, profileId: mainProfileId && mainProfileId !== profileId ? mainProfileId : profileId, accountId, platform, username: username ?? null },
     },
     { onConflict: "organization_id,provider_type,provider_name" },
   );
   if (error) throw new Error(`Connexion ${platform} enregistrée mais impossible à finaliser: ${error.message}`);
+}
+
+async function isAdditionalSocialProfile(organizationId: string, profileId: string): Promise<boolean> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("zernio_social_profiles")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (error) throw new Error(`Lecture des profils Zernio impossible: ${error.message}`);
+  return Boolean(data);
 }

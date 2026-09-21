@@ -157,12 +157,14 @@ export function StorefrontFooter({ site }: { site: StorefrontSite }) {
             © {foundedYear && foundedYear < currentYear ? `${foundedYear}–${currentYear}` : currentYear} {tenant.name}.
             Tous droits réservés.
           </p>
-          <p>
-            Site propulsé par{" "}
-            <a href={env.NEXT_PUBLIC_APP_URL} target="_blank" rel="noopener noreferrer" className="font-medium hover:text-brand">
-              CRESYVA
-            </a>
-          </p>
+          {!capabilities.brandingRemoved && (
+            <p>
+              Site propulsé par{" "}
+              <a href={env.NEXT_PUBLIC_APP_URL} target="_blank" rel="noopener noreferrer" className="font-medium hover:text-brand">
+                CRESYVA
+              </a>
+            </p>
+          )}
         </Container>
       </div>
     </footer>

@@ -1,4 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { assertGatedFeature } from "./feature-gate-service";
 import type { LeadScoreResult } from "@/domain/entities/lead";
 import { notifyOrgAdmins } from "./notification-service";
 import { trackEvent } from "./analytics-service";
@@ -161,6 +162,9 @@ export interface LeadListItem {
   createdAt: string;
   contactName: string | null;
   contactPhone: string | null;
+  /** Lot O : notes libres sur le prospect (incluses dès Discover). */
+  contactId: string | null;
+  contactNotes: string | null;
 }
 
 export interface ListLeadsOptions {
@@ -184,7 +188,8 @@ interface LeadRow {
   last_contact_at: string | null;
   next_follow_up_at: string | null;
   created_at: string;
-  contacts?: { full_name?: string | null; phone_e164?: string | null } | null;
+  contact_id?: string | null;
+  contacts?: { full_name?: string | null; phone_e164?: string | null; notes?: string | null } | null;
 }
 
 /**
@@ -202,7 +207,7 @@ export async function listLeadsForOrg(organizationId: string, options: ListLeads
   let query = supabase
     .from("leads")
     .select(
-      "id, status, source, intent, score, score_reason, last_contact_at, next_follow_up_at, created_at, contacts(full_name, phone_e164)",
+      "id, contact_id, status, source, intent, score, score_reason, last_contact_at, next_follow_up_at, created_at, contacts(full_name, phone_e164, notes)",
       { count: "exact" },
     )
     .eq("organization_id", organizationId)
@@ -230,6 +235,8 @@ export async function listLeadsForOrg(organizationId: string, options: ListLeads
       createdAt: row.created_at,
       contactName: row.contacts?.full_name ?? null,
       contactPhone: row.contacts?.phone_e164 ?? null,
+      contactId: row.contact_id ?? null,
+      contactNotes: row.contacts?.notes ?? null,
     })),
     totalCount: count ?? 0,
   };
@@ -245,6 +252,8 @@ export async function updateLeadStatus(
   if (!LEAD_STATUSES.includes(newStatus)) {
     throw new ValidationError(`Statut "${newStatus}" inconnu.`);
   }
+  // Lot O : le pipeline (statuts) fait partie du CRM complet (Starter+).
+  await assertGatedFeature(organizationId, "crm");
 
   const supabase = getSupabaseServiceClient();
   const { data: lead, error: readError } = await supabase
@@ -267,4 +276,28 @@ export async function updateLeadStatus(
     event_type: "STATUS_CHANGED",
     payload: { from: lead.status, to: newStatus, actorUserId: actorUserId ?? null },
   });
+}
+
+/**
+ * Lot O — notes libres sur un prospect (fonctionnalité Discover, donc
+ * SANS verrou de plan). 2 000 caractères max : c'est un aide-mémoire, pas
+ * un champ de stockage. Toujours scopé par organisation.
+ */
+export const MAX_CONTACT_NOTES_LENGTH = 2000;
+
+export async function updateContactNotes(organizationId: string, contactId: string, notes: string): Promise<void> {
+  const trimmed = notes.trim();
+  if (trimmed.length > MAX_CONTACT_NOTES_LENGTH) {
+    throw new ValidationError(`La note ne peut pas dépasser ${MAX_CONTACT_NOTES_LENGTH} caractères.`);
+  }
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("contacts")
+    .update({ notes: trimmed || null })
+    .eq("id", contactId)
+    .eq("organization_id", organizationId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`Impossible d'enregistrer la note: ${error.message}`);
+  if (!data) throw new NotFoundError("Contact introuvable.");
 }

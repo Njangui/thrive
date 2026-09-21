@@ -100,7 +100,7 @@ export default async function CategoriesPage({
                   <input
                     name="name"
                     defaultValue={c.name}
-                    className="w-full max-w-xs rounded-xl border border-navy-900/10 px-3 py-2 text-sm outline-none focus:border-violet-400"
+                    className="w-full max-w-xs rounded-xl border border-navy-900/10 px-3 py-2 text-sm outline-hidden focus:border-violet-400"
                   />
                   <SubmitButton
                     pendingLabel="..."
@@ -132,7 +132,7 @@ export default async function CategoriesPage({
             name="name"
             required
             placeholder="Ex : Vêtements enfants"
-            className="w-full max-w-xs rounded-xl border border-navy-900/10 px-3 py-2 text-sm outline-none focus:border-violet-400"
+            className="w-full max-w-xs rounded-xl border border-navy-900/10 px-3 py-2 text-sm outline-hidden focus:border-violet-400"
           />
           <SubmitButton pendingLabel="Ajout...">Ajouter</SubmitButton>
         </form>

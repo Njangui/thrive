@@ -32,6 +32,10 @@ export const KNOWN_ENTITLEMENT_KEYS = new Set([
   "analytics", "push_notifications", "finance", "prospect_notes", "crm",
   "semi_automatic_messaging", "automatic_messaging", "social_accounts",
   "facebook_messenger", "instagram_messages", "linkedin", "tiktok",
+  // Freemium v2 (migration 0067) : verrous et quotas ajoutés au lot O.
+  "telegram_channels", "tiktok_auto_comments", "orders", "appointments",
+  "site_analytics", "follow_ups", "custom_domain", "remove_branding",
+  "video_retention_days",
 ]);
 export type PlanKey = (typeof PLAN_KEYS)[number];
 
@@ -257,6 +261,7 @@ export async function countOrganizationRows(
   table: string,
   organizationId: string,
   statusIn?: string[],
+  columnFilter?: { column: string; values: string[] },
 ): Promise<number> {
   const supabase = getSupabaseServiceClient();
   let query = supabase
@@ -266,6 +271,12 @@ export async function countOrganizationRows(
 
   if (statusIn && statusIn.length > 0) {
     query = query.in("status", statusIn);
+  }
+  // Lot O : filtre additionnel (ex: chat_type = 'channel' pour les canaux
+  // Telegram, platform = 'facebook' pour les pages Facebook) — permet de
+  // compter plusieurs quotas distincts dans une même table.
+  if (columnFilter && columnFilter.values.length > 0) {
+    query = query.in(columnFilter.column, columnFilter.values);
   }
 
   const { count, error } = await query;

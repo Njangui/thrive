@@ -21,6 +21,22 @@ export interface TelegramUser {
 export interface TelegramChat {
   id: number;
   type: "private" | "group" | "supergroup" | "channel";
+  title?: string;
+  username?: string;
+}
+
+/** core.telegram.org/bots/api#chatmemberupdated — le bot a été ajouté / promu / retiré d'un chat. */
+export interface TelegramChatMemberUpdated {
+  chat: TelegramChat;
+  date: number;
+  old_chat_member: { status: string; user: { id: number } };
+  new_chat_member: { status: string; user: { id: number }; can_post_messages?: boolean };
+}
+
+export interface TelegramChatMember {
+  status: string;
+  user: { id: number };
+  can_post_messages?: boolean;
 }
 
 export interface TelegramPhotoSize { file_id: string; file_unique_id: string; width: number; height: number; file_size?: number; }
@@ -47,6 +63,8 @@ export interface TelegramMessage {
 export interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
+  /** Lot O : le bot rejoint / quitte un canal ou un groupe (enregistrement automatique des destinations). */
+  my_chat_member?: TelegramChatMemberUpdated;
 }
 
 /** Bouton URL inline (core.telegram.org/bots/api#inlinekeyboardbutton) — le seul type de bouton utilisé ici, un lien externe cliquable sous le message. */

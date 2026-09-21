@@ -175,7 +175,7 @@ export default async function CatalogPage({
                 id="tri"
                 name="tri"
                 defaultValue={sort}
-                className="h-10 rounded-brand border border-black/12 bg-white px-3 text-sm outline-none focus:border-brand"
+                className="h-10 rounded-brand border border-black/12 bg-white px-3 text-sm outline-hidden focus:border-brand"
               >
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>

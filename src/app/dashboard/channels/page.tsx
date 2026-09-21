@@ -4,8 +4,11 @@ import { requireCurrentOrganization, requireMembership, getCurrentUserEmail } fr
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { getZernioAccounts, getZernioConnectUrl, getZernioWhatsAppConnectUrl, getZernioWhatsAppAccounts, getZernioWhatsAppGroupsConnectUrl, getZernioWhatsAppGroupsAccount } from "@/application/services/zernio-channel-service";
-import { connectTelegramChannel, disconnectTelegramChannel, getTelegramChannelStatus } from "@/application/services/telegram-channel-service";
-import { createYouTubeConnectUrl, getYouTubeConnection } from "@/application/services/youtube-channel-service";
+import { connectTelegramChannel, getTelegramChannelStatus, disconnectTelegramBot, resyncTelegramBotWebhook } from "@/application/services/telegram-channel-service";
+import { createYouTubeConnectUrl, disconnectYouTubeAccount, getYouTubeConnection, listYouTubeAccounts } from "@/application/services/youtube-channel-service";
+import { listOrganizationSocialAccounts, syncSocialAccountsFromZernio } from "@/application/services/social-account-registry-service";
+import { addTelegramDestination, listTelegramDestinations, removeTelegramDestination } from "@/application/services/telegram-destination-service";
+import { MultiAccountSections, type Quota, type SocialPlatformSection } from "./multi-account-sections";
 import {
   requestDedicatedNumber,
   getOrganizationDedicatedNumberStatus,
@@ -13,19 +16,7 @@ import {
   initiateDedicatedNumberPayment,
 } from "@/application/services/phone-number-rental-service";
 import { AppError } from "@/lib/errors";
-import { SOCIAL_BRAND } from "@/app/_components/brand-icons";
 import { canUseFeature } from "@/application/services/entitlements-service";
-
-// Les vraies icônes/couleurs de marque (Instagram, Facebook, LinkedIn,
-// TikTok, X) vivent dans `SOCIAL_BRAND` (`brand-icons.tsx`, source unique
-// partagée avec les autres écrans qui affichent ces réseaux) — ce tableau
-// ne garde que ce qui est spécifique à cette page (description, mode).
-const SOCIAL_CHANNELS = [
-  { id: "instagram", label: "Instagram", description: "Publiez vos photos, Reels et contenus produits.", mode: "managed" },
-  { id: "facebook", label: "Facebook", description: "Connectez votre Page Facebook et gérez vos publications.", mode: "managed" },
-  { id: "linkedin", label: "LinkedIn", description: "Publiez pour votre entreprise ou profil professionnel.", mode: "managed" },
-  { id: "tiktok", label: "TikTok", description: "Diffusez vos vidéos et campagnes de contenu.", mode: "managed" },
-  ] as const;
 
 function flash(kind: "success" | "error", message: string): never {
   redirect(`/dashboard/channels?${kind}=${encodeURIComponent(message)}`);
@@ -47,18 +38,14 @@ async function connectSocialAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   const platform = String(formData.get("platform") ?? "");
+  const reconnectAccountId = String(formData.get("reconnectAccountId") ?? "") || undefined;
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
-  const platformEntitlement: Record<string, string> = { facebook: "facebook_pages", instagram: "instagram_accounts", linkedin: "linkedin_pages", tiktok: "tiktok_accounts" };
-  const entitlementKey = platformEntitlement[platform];
-  if (entitlementKey) {
-    const entitlement = await canUseFeature(organizationId, entitlementKey, 1);
-    if (!entitlement.allowed) flash("error", `Le canal ${platform} n'est pas inclus dans votre offre ou sa limite est atteinte.`);
-  }
+  // Lot O : plafond cumulatif vérifié dans getZernioConnectUrl (une reconnexion ne consomme pas de quota).
   const supabase = getSupabaseServiceClient();
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
   let url: string;
   try {
-    url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA", platform as never);
+    url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA", platform as never, reconnectAccountId ? { reconnectAccountId } : undefined);
   } catch (error) {
     flash("error", error instanceof AppError ? error.message : error instanceof Error ? error.message : "Impossible de démarrer la connexion.");
   }
@@ -158,13 +145,65 @@ async function connectTelegramAction(formData: FormData) {
 async function disconnectTelegramAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
+  const botId = String(formData.get("botId") ?? "");
   const membership = await requireMembership(organizationId, ["owner", "admin"]);
   try {
-    await disconnectTelegramChannel(organizationId, membership.userId);
+    await disconnectTelegramBot(organizationId, membership.userId, botId);
   } catch (error) {
     flash("error", error instanceof Error ? error.message : "Déconnexion Telegram impossible.");
   }
-  flash("success", "Telegram déconnecté.");
+  flash("success", "Bot Telegram déconnecté.");
+}
+
+async function resyncTelegramAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const botId = String(formData.get("botId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin"]);
+  try {
+    await resyncTelegramBotWebhook(organizationId, botId);
+  } catch (error) {
+    flash("error", error instanceof Error ? error.message : "Actualisation du bot impossible.");
+  }
+  flash("success", "Bot actualisé : les canaux et groupes où il est ajouté seront enregistrés automatiquement.");
+}
+
+async function addTelegramDestinationAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin"]);
+  let title: string | null = null;
+  try {
+    const result = await addTelegramDestination(organizationId, String(formData.get("botId") ?? ""), String(formData.get("chatRef") ?? ""));
+    title = result.title;
+  } catch (error) {
+    flash("error", error instanceof AppError ? error.message : error instanceof Error ? error.message : "Enregistrement impossible.");
+  }
+  flash("success", `Destination Telegram enregistrée${title ? ` : ${title}` : ""}.`);
+}
+
+async function removeTelegramDestinationAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin"]);
+  try {
+    await removeTelegramDestination(organizationId, String(formData.get("destinationId") ?? ""));
+  } catch (error) {
+    flash("error", error instanceof AppError ? error.message : "Suppression impossible.");
+  }
+  flash("success", "Destination Telegram retirée.");
+}
+
+async function disconnectYouTubeAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin"]);
+  try {
+    await disconnectYouTubeAccount(organizationId, String(formData.get("accountId") ?? ""));
+  } catch (error) {
+    flash("error", error instanceof AppError ? error.message : "Déconnexion YouTube impossible.");
+  }
+  flash("success", "Chaîne YouTube déconnectée.");
 }
 
 async function connectYouTubeAction(formData: FormData) {
@@ -182,21 +221,50 @@ async function connectYouTubeAction(formData: FormData) {
   redirect(url);
 }
 
+const SOCIAL_SECTIONS = [
+  { platform: "facebook", label: "Facebook", quotaKey: "facebook_pages" },
+  { platform: "instagram", label: "Instagram", quotaKey: "instagram_accounts" },
+  { platform: "linkedin", label: "LinkedIn", quotaKey: "linkedin_pages" },
+  { platform: "tiktok", label: "TikTok", quotaKey: "tiktok_accounts" },
+] as const;
+
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string }> }) {
   const { success, error } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
   const [accounts, whatsappAccounts, telegram, youtube, whatsappGroupsAccount, dedicatedNumber, dedicatedNumberPriceFcfa] = await Promise.all([
     getZernioAccounts(organizationId).catch(() => []),
     getZernioWhatsAppAccounts(organizationId).catch(() => []),
-    getTelegramChannelStatus(organizationId).catch(() => ({ connected: false, botUsername: null })),
+    getTelegramChannelStatus(organizationId).catch(() => ({ connected: false, botUsername: null, bots: [] })),
     getYouTubeConnection(organizationId).catch(() => ({ connected: false, metadata: {} as { channelId?: string; title?: string; username?: string }, credentialReference: null })),
     getZernioWhatsAppGroupsAccount(organizationId).catch(() => null),
     getOrganizationDedicatedNumberStatus(organizationId).catch(() => ({ pendingRequestId: null, assignedNumber: null })),
     getDedicatedNumberMonthlyPriceFcfa().catch(() => null),
   ]);
   const whatsappEntitlement = await canUseFeature(organizationId, "whatsapp", 1).catch(() => ({ allowed: false, limit: 0, used: whatsappAccounts.length, remaining: 0 }));
-  const byPlatform = new Map(accounts.filter((a) => a.platform !== "youtube" && a.platform !== "whatsapp").map((a) => [a.platform, a]));
-  const totalConnected = byPlatform.size + whatsappAccounts.length + (youtube.connected ? 1 : 0) + (telegram.connected ? 1 : 0);
+  // Lot O — multi-comptes : registre réaligné sur Zernio, chaînes YouTube, bots et destinations Telegram, jauges du plan.
+  const quotaOf = async (key: string): Promise<Quota> => {
+    const result = await canUseFeature(organizationId, key, 0).catch(() => ({ used: 0, limit: 0 }));
+    return { used: result.used, limit: result.limit };
+  };
+  const [socialAccounts, youtubeAccounts, telegramDestinations, botQuota, channelQuota, groupQuota, youtubeQuota, ...socialQuotas] = await Promise.all([
+    syncSocialAccountsFromZernio(organizationId).catch(() => listOrganizationSocialAccounts(organizationId).catch(() => [])),
+    listYouTubeAccounts(organizationId).catch(() => []),
+    listTelegramDestinations(organizationId).catch(() => []),
+    quotaOf("telegram_bots"),
+    quotaOf("telegram_channels"),
+    quotaOf("telegram_groups"),
+    quotaOf("youtube_accounts"),
+    ...SOCIAL_SECTIONS.map((section) => quotaOf(section.quotaKey)),
+  ]);
+  const socialSections: SocialPlatformSection[] = SOCIAL_SECTIONS.map((section, index) => ({
+    platform: section.platform,
+    label: section.label,
+    quota: socialQuotas[index]!,
+    accounts: socialAccounts.filter((account) => account.platform === section.platform).map((account) => ({ accountId: account.accountId, username: account.username })),
+  }));
+  const totalConnected = socialAccounts.length + whatsappAccounts.length + youtubeAccounts.length + telegram.bots.length;
+  void accounts;
+  void youtube;
 
   return (
     <div className="space-y-7">
@@ -214,7 +282,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
       <section className="adm-card border-violet-100 bg-violet-50/60">
         <p className="adm-eyebrow">Comment ça marche ?</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {[["01", "Choisissez", "Le canal à connecter."], ["02", "Autorisez", "Le service affiche son propre parcours sécurisé."], ["03", "Travaillez", "Ensuite depuis CRESYVA, sans configuration technique." ]].map(([n,t,d]) => <div key={n} className="rounded-2xl bg-white p-4 shadow-sm"><span className="text-xs font-extrabold text-violet-600">{n}</span><p className="mt-2 text-sm font-bold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}
+          {[["01", "Choisissez", "Le canal à connecter."], ["02", "Autorisez", "Le service affiche son propre parcours sécurisé."], ["03", "Travaillez", "Ensuite depuis CRESYVA, sans configuration technique." ]].map(([n,t,d]) => <div key={n} className="rounded-2xl bg-white p-4 shadow-xs"><span className="text-xs font-extrabold text-violet-600">{n}</span><p className="mt-2 text-sm font-bold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}
         </div>
       </section>
 
@@ -224,7 +292,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
           <div className="space-y-3 p-5 sm:p-6">{whatsappAccounts.length ? whatsappAccounts.map((account, index) => <div key={account.accountId} className="flex items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4"><div className="min-w-0"><p className="text-sm font-semibold">{account.phoneNumber || account.username || `Numéro WhatsApp ${index + 1}`}</p><p className="mt-1 text-xs text-slate-500">{account.isPrimary ? "Numéro principal" : `Numéro ${index + 1}`} · {account.status === "connected" ? "Connecté" : "Connexion à vérifier"}</p></div><span className={account.status === "connected" ? "adm-badge-success" : "adm-badge-neutral"}>{account.status === "connected" ? "Actif" : "À vérifier"}</span></div>) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Aucun numéro WhatsApp de messagerie n&apos;est encore connecté.</div>}</div>
           <div className="border-t border-navy-900/[0.06] p-5 sm:p-6"><form action={connectWhatsAppAction}><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" disabled={!whatsappEntitlement.allowed} className="adm-btn-primary w-full sm:w-auto">{whatsappAccounts.length ? "Ajouter un numéro WhatsApp" : "Connecter mon WhatsApp"}</SubmitButton></form><p className="mt-2 text-xs text-slate-500">{whatsappEntitlement.limit === -1 ? "Numéros selon les capacités de votre offre." : `${whatsappAccounts.length}/${whatsappEntitlement.limit} numéro${whatsappEntitlement.limit > 1 ? "s" : ""} utilisé${whatsappEntitlement.limit > 1 ? "s" : ""}.`}</p></div>
         </div>
-        <div className="adm-card bg-gradient-to-br from-violet-50 via-white to-indigo-50"><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">Une boîte pour vendre</h2><div className="mt-5 space-y-3">{[['●','WhatsApp','Demandes et suivi clients'],['◎','Instagram','Conversations sociales'],['◈','Facebook','Messenger et commentaires'],['✦','Assistant','Réponse automatique puis transfert humain']].map(([i,t,d])=><div key={t} className="flex items-center gap-3 rounded-2xl bg-white/80 p-3 shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-700">{i}</span><div><p className="text-sm font-semibold">{t}</p><p className="text-xs text-slate-500">{d}</p></div></div>)}</div><Link href="/dashboard/conversations" className="mt-5 inline-flex text-sm font-semibold text-violet-700 hover:underline">Ouvrir la boîte de réception →</Link></div>
+        <div className="adm-card bg-gradient-to-br from-violet-50 via-white to-indigo-50"><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">Une boîte pour vendre</h2><div className="mt-5 space-y-3">{[['●','WhatsApp','Demandes et suivi clients'],['◎','Instagram','Conversations sociales'],['◈','Facebook','Messenger et commentaires'],['✦','Assistant','Réponse automatique puis transfert humain']].map(([i,t,d])=><div key={t} className="flex items-center gap-3 rounded-2xl bg-white/80 p-3 shadow-xs"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-700">{i}</span><div><p className="text-sm font-semibold">{t}</p><p className="text-xs text-slate-500">{d}</p></div></div>)}</div><Link href="/dashboard/conversations" className="mt-5 inline-flex text-sm font-semibold text-violet-700 hover:underline">Ouvrir la boîte de réception →</Link></div>
       </section>
 
       <section className="adm-card overflow-hidden p-0">
@@ -267,21 +335,22 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
         )}
       </section>
 
-      <section className="adm-card">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="adm-eyebrow">Réseaux sociaux</p><h2 className="mt-1 adm-heading-2 text-lg">Votre présence sociale</h2><p className="mt-1 text-sm text-slate-500">Les comptes gérés ici apparaissent dans vos publications et analytics.</p></div><a href="/dashboard/analytics" className="text-sm font-semibold text-violet-700 hover:underline">Voir les analytics →</a></div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {SOCIAL_CHANNELS.map((channel) => { const account = byPlatform.get(channel.id); const brand = SOCIAL_BRAND[channel.id]; const Icon = brand.Icon; return <div key={channel.id} className="group flex min-h-[150px] flex-col rounded-2xl border border-navy-900/[0.07] bg-white p-4 transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-lg"><div className="flex items-start justify-between"><span className={`grid h-11 w-11 place-items-center rounded-2xl text-white ${brand.badgeClassName}`}><Icon className="h-5 w-5" /></span>{account ? <span className="adm-badge-success">Connecté</span> : <span className="adm-badge-neutral">Disponible</span>}</div><div className="mt-4"><p className="font-semibold">{channel.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{account?.username ? `@${account.username}` : channel.description}</p></div><form action={connectSocialAction} className="mt-auto pt-4"><input type="hidden" name="organizationId" value={organizationId}/><input type="hidden" name="platform" value={channel.id}/><SubmitButton pendingLabel="Connexion…" className="w-full rounded-xl border border-navy-900/10 bg-white px-3 py-2 text-xs font-semibold text-navy-900 transition hover:border-violet-300 hover:bg-violet-50">{account ? "Reconnecter" : "Connecter"}</SubmitButton></form></div>; })}
-
-          <div className="group flex min-h-[150px] flex-col rounded-2xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-white p-4 transition hover:-translate-y-0.5 hover:shadow-lg"><div className="flex items-start justify-between"><span className={`grid h-11 w-11 place-items-center rounded-2xl text-white ${SOCIAL_BRAND.youtube.badgeClassName}`}><SOCIAL_BRAND.youtube.Icon className="h-5 w-5" /></span>{youtube.connected ? <span className="adm-badge-success">Connecté</span> : <span className="adm-badge-neutral">Connexion directe</span>}</div><div className="mt-4"><p className="font-semibold">YouTube</p><p className="mt-1 text-xs leading-5 text-slate-500">{youtube.connected ? youtube.metadata.title ?? "Chaîne connectée" : "Connexion Google native, indépendante des autres canaux."}</p></div><form action={connectYouTubeAction} className="mt-auto pt-4"><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 hover:bg-red-50">{youtube.connected ? "Reconnecter YouTube" : "Connecter YouTube"}</SubmitButton></form></div>
-        </div>
-      </section>
-
-      <section className="adm-card overflow-hidden">
-        <div className="grid gap-6 lg:grid-cols-[1fr_.8fr]">
-          <div><p className="adm-eyebrow">Telegram</p><h2 className="mt-1 adm-heading-2 text-lg">Votre bot, directement.</h2><p className="mt-2 text-sm leading-6 text-slate-500">Telegram fonctionne ici sans intermédiaire : créez votre bot avec BotFather, copiez son jeton puis collez-le ci-dessous. CRESYVA configure automatiquement le webhook.</p><div className="mt-5 grid gap-3 sm:grid-cols-3">{[["01","Créer le bot","Ouvrez @BotFather puis /newbot."],["02","Copier le jeton","Copiez le token fourni par Telegram."],["03","Connecter","Collez-le ici et testez le bot."]].map(([n,t,d])=><div key={n} className="rounded-2xl bg-[#F8FAFC] p-4"><span className="text-xs font-bold text-violet-600">{n}</span><p className="mt-2 text-sm font-semibold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}</div></div>
-          <div className="rounded-2xl bg-navy-900 p-5 text-white"><p className="text-xs font-bold uppercase tracking-wider text-violet-300">Configuration</p>{telegram.connected ? <><p className="mt-2 text-sm text-white/70">Bot connecté : <strong className="text-white">@{telegram.botUsername}</strong></p><form action={disconnectTelegramAction} className="mt-5"><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Déconnexion…" className="w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/15">Déconnecter</SubmitButton></form></> : <form action={connectTelegramAction} className="mt-4 space-y-3"><input type="hidden" name="organizationId" value={organizationId}/><label className="block text-xs font-semibold text-white/70">Jeton du bot</label><input name="botToken" type="password" autoComplete="off" placeholder="123456:ABC…" required className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-white/30 outline-none"/><SubmitButton pendingLabel="Vérification…" className="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500">Connecter mon bot</SubmitButton><a className="block text-center text-xs text-white/45 hover:text-white" href="https://t.me/BotFather" target="_blank" rel="noreferrer">Ouvrir BotFather →</a></form>}</div>
-        </div>
-      </section>
+      <MultiAccountSections
+        organizationId={organizationId}
+        social={socialSections}
+        youtube={{ accounts: youtubeAccounts, quota: youtubeQuota }}
+        telegram={{ bots: telegram.bots, destinations: telegramDestinations, botQuota, channelQuota, groupQuota }}
+        actions={{
+          connectSocial: connectSocialAction,
+          connectYouTube: connectYouTubeAction,
+          disconnectYouTube: disconnectYouTubeAction,
+          connectTelegram: connectTelegramAction,
+          disconnectTelegram: disconnectTelegramAction,
+          resyncTelegram: resyncTelegramAction,
+          addTelegramDestination: addTelegramDestinationAction,
+          removeTelegramDestination: removeTelegramDestinationAction,
+        }}
+      />
     </div>
   );
 }

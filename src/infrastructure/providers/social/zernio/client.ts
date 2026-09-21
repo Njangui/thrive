@@ -72,7 +72,8 @@ export class ZernioSocialClient {
     fileName: string,
     contentType: string,
     sizeBytes?: number,
-  ): Promise<{ uploadUrl: string; publicUrl: string; key?: string; expiresIn?: number }> {
+    options: { permanent?: boolean } = {},
+  ): Promise<{ uploadUrl: string; publicUrl: string; key?: string; expiresIn?: number; permanent?: boolean }> {
     this.assertConfigured();
 
     const attempt = async (body: Record<string, string | number>) =>
@@ -82,11 +83,14 @@ export class ZernioSocialClient {
         body: JSON.stringify(body),
       });
 
-    let res = await attempt({
-      filename: fileName,
-      contentType,
-      ...(sizeBytes ? { size: sizeBytes } : {}),
-    });
+    // Lot O : `permanent: true` (stockage permanent au lieu du temporaire de 7 jours).
+    // PARAMÈTRE NON DOCUMENTÉ dans la référence publique de l'endpoint (nom de
+    // fichier, type MIME, taille) — d'où la tolérance : si Zernio le refuse
+    // (400/422), on retente sans, et c'est la clé RENVOYÉE (hors `temp/`) qui
+    // dit si le fichier est réellement permanent — voir detectVideoStorageClass.
+    const base = { filename: fileName, contentType, ...(sizeBytes ? { size: sizeBytes } : {}) };
+    let res = options.permanent ? await attempt({ ...base, permanent: 1 } as unknown as Record<string, string | number>) : await attempt(base);
+    if (options.permanent && (res.status === 400 || res.status === 422)) res = await attempt(base);
     if (res.status === 400) res = await attempt({ fileName, fileType: contentType });
 
     if (!res.ok) {
@@ -94,12 +98,12 @@ export class ZernioSocialClient {
       throw new Error(`Zernio createMediaPresign failed (${res.status}): ${body}`);
     }
 
-    const data = (await res.json()) as { uploadUrl?: string; publicUrl?: string; fileUrl?: string; key?: string; expiresIn?: number };
+    const data = (await res.json()) as { uploadUrl?: string; publicUrl?: string; fileUrl?: string; key?: string; expiresIn?: number; permanent?: boolean; isPermanent?: boolean };
     const publicUrl = data.publicUrl ?? data.fileUrl;
     if (!data.uploadUrl || !publicUrl) {
       throw new Error("Réponse Zernio inattendue : uploadUrl/publicUrl manquant.");
     }
-    return { uploadUrl: data.uploadUrl, publicUrl, key: data.key, expiresIn: data.expiresIn };
+    return { uploadUrl: data.uploadUrl, publicUrl, key: data.key, expiresIn: data.expiresIn, permanent: data.permanent ?? data.isPermanent };
   }
 
   /** CONFIRMÉ (doc Discord "Edit & Delete", endpoint générique Posts API) : supprime un brouillon ou annule un post programmé. */
@@ -192,6 +196,42 @@ export class ZernioSocialClient {
   }
 
   /** CONFIRMÉ (SDKs officiels zernio-php/zernio-dotnet) : POST .../{commentId}/hide avec { accountId }. */
+  /**
+   * Lot O — commentaire de PREMIER NIVEAU sur un post (sans `commentId`).
+   * Sert au premier commentaire TikTok (Zernio ne le gère pas via `firstComment`).
+   * Forme de la requête reprise de `replyToInboxComment` sans `commentId` ;
+   * la réponse peut porter l'id du commentaire créé (champ non confirmé :
+   * lecture défensive) — à valider avec un compte TikTok Business réel.
+   */
+  async postTopLevelInboxComment(postId: string, accountId: string, message: string): Promise<{ commentId?: string }> {
+    this.assertConfigured();
+    const res = await fetch(`${this.baseUrl}/inbox/comments/${encodeURIComponent(postId)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, message }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio postTopLevelInboxComment failed (${res.status}): ${body}`);
+    }
+    const json = (await res.json().catch(() => ({}))) as { commentId?: string; comment?: { id?: string; _id?: string }; id?: string };
+    return { commentId: json.commentId ?? json.comment?.id ?? json.comment?._id ?? json.id };
+  }
+
+  /** Épingle un commentaire de premier niveau (TikTok : pin/unpin supportés — docs.zernio.com/platforms/tiktok). */
+  async pinInboxComment(postId: string, accountId: string, commentId: string): Promise<void> {
+    this.assertConfigured();
+    const res = await fetch(`${this.baseUrl}/inbox/comments/${encodeURIComponent(postId)}/${encodeURIComponent(commentId)}/pin`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zernio pinInboxComment failed (${res.status}): ${body}`);
+    }
+  }
+
   async hideInboxComment(postId: string, accountId: string, commentId: string): Promise<void> {
     this.assertConfigured();
 

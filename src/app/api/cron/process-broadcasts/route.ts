@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyCronAuth } from "@/lib/cron-auth";
 import { processScheduledBroadcasts } from "@/application/services/whatsapp-group-service";
+import { processDueContactBroadcasts } from "@/application/services/contact-broadcast-service";
 
 /**
  * Lot F — traite les diffusions groupées WhatsApp programmées dont
@@ -28,7 +29,12 @@ async function handle(request: Request) {
 
   try {
     const result = await processScheduledBroadcasts();
-    return NextResponse.json({ ok: true, ...result });
+    // Lot O : diffusions vers des CONTACTS (même cron, échecs isolés des diffusions de groupes).
+    const contactBroadcasts = await processDueContactBroadcasts().catch((error) => {
+      console.error("/api/cron/process-broadcasts: diffusions contacts en échec:", error);
+      return { error: error instanceof Error ? error.message : "Erreur interne" };
+    });
+    return NextResponse.json({ ok: true, ...result, contactBroadcasts });
   } catch (error) {
     console.error("/api/cron/process-broadcasts: échec:", error);
     return NextResponse.json({ ok: false, error: "Erreur interne" }, { status: 500 });

@@ -1,6 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { ValidationError } from "@/lib/errors";
 import { getDomainProvider } from "@/infrastructure/providers/registry";
+import { assertGatedFeature } from "./feature-gate-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 
@@ -127,6 +128,8 @@ export async function requestDomain(
   domainName: string,
   actorUserId: string,
 ): Promise<{ requestId: string }> {
+  // Lot O : domaine personnalisé = Starter+ (garde serveur, pas seulement l'UI).
+  await assertGatedFeature(organizationId, "custom_domain");
   const normalized = domainName.trim().toLowerCase();
   if (!DOMAIN_NAME_PATTERN.test(normalized)) {
     throw new ValidationError('Nom de domaine invalide (ex: "boutique-fatou.cm").');

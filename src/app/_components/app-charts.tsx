@@ -89,18 +89,21 @@ export function AppDonutChart({
   const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
-  let offsetAcc = 0;
+  // Arcs calculés sans mutation pendant le rendu : décalage de chaque segment = somme des longueurs précédentes.
+  const arcs = segments.map((s) => {
+    const dash = (s.value / total) * circumference;
+    return { dash, gap: circumference - dash };
+  });
+  const offsets = arcs.map((_, i) => arcs.slice(0, i).reduce((sum, arc) => sum + arc.dash, 0));
 
   return (
     <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-8">
       <div className="relative h-[168px] w-[168px] shrink-0">
         <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
           <circle cx="50" cy="50" r={radius} fill="none" stroke="#F0EDFB" strokeWidth="14" />
-          {segments.map((s) => {
-            const fraction = s.value / total;
-            const dash = fraction * circumference;
-            const gap = circumference - dash;
-            const circle = (
+          {segments.map((s, i) => {
+            const { dash, gap } = arcs[i] ?? { dash: 0, gap: circumference };
+            return (
               <circle
                 key={s.label}
                 cx="50"
@@ -110,12 +113,10 @@ export function AppDonutChart({
                 stroke={s.color}
                 strokeWidth="14"
                 strokeDasharray={`${dash} ${gap}`}
-                strokeDashoffset={-offsetAcc}
+                strokeDashoffset={-(offsets[i] ?? 0)}
                 strokeLinecap="butt"
               />
             );
-            offsetAcc += dash;
-            return circle;
           })}
         </svg>
         {centerValue ? (

@@ -116,7 +116,7 @@ describe("canUseFeature", () => {
     // plans-repository.ts/countOrganizationRows — 3e argument optionnel et
     // rétrocompatible, ajouté par ce lot) — sinon déconnecter un groupe ne
     // libérerait jamais son quota.
-    expect(mockCountOrganizationRows).toHaveBeenCalledWith("whatsapp_groups", "org-1", ["connected"]);
+    expect(mockCountOrganizationRows).toHaveBeenCalledWith("whatsapp_groups", "org-1", ["connected"], undefined);
     expect(result).toEqual({ allowed: true, limit: 10, used: 7, remaining: 3 });
   });
 

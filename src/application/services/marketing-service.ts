@@ -3,7 +3,8 @@ import { getSocialPublishingProvider } from "@/infrastructure/providers/registry
 import type { SocialPostTarget } from "@/domain/ports/social-publishing-provider";
 import type { SocialPostStatusUpdatedEvent } from "@/domain/events/domain-events";
 import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
-import { canUseFeature } from "./entitlements-service";
+import { isFeatureEnabled } from "./entitlements-service";
+import { assertTargetsBelongToOrganization } from "./social-account-registry-service";
 import { trackEvent } from "./analytics-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { QuotaExceededError } from "@/lib/errors";
@@ -69,12 +70,17 @@ export async function createCampaignFromProducts(
     ids.add(target.accountId);
     accountsByPlatform.set(target.platform, ids);
   }
-  for (const [platform, accountIds] of accountsByPlatform) {
-    const entitlement = await canUseFeature(input.organizationId, entitlementByPlatform[platform]!, accountIds.size);
-    if (!entitlement.allowed) {
-      throw new QuotaExceededError(`La limite ${platform} de votre offre est atteinte.`);
+  // Lot O : les plafonds de comptes sont désormais CUMULATIFS et appliqués à la
+  // CONNEXION (registre `social_accounts` / `youtube_accounts`). À la
+  // publication, on vérifie seulement que le réseau est inclus dans l'offre et
+  // que chaque compte ciblé appartient bien à l'organisation.
+  for (const platform of accountsByPlatform.keys()) {
+    const { enabled } = await isFeatureEnabled(input.organizationId, entitlementByPlatform[platform]!);
+    if (!enabled) {
+      throw new QuotaExceededError(`Le canal ${platform} n'est pas inclus dans votre offre.`);
     }
   }
+  await assertTargetsBelongToOrganization(input.organizationId, input.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })));
 
   const supabase = getSupabaseServiceClient();
 

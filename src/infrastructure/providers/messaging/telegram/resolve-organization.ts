@@ -18,26 +18,22 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
  */
 export async function resolveOrganizationIdByTelegramWebhookToken(
   webhookPathToken: string,
-): Promise<{ organizationId: string; webhookSecret: string } | null> {
+): Promise<{ organizationId: string; webhookSecret: string; botId: string } | null> {
   const supabase = getSupabaseServiceClient();
 
+  // Lot O : un bot par ligne de `telegram_bots` (plusieurs bots par organisation).
   const { data, error } = await supabase
-    .from("provider_connections")
-    .select("organization_id, metadata")
-    .eq("provider_type", "messaging")
-    .eq("provider_name", "telegram")
+    .from("telegram_bots")
+    .select("id, organization_id, webhook_secret")
     .eq("status", "connected")
-    .eq("metadata->>webhookPathToken", webhookPathToken)
+    .eq("webhook_path_token", webhookPathToken)
     .maybeSingle();
 
   if (error) {
     console.error(`resolveOrganizationIdByTelegramWebhookToken(${webhookPathToken}) error:`, error.message);
     return null;
   }
-  if (!data) return null;
+  if (!data || !data.webhook_secret) return null;
 
-  const metadata = (data.metadata ?? {}) as { webhookSecret?: string };
-  if (!metadata.webhookSecret) return null;
-
-  return { organizationId: data.organization_id, webhookSecret: metadata.webhookSecret };
+  return { organizationId: data.organization_id as string, webhookSecret: data.webhook_secret as string, botId: data.id as string };
 }

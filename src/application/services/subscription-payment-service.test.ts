@@ -23,6 +23,9 @@ vi.mock("@/infrastructure/providers/registry", () => ({
     verifyPayment: mockVerifyPayment,
     cancelPayment: mockCancelPayment,
   })),
+  // Consommé par notifyPlatformAdminTelegram() (alertes opérateur) : sans cet export, chaque
+  // scénario d'échec loguait « No "getNotificationProvider" export is defined on the mock ».
+  getNotificationProvider: vi.fn(async () => ({ providerName: "test", send: vi.fn(async () => ({ delivered: true })) })),
 }));
 
 const mockFrom = vi.fn();

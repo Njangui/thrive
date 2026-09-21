@@ -44,6 +44,8 @@ export interface ZernioPostPlatformTarget {
 }
 
 export interface ZernioCreatePostPayload {
+  /** Lot O : premier commentaire (YouTube, LinkedIn, Facebook, Instagram — docs.zernio.com). */
+  firstComment?: string;
   content: string;
   mediaItems?: ZernioMediaItem[];
   platforms: ZernioPostPlatformTarget[];

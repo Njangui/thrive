@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { CresyvaBrand } from "@/app/_components/cresyva-brand";
 import { usePathname } from "next/navigation";
 import { ADMIN_NAV_GROUPS } from "./sidebar";
 import { IconGrid } from "./icons";

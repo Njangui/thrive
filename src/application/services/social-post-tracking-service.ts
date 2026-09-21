@@ -199,7 +199,7 @@ export async function trackExternalPost(event: ExternalPostTrackedEvent): Promis
  * est créée à la volée ici plutôt que de perdre le commentaire — même
  * mécanisme (`ensureTrackedPost`) que `trackExternalPost` ci-dessus.
  */
-export async function handleIncomingComment(event: CommentReceivedEvent): Promise<void> {
+export async function handleIncomingComment(event: CommentReceivedEvent): Promise<{ commentId: string } | null> {
   const supabase = getSupabaseServiceClient();
 
   const tracked = await ensureTrackedPost(
@@ -214,7 +214,7 @@ export async function handleIncomingComment(event: CommentReceivedEvent): Promis
       `handleIncomingComment: post introuvable/non-créable pour org ${event.organizationId}, ` +
         `provider_post_id ${event.payload.providerPostId} — commentaire ${event.payload.externalCommentId} perdu.`,
     );
-    return;
+    return null;
   }
 
   const { data: inserted, error: upsertError } = await supabase
@@ -227,6 +227,7 @@ export async function handleIncomingComment(event: CommentReceivedEvent): Promis
         provider_account_id: event.payload.providerAccountId,
         external_comment_id: event.payload.externalCommentId,
         author_name: event.payload.authorName,
+        author_external_id: event.payload.authorExternalId ?? null,
         content: event.payload.content,
       },
       { onConflict: "social_post_id,provider_account_id,external_comment_id", ignoreDuplicates: true },
@@ -236,13 +237,13 @@ export async function handleIncomingComment(event: CommentReceivedEvent): Promis
 
   if (upsertError) {
     console.error(`handleIncomingComment(${event.organizationId}):`, upsertError.message);
-    return;
+    return null;
   }
 
   // `ignoreDuplicates: true` ne renvoie aucune ligne pour un commentaire
   // déjà connu (re-livraison webhook, ou déjà récupéré par un sync
   // manuel entre-temps) — jamais de notification en double dans ce cas.
-  if (!inserted) return;
+  if (!inserted) return null;
 
   await notifyOrgAdmins({
     organizationId: event.organizationId,
@@ -255,6 +256,8 @@ export async function handleIncomingComment(event: CommentReceivedEvent): Promis
   }).catch((err) => {
     console.error(`handleIncomingComment(${event.organizationId}): échec notification:`, err);
   });
+
+  return { commentId: inserted.id as string };
 }
 
 function truncate(text: string, max: number): string {

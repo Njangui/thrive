@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireCurrentOrganization, requireMembership } from "@/application/services/auth-service";
-import { listLeadsForOrg, updateLeadStatus, LEAD_STATUSES, type LeadStatus } from "@/application/services/lead-service";
+import { listLeadsForOrg, updateLeadStatus, updateContactNotes, MAX_CONTACT_NOTES_LENGTH, LEAD_STATUSES, type LeadStatus } from "@/application/services/lead-service";
+import { isGatedFeatureEnabled } from "@/application/services/feature-gate-service";
 import { AppError } from "@/lib/errors";
 import { SubmitButton } from "@/app/_components/submit-button";
 
@@ -50,6 +51,24 @@ async function updateLeadStatusAction(formData: FormData) {
   }
 }
 
+async function saveContactNotesAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+  const contactId = String(formData.get("contactId") ?? "");
+  const notes = String(formData.get("notes") ?? "");
+  const currentQuery = String(formData.get("currentQuery") ?? "");
+  const suffix = currentQuery ? `&${currentQuery}` : "";
+  let errorMessage: string | null = null;
+  try {
+    await updateContactNotes(membership.organizationId, contactId, notes);
+  } catch (error) {
+    errorMessage = error instanceof AppError ? error.message : "Impossible d'enregistrer la note.";
+  }
+  if (errorMessage) redirect(`/dashboard/leads?error=${encodeURIComponent(errorMessage)}${suffix}`);
+  redirect(`/dashboard/leads?success=${encodeURIComponent("Note enregistrée.")}${suffix}`);
+}
+
 export default async function LeadsPage({
   searchParams,
 }: {
@@ -62,26 +81,46 @@ export default async function LeadsPage({
   const status = statusParam && isLeadStatus(statusParam) ? statusParam : undefined;
   const currentQuery = new URLSearchParams({ page: String(page), ...(status ? { status } : {}) }).toString();
 
-  const { leads, totalCount } = await listLeadsForOrg(organizationId, { status, page, pageSize: PAGE_SIZE });
+  // Lot O : Discover garde la liste des prospects + les notes ; le pipeline
+  // (statuts, score, relances automatiques) est le CRM complet, Starter+.
+  const crmEnabled = await isGatedFeatureEnabled(organizationId, "crm");
+  const { leads, totalCount } = await listLeadsForOrg(organizationId, { status: crmEnabled ? status : undefined, page, pageSize: PAGE_SIZE });
   const supabase = (await import("@/infrastructure/supabase/server-client")).getSupabaseServiceClient();
-  const { count: pendingFollowUps } = await supabase.from("automated_followups").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "pending");
+  const { count: pendingFollowUps } = crmEnabled
+    ? await supabase.from("automated_followups").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "pending")
+    : { count: 0 };
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-jakarta text-2xl font-bold tracking-tight">Clients</h1>
-        <p className="mt-1 text-sm text-slate-500">Prospects et clients de votre pipeline commercial.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {crmEnabled ? "Prospects et clients de votre pipeline commercial." : "Vos prospects et vos notes. Le pipeline complet est inclus à partir de l'offre Starter."}
+        </p>
       </div>
 
       {success && <p className="adm-alert-success">{success}</p>}
       {error && <p className="adm-alert-danger">{error}</p>}
 
+      {!crmEnabled && (
+        <section className="adm-card flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-violet-50 via-white to-white">
+          <div>
+            <p className="adm-eyebrow">CRM complet — Starter et Pro</p>
+            <p className="mt-1 text-sm text-slate-600">Pipeline commercial, score d&apos;engagement et relances automatiques à 24 h / 48 h.</p>
+          </div>
+          <Link href="/dashboard/subscription" className="adm-btn-primary">Voir les offres</Link>
+        </section>
+      )}
+
+      {crmEnabled && (
       <section className="grid gap-4 lg:grid-cols-[1fr_auto]">
         <div className="adm-card bg-gradient-to-r from-violet-50 via-white to-white"><p className="adm-eyebrow">Relance intelligente</p><h2 className="mt-1 adm-heading-2 text-lg">24 h pour les plus engagés · 48 h pour les autres</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Le système s&apos;appuie d&apos;abord sur les signaux réellement observés et des messages sûrs. L&apos;IA intervient seulement en dernière position pour personnaliser une relance, sans décider qui doit être relancé.</p><div className="mt-4 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-violet-100 px-3 py-1.5 font-semibold text-violet-700">Engagement élevé · 24 h</span><span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">Engagement standard · 48 h</span><span className="rounded-full bg-emerald-100 px-3 py-1.5 font-semibold text-emerald-700">{pendingFollowUps ?? 0} relance(s) en attente</span></div></div>
         <div className="adm-kpi min-w-[170px]"><p className="adm-label">Automatisées</p><p className="mt-1 adm-value">Actif</p><p className="mt-1 text-xs adm-muted">Traitement périodique sécurisé</p></div>
       </section>
+      )}
 
+      {crmEnabled && (
       <div className="flex flex-wrap gap-2 text-xs">
         <Link
           href="/dashboard/leads"
@@ -99,6 +138,7 @@ export default async function LeadsPage({
           </Link>
         ))}
       </div>
+      )}
 
       <div className="overflow-x-auto rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)]">
         {leads.length === 0 ? (
@@ -108,10 +148,11 @@ export default async function LeadsPage({
             <thead className="border-b border-navy-900/10 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Contact</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2" title="Calculé automatiquement à partir du nombre de messages échangés — aucune IA n'est utilisée pour ce score.">Score d&apos;engagement</th>
+                {crmEnabled && <th className="px-4 py-2">Statut</th>}
+                {crmEnabled && <th className="px-4 py-2" title="Calculé automatiquement à partir du nombre de messages échangés — aucune IA n'est utilisée pour ce score.">Score d&apos;engagement</th>}
                 <th className="px-4 py-2">Source</th>
-                <th className="px-4 py-2" />
+                <th className="px-4 py-2">Notes</th>
+                {crmEnabled && <th className="px-4 py-2" />}
               </tr>
             </thead>
             <tbody>
@@ -121,15 +162,42 @@ export default async function LeadsPage({
                     <p>{lead.contactName ?? "Sans nom"}</p>
                     <p className="text-xs text-slate-500">{lead.contactPhone ?? "—"}</p>
                   </td>
-                  <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[lead.status]}`}>
-                      {STATUS_LABELS[lead.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2" title={lead.scoreReason ?? undefined}>
-                    {lead.score ?? "—"}
-                  </td>
+                  {crmEnabled && (
+                    <td className="px-4 py-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[lead.status]}`}>
+                        {STATUS_LABELS[lead.status]}
+                      </span>
+                    </td>
+                  )}
+                  {crmEnabled && (
+                    <td className="px-4 py-2" title={lead.scoreReason ?? undefined}>
+                      {lead.score ?? "—"}
+                    </td>
+                  )}
                   <td className="px-4 py-2 text-slate-500">{lead.source ?? "—"}</td>
+                  <td className="px-4 py-2">
+                    {lead.contactId ? (
+                      <form action={saveContactNotesAction} className="flex min-w-[220px] items-start gap-2">
+                        <input type="hidden" name="organizationId" value={organizationId} />
+                        <input type="hidden" name="contactId" value={lead.contactId} />
+                        <input type="hidden" name="currentQuery" value={currentQuery} />
+                        <textarea
+                          name="notes"
+                          defaultValue={lead.contactNotes ?? ""}
+                          maxLength={MAX_CONTACT_NOTES_LENGTH}
+                          rows={2}
+                          placeholder="Ajouter une note…"
+                          className="w-full rounded-xl border border-navy-900/10 px-2 py-1 text-xs"
+                        />
+                        <SubmitButton pendingLabel="..." className="text-xs font-medium text-violet-600 hover:underline disabled:opacity-60">
+                          Enregistrer
+                        </SubmitButton>
+                      </form>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
+                  {crmEnabled && (
                   <td className="px-4 py-2 text-right">
                     <form action={updateLeadStatusAction} className="flex items-center justify-end gap-2">
                       <input type="hidden" name="organizationId" value={organizationId} />
@@ -147,6 +215,7 @@ export default async function LeadsPage({
                       </SubmitButton>
                     </form>
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>

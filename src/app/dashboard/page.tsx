@@ -60,7 +60,6 @@ export default async function DashboardHomePage() {
   ]);
 
   const industry = getIndustryUi(organization.data?.industry);
-  const hasInventory = enabledModules.includes("inventory");
 
   const donutPalette = ["#00D1A0", "#34D4B5", "#A7F3E0", "#F0EDFB", "#94A3B8"];
   const donutSegments = charts.salesByCategory.map((c, i) => ({
@@ -130,7 +129,7 @@ export default async function DashboardHomePage() {
           <span className="text-[10px] font-bold uppercase tracking-[.16em] text-violet-600">Assistant</span>
           <h2 className="mt-2 font-jakarta text-lg font-extrabold">Besoin d’un coup de main ?</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">Retrouvez vos conversations, votre FAQ et les outils d’assistance depuis un seul endroit.</p>
-          <Link href="/dashboard/ai" className="mt-4 inline-flex rounded-xl bg-white px-3.5 py-2.5 text-xs font-semibold text-violet-700 shadow-sm ring-1 ring-violet-200 transition hover:bg-violet-100">Ouvrir l’assistant →</Link>
+          <Link href="/dashboard/ai" className="mt-4 inline-flex rounded-xl bg-white px-3.5 py-2.5 text-xs font-semibold text-violet-700 shadow-xs ring-1 ring-violet-200 transition hover:bg-violet-100">Ouvrir l’assistant →</Link>
         </div>
       </div>
 

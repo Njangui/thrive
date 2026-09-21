@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./entitlements-service", () => ({
   canUseFeature: vi.fn(),
+  isFeatureEnabled: vi.fn(),
+}));
+
+// Lot O : la vérification d'appartenance des comptes ciblés passe par le
+// registre `social_accounts` / `youtube_accounts` (mocké ici).
+vi.mock("./social-account-registry-service", () => ({
+  assertTargetsBelongToOrganization: vi.fn(),
 }));
 
 // Lot M — table-based builder (même pattern que whatsapp-group-service.test.ts)
@@ -56,12 +63,15 @@ import {
   handlePostStatusWebhook,
   pauseScheduledPostsForProduct,
 } from "./marketing-service";
-import { canUseFeature } from "./entitlements-service";
+import { isFeatureEnabled } from "./entitlements-service";
+import { assertTargetsBelongToOrganization } from "./social-account-registry-service";
+import { ValidationError } from "@/lib/errors";
 import { notifyOrgAdmins } from "./notification-service";
 import { trackEvent } from "./analytics-service";
 import type { SocialPostStatusUpdatedEvent } from "@/domain/events/domain-events";
 
-const mockCanUseFeature = vi.mocked(canUseFeature);
+const mockIsFeatureEnabled = vi.mocked(isFeatureEnabled);
+const mockAssertTargetsBelong = vi.mocked(assertTargetsBelongToOrganization);
 const mockNotifyOrgAdmins = vi.mocked(notifyOrgAdmins);
 const mockTrackEvent = vi.mocked(trackEvent);
 
@@ -101,74 +111,65 @@ describe("addHoursToNaiveIso", () => {
   });
 });
 
-describe("createCampaignFromProducts — enforcement par plateforme (grille commerciale Facebook/Instagram/LinkedIn/TikTok/YouTube)", () => {
+describe("createCampaignFromProducts — enforcement freemium v2 (plafonds cumulés à la connexion, appartenance à la publication)", () => {
+  const baseInput = {
+    organizationId: "org-1",
+    name: "Promo rentrée",
+    productIds: ["p1"],
+    firstSlotAt: "2026-09-01T18:00:00",
+    intervalHours: 24,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSocialPublishingProvider.mockResolvedValue({});
+    mockGetSocialPublishingProvider.mockResolvedValue({ listAccounts: vi.fn().mockResolvedValue([]) });
   });
 
-  // Le vrai garde-fou contre un nombre de comptes connectés dépassant le
-  // quota est appliqué à la CONNEXION du compte (voir
-  // dashboard/channels/page.tsx::connectSocialAction, canUseFeature avant
-  // toute connexion) — un plan ne peut donc jamais avoir plus de comptes
-  // connectés que sa limite. Ici, createCampaignFromProducts revérifie
-  // par plateforme, à partir des comptes CIBLÉS par cette campagne
-  // (jamais un plafond global : Discover doit pouvoir utiliser son compte
-  // YouTube inclus même à la limite Facebook).
-  it("refuse AVANT tout accès DB si une plateforme ciblée dépasse son quota (comptes distincts ciblés par CETTE campagne, pour cette plateforme)", async () => {
-    mockCanUseFeature.mockResolvedValue({ allowed: false, limit: 1, used: 1, remaining: 0 });
+  it("refuse AVANT tout accès DB si le réseau ciblé n'est pas inclus dans l'offre", async () => {
+    mockIsFeatureEnabled.mockResolvedValue({ enabled: false, limit: 0 });
 
     await expect(
+      createCampaignFromProducts({ ...baseInput, targets: [{ platform: "tiktok", accountId: "acc-1" }] }),
+    ).rejects.toThrow(/n'est pas inclus dans votre offre/);
+
+    expect(mockIsFeatureEnabled).toHaveBeenCalledWith("org-1", "tiktok_accounts");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("refuse AVANT tout accès DB un compte qui n'appartient pas à l'organisation (clé Zernio partagée par la plateforme)", async () => {
+    mockIsFeatureEnabled.mockResolvedValue({ enabled: true, limit: 3 });
+    mockAssertTargetsBelong.mockRejectedValue(new ValidationError("Un compte ciblé n'appartient pas à votre organisation."));
+
+    await expect(
+      createCampaignFromProducts({ ...baseInput, targets: [{ platform: "facebook", accountId: "acc-autre-tenant" }] }),
+    ).rejects.toThrow(/n'appartient pas/);
+
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("autorisé : réseau inclus + comptes de l'organisation — la vérification reçoit exactement les cibles demandées", async () => {
+    mockIsFeatureEnabled.mockResolvedValue({ enabled: true, limit: 3 });
+    mockAssertTargetsBelong.mockResolvedValue(undefined);
+
+    // Pas de configuration DB au-delà des gardes : la fonction échoue plus
+    // loin (campagne non créée, mock par défaut) — seuls les points
+    // d'application des droits nous intéressent ici.
+    await expect(
       createCampaignFromProducts({
-        organizationId: "org-1",
-        name: "Promo rentrée",
-        productIds: ["p1"],
+        ...baseInput,
         targets: [
           { platform: "facebook", accountId: "acc-1" },
           { platform: "facebook", accountId: "acc-2" },
         ],
-        firstSlotAt: "2026-09-01T18:00:00",
-        intervalHours: 24,
-      }),
-    ).rejects.toThrow(/facebook/);
-
-    // 2 comptes Facebook DISTINCTS ciblés par cette campagne, jamais un
-    // total toutes plateformes confondues (voir entitlementByPlatform).
-    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "facebook_pages", 2);
-    // Aucun accès DB avant la vérification de droits (enforcement serveur réel).
-    expect(mockFrom).not.toHaveBeenCalled();
-  });
-
-  it("autorisé : sous la limite de la plateforme ciblée, la vérification passe (échec plus loin sur la création DB, hors périmètre de ce test)", async () => {
-    mockCanUseFeature.mockResolvedValue({ allowed: true, limit: 10, used: 0, remaining: 10 });
-
-    await expect(
-      createCampaignFromProducts({
-        organizationId: "org-1",
-        name: "Promo rentrée",
-        productIds: ["p1"],
-        targets: [{ platform: "facebook", accountId: "acc-1" }],
-        firstSlotAt: "2026-09-01T18:00:00",
-        intervalHours: 24,
       }),
     ).rejects.toThrow();
 
-    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "facebook_pages", 1);
-  });
-
-  it("une plateforme hors grille commerciale est refusée explicitement, jamais silencieusement ignorée", async () => {
-    await expect(
-      createCampaignFromProducts({
-        organizationId: "org-1",
-        name: "Promo rentrée",
-        productIds: ["p1"],
-        targets: [{ platform: "snapchat", accountId: "acc-1" }],
-        firstSlotAt: "2026-09-01T18:00:00",
-        intervalHours: 24,
-      }),
-    ).rejects.toThrow(/snapchat/);
-
-    expect(mockCanUseFeature).not.toHaveBeenCalled();
+    // Un seul contrôle « réseau inclus » par plateforme, quel que soit le nombre de comptes.
+    expect(mockIsFeatureEnabled).toHaveBeenCalledTimes(1);
+    expect(mockAssertTargetsBelong).toHaveBeenCalledWith("org-1", [
+      { platform: "facebook", accountId: "acc-1" },
+      { platform: "facebook", accountId: "acc-2" },
+    ]);
   });
 });
 

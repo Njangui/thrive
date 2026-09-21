@@ -1,5 +1,6 @@
 import { TELEGRAM_UPLOAD_MAX_BYTES } from "@/lib/remote-media";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { isFeatureEnabled } from "./entitlements-service";
 import { ZernioSocialClient } from "@/infrastructure/providers/social/zernio/client";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 
@@ -63,6 +64,9 @@ export interface CatalogVideo {
   sizeBytes: number | null;
   uploadedAt: string;
   expiresAt: string;
+  /** Lot O : `permanent` si Zernio a confirmé un stockage permanent ; `temporary` (7 jours) sinon. */
+  storageClass: VideoStorageClass;
+  retentionDays: number | null;
   expired: boolean;
 }
 
@@ -72,6 +76,32 @@ export interface CatalogVideo {
 
 export function computeVideoExpiry(uploadedAt: Date): Date {
   return new Date(uploadedAt.getTime() + VIDEO_RETENTION_MS);
+}
+
+export type VideoStorageClass = "temporary" | "permanent";
+
+/**
+ * Lot O — stockage RÉELLEMENT obtenu chez Zernio, déduit de la réponse (jamais
+ * d'une valeur envoyée par le navigateur). Le stockage temporaire vit sous
+ * `temp/` (`media.zernio.com/temp/…`, doc Zernio « Media Uploads ») ; un fichier
+ * hors de ce préfixe, ou explicitement marqué permanent, est permanent.
+ */
+export function detectVideoStorageClass(publicUrl: string, storageKey?: string | null, permanentFlag?: boolean): VideoStorageClass {
+  if (permanentFlag === true) return "permanent";
+  if (permanentFlag === false) return "temporary";
+  const isTemp = /(^|\/)temp\//.test(storageKey ?? "") || /\/temp\//.test(publicUrl);
+  return isTemp ? "temporary" : "permanent";
+}
+
+/** Jours de conservation effectifs : plan (`video_retention_days`) si permanent, sinon 7 jours (stockage temporaire). */
+export function effectiveRetentionDays(storageClass: VideoStorageClass, planDays: number): number {
+  if (storageClass === "temporary") return VIDEO_RETENTION_DAYS;
+  if (planDays === -1) return 365;
+  return planDays > 0 ? planDays : VIDEO_RETENTION_DAYS;
+}
+
+export function computeCatalogVideoExpiry(uploadedAt: Date, retentionDays: number): Date {
+  return new Date(uploadedAt.getTime() + retentionDays * 24 * 60 * 60 * 1000);
 }
 
 export function isVideoExpired(expiresAt: string | Date, now: Date = new Date()): boolean {
@@ -113,7 +143,7 @@ function formatDeadline(date: Date): string {
  * diffusion immédiate (une vidéo déjà expirée ne peut pas non plus partir).
  */
 export function assertVideoAvailableForPublication(
-  video: { title: string | null; expiresAt: Date },
+  video: { title: string | null; expiresAt: Date; retentionDays?: number },
   publishAt: Date,
   now: Date = new Date(),
 ): void {
@@ -121,12 +151,12 @@ export function assertVideoAvailableForPublication(
 
   if (video.expiresAt.getTime() <= now.getTime()) {
     throw new ValidationError(
-      `La vidéo ${label} a expiré : Zernio ne conserve les vidéos que ${VIDEO_RETENTION_DAYS} jours. Téléversez-la à nouveau.`,
+      `La vidéo ${label} a expiré : cette vidéo n'est conservée que ${video.retentionDays ?? VIDEO_RETENTION_DAYS} jours. Téléversez-la à nouveau.`,
     );
   }
   if (publishAt.getTime() > video.expiresAt.getTime() - PUBLICATION_SAFETY_MARGIN_MS) {
     throw new ValidationError(
-      `La vidéo ${label} n'est conservée par Zernio que jusqu'au ${formatDeadline(video.expiresAt)} (${VIDEO_RETENTION_DAYS} jours après son envoi). ` +
+      `La vidéo ${label} n'est conservée par Zernio que jusqu'au ${formatDeadline(video.expiresAt)} (${video.retentionDays ?? VIDEO_RETENTION_DAYS} jours après son envoi). ` +
         "Programmez la publication avant cette date, ou téléversez à nouveau la vidéo plus près de la publication.",
     );
   }
@@ -146,9 +176,11 @@ interface CatalogVideoRow {
   size_bytes: number | null;
   uploaded_at: string;
   expires_at: string;
+  storage_class?: VideoStorageClass | null;
+  retention_days?: number | null;
 }
 
-const VIDEO_COLUMNS = "id, product_id, service_id, title, url, content_type, size_bytes, uploaded_at, expires_at";
+const VIDEO_COLUMNS = "id, product_id, service_id, title, url, content_type, size_bytes, uploaded_at, expires_at, storage_class, retention_days";
 
 function mapVideo(row: CatalogVideoRow, now: Date = new Date()): CatalogVideo {
   return {
@@ -161,6 +193,8 @@ function mapVideo(row: CatalogVideoRow, now: Date = new Date()): CatalogVideo {
     sizeBytes: row.size_bytes,
     uploadedAt: row.uploaded_at,
     expiresAt: row.expires_at,
+    storageClass: row.storage_class ?? "temporary",
+    retentionDays: row.retention_days ?? null,
     expired: isVideoExpired(row.expires_at, now),
   };
 }
@@ -170,6 +204,8 @@ export interface VideoUploadTicket {
   publicUrl: string;
   key: string | null;
   contentType: string;
+  /** Stockage annoncé par Zernio pour CE fichier (informatif — recalculé côté serveur à l'enregistrement). */
+  storageClass: VideoStorageClass;
 }
 
 /** Étape 1 : obtient l'URL présignée. Le navigateur envoie ensuite le fichier DIRECTEMENT à Zernio. */
@@ -180,11 +216,11 @@ export async function requestVideoUploadTicket(
 ): Promise<VideoUploadTicket> {
   validateVideoFile(contentType, sizeBytes);
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100) || "video.mp4";
-  const presign = await new ZernioSocialClient().createMediaPresign(safeName, contentType, sizeBytes);
+  const presign = await new ZernioSocialClient().createMediaPresign(safeName, contentType, sizeBytes, { permanent: true });
   if (!isZernioMediaUrl(presign.publicUrl)) {
     throw new Error("Zernio a renvoyé une URL publique inattendue.");
   }
-  return { uploadUrl: presign.uploadUrl, publicUrl: presign.publicUrl, key: presign.key ?? null, contentType };
+  return { uploadUrl: presign.uploadUrl, publicUrl: presign.publicUrl, key: presign.key ?? null, contentType, storageClass: detectVideoStorageClass(presign.publicUrl, presign.key, presign.permanent) };
 }
 
 export interface RegisterCatalogVideoInput {
@@ -217,7 +253,7 @@ export async function telegramVideoLimitErrorForUrl(organizationId: string, url:
   return telegramVideoLimitMessage(data?.size_bytes as number | null | undefined);
 }
 
-/** Étape 2 : enregistre la vidéo une fois le `PUT` terminé, avec son échéance de 7 jours. */
+/** Étape 2 : enregistre la vidéo une fois le `PUT` terminé, avec son échéance (conservation de l'offre si stockage permanent, sinon 7 jours). */
 export async function registerCatalogVideo(organizationId: string, input: RegisterCatalogVideoInput): Promise<CatalogVideo> {
   // Seules les URLs Zernio sont acceptées : ce champ alimente un lecteur
   // <video> sur la vitrine publique — jamais une URL arbitraire.
@@ -236,6 +272,12 @@ export async function registerCatalogVideo(organizationId: string, input: Regist
     if (!data) throw new NotFoundError("Service introuvable");
   }
 
+  // Lot O : conservation selon l'offre (7 / 30 / 90 jours) UNIQUEMENT si Zernio a
+  // réellement confirmé un stockage permanent (jamais sur la foi du navigateur).
+  const storageClass = detectVideoStorageClass(input.publicUrl, input.storageKey);
+  const { limit: planDays } = await isFeatureEnabled(organizationId, "video_retention_days");
+  const retentionDays = effectiveRetentionDays(storageClass, planDays);
+
   const uploadedAt = new Date();
   const { data, error } = await supabase
     .from("catalog_videos")
@@ -249,7 +291,9 @@ export async function registerCatalogVideo(organizationId: string, input: Regist
       content_type: input.contentType,
       size_bytes: input.sizeBytes ?? null,
       uploaded_at: uploadedAt.toISOString(),
-      expires_at: computeVideoExpiry(uploadedAt).toISOString(),
+      expires_at: computeCatalogVideoExpiry(uploadedAt, retentionDays).toISOString(),
+      storage_class: storageClass,
+      retention_days: storageClass === "permanent" ? retentionDays : null,
     })
     .select(VIDEO_COLUMNS)
     .single();
@@ -348,20 +392,20 @@ export async function assertPublicationMediaAvailable(
 
   const { data, error } = await getSupabaseServiceClient()
     .from("catalog_videos")
-    .select("title, url, expires_at")
+    .select("title, url, expires_at, retention_days")
     .eq("organization_id", organizationId)
     .in("url", zernioUrls);
   if (error) throw new Error(`Erreur lecture vidéos: ${error.message}`);
 
-  const known = new Map<string, { title: string | null; expires_at: string }>();
-  for (const row of data ?? []) known.set(row.url as string, { title: row.title as string | null, expires_at: row.expires_at as string });
+  const known = new Map<string, { title: string | null; expires_at: string; retention_days: number | null }>();
+  for (const row of data ?? []) known.set(row.url as string, { title: row.title as string | null, expires_at: row.expires_at as string, retention_days: (row.retention_days as number | null) ?? null });
   const now = new Date();
   const at = publishAt ?? now;
 
   for (const url of zernioUrls) {
     const video = known.get(url);
     if (video) {
-      assertVideoAvailableForPublication({ title: video.title, expiresAt: new Date(video.expires_at) }, at, now);
+      assertVideoAvailableForPublication({ title: video.title, expiresAt: new Date(video.expires_at), retentionDays: video.retention_days ?? undefined }, at, now);
     } else if (at.getTime() > now.getTime() + VIDEO_RETENTION_MS) {
       throw new ValidationError(
         `Ce média est hébergé chez Zernio, qui ne le conserve que ${VIDEO_RETENTION_DAYS} jours : impossible de programmer une publication plus de ${VIDEO_RETENTION_DAYS} jours à l'avance.`,

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#121212"/><stop offset=".6" stop-color="#2b2823"/><stop offset="1" stop-color="#8b6446"/></linearGradient>
+ <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d6a36c"/><stop offset="1" stop-color="#72523c"/></linearGradient>
+</defs>
+<rect width="1600" height="1000" fill="url(#bg)"/>
+<rect x="950" y="0" width="650" height="1000" fill="#171714" opacity=".42"/>
+<g opacity=".18" fill="#e7c9a8"><circle cx="1280" cy="260" r="230"/><circle cx="1450" cy="750" r="300"/></g>
+<path d="M840 100 L1100 40 1330 125 1450 1000 760 1000Z" fill="url(#coat)" opacity=".92"/>
+<ellipse cx="1120" cy="210" rx="130" ry="145" fill="#c18b64"/>
+<path d="M980 180 Q1120 45 1260 185 L1235 235 Q1110 175 995 235Z" fill="#171714"/>
+<path d="M850 430 Q1120 330 1390 450 L1360 920 820 920Z" fill="#20201d" opacity=".72"/>
+<rect x="90" y="130" width="520" height="690" rx="2" fill="#efe8dc" opacity=".07" stroke="#d9b68f" stroke-opacity=".35"/>
+<path d="M155 720 L155 300 280 205 405 300 405 720Z" fill="#171714" opacity=".85"/>
+<path d="M450 720 L450 330 540 260 630 330 630 720Z" fill="#a97950" opacity=".55"/>
+<g fill="#d89b5d"><circle cx="190" cy="190" r="4"/><circle cx="230" cy="155" r="3"/><circle cx="520" cy="180" r="4"/><circle cx="590" cy="145" r="3"/></g>
+<rect width="1600" height="1000" fill="#000" opacity=".18"/>
+</svg>

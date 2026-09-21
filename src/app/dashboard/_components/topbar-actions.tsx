@@ -101,7 +101,7 @@ export function TopbarSearch({ enabledModules, industry }: { enabledModules: Mod
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Rechercher une section..."
-                    className="w-full text-sm outline-none placeholder:text-navy-900/40"
+                    className="w-full text-sm outline-hidden placeholder:text-navy-900/40"
                   />
                 </div>
                 <ul className="max-h-72 overflow-y-auto p-1">

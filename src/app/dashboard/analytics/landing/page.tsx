@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireCurrentOrganization } from "@/application/services/auth-service";
 import { getLandingAnalytics } from "@/application/services/landing-analytics-service";
+import { isGatedFeatureEnabled } from "@/application/services/feature-gate-service";
+import { UpgradeNotice } from "@/app/dashboard/_components/upgrade-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +84,7 @@ export default async function LandingAnalyticsPage({
   searchParams?: Promise<{ days?: string }> | { days?: string };
 }) {
   const { organizationId } = await requireCurrentOrganization();
+  if (!(await isGatedFeatureEnabled(organizationId, "site_analytics"))) return <UpgradeNotice feature="site_analytics" />;
   const params = await searchParams;
   const requested = Number(params?.days);
   const days = (PERIODS as readonly number[]).includes(requested) ? requested : 30;
@@ -160,8 +163,8 @@ export default async function LandingAnalyticsPage({
         <div className="mt-2 flex justify-between text-xs text-slate-500">
           <span>{daily[0]?.date}</span>
           <span>
-            <span className="mr-3 inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm bg-violet-200" /> Pages vues</span>
-            <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm bg-violet-600" /> Part des visiteurs</span>
+            <span className="mr-3 inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-xs bg-violet-200" /> Pages vues</span>
+            <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-xs bg-violet-600" /> Part des visiteurs</span>
           </span>
           <span>{daily.at(-1)?.date}</span>
         </div>

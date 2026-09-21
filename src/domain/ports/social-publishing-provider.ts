@@ -17,6 +17,13 @@ export interface CreateSocialPostRequest {
   scheduledFor?: string; // format 'YYYY-MM-DDTHH:mm:ss', voir timezone
   timezone?: string;
   publishNow?: boolean;
+  /**
+   * Lot O — premier commentaire publié automatiquement juste après la
+   * publication (Zernio : YouTube, LinkedIn, Facebook, Instagram). TikTok est
+   * traité à part (job après `post.tiktok.url_resolved`) — voir
+   * first-comment-service.ts.
+   */
+  firstComment?: string;
 }
 
 export interface SocialPostResult {
@@ -139,6 +146,12 @@ export interface SocialPublishingProvider {
 
   /** CONFIRMÉ : POST /v1/inbox/comments/{postId} avec { accountId, commentId, message }. */
   replyToComment(providerPostId: string, accountId: string, commentId: string, message: string): Promise<void>;
+
+  /** Lot O — commentaire de premier niveau (premier commentaire TikTok). Optionnel : absent = non supporté par le connecteur. */
+  postTopLevelComment?(providerPostId: string, accountId: string, message: string): Promise<{ commentId?: string }>;
+
+  /** Lot O — épingle un commentaire de premier niveau. Optionnel. */
+  pinComment?(providerPostId: string, accountId: string, commentId: string): Promise<void>;
 
   /** CONFIRMÉ (SDKs officiels Zernio) : POST .../{commentId}/hide avec { accountId }. Facebook/Instagram/Threads uniquement. */
   hideComment(providerPostId: string, accountId: string, commentId: string): Promise<void>;

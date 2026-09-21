@@ -40,10 +40,13 @@ export function StorefrontHeader({
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
+  // Ferme le menu mobile à chaque navigation : état ajusté PENDANT le rendu (pattern React
+  // « ajuster l'état quand une prop change »), sans effet ni rendu intermédiaire.
+  const [menuPathname, setMenuPathname] = useState(pathname);
+  if (menuPathname !== pathname) {
+    setMenuPathname(pathname);
     setMenuOpen(false);
-  }, [pathname]);
+  }
 
   // Le menu mobile est en `position: fixed` : sans ce verrou, le corps de
   // la page continue de défiler derrière lui sur iOS.
@@ -59,7 +62,7 @@ export function StorefrontHeader({
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
-    <header className={`sf-header ${homeOverlay ? "sf-header-overlay" : "sticky top-0"} z-40 border-b border-black/[0.07] bg-white/95 backdrop-blur`}>
+    <header className={`sf-header ${homeOverlay ? "sf-header-overlay" : "sticky top-0"} z-40 border-b border-black/[0.07] bg-white/95 backdrop-blur-sm`}>
       <Container className="flex h-16 items-center gap-3 sm:h-[72px] sm:gap-6">
         <Link href="/" className="flex shrink-0 items-center gap-2" aria-label={`${businessName} — accueil`}>
           {logoUrl ? (
@@ -100,7 +103,7 @@ export function StorefrontHeader({
                   type="search"
                   name="q"
                   placeholder="Rechercher…"
-                  className="h-10 w-40 rounded-brand border border-black/10 bg-white pl-8 pr-3 text-sm outline-none transition-[width] focus:w-56 focus:border-brand"
+                  className="h-10 w-40 rounded-brand border border-black/10 bg-white pl-8 pr-3 text-sm outline-hidden transition-[width] focus:w-56 focus:border-brand"
                 />
               </div>
             </form>
@@ -144,7 +147,7 @@ export function StorefrontHeader({
                   type="search"
                   name="q"
                   placeholder="Rechercher…"
-                  className="h-11 w-full rounded-brand border border-black/10 px-3 text-sm outline-none focus:border-brand"
+                  className="h-11 w-full rounded-brand border border-black/10 px-3 text-sm outline-hidden focus:border-brand"
                 />
               </form>
             )}

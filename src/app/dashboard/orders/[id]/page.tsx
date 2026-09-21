@@ -4,6 +4,8 @@ import { requireCurrentOrganization, requireMembership } from "@/application/ser
 import { getOrderDetail, markOrderCompleted, cancelOrder, type OrderStatus } from "@/application/services/order-service";
 import { NotFoundError } from "@/lib/errors";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { isGatedFeatureEnabled } from "@/application/services/feature-gate-service";
+import { UpgradeNotice } from "@/app/dashboard/_components/upgrade-notice";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: "En attente",
@@ -40,6 +42,7 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const { success } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
+  if (!(await isGatedFeatureEnabled(organizationId, "orders"))) return <UpgradeNotice feature="orders" />;
 
   let order;
   try {

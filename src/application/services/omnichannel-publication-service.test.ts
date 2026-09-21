@@ -49,7 +49,11 @@ vi.mock("./catalog-service", async (importOriginal) => {
   return { ...actual, getProductsByIds: mocks.getProductsByIds }; // garde buildProductButtons (pur) réel
 });
 vi.mock("./telegram-channel-service", () => ({ getTelegramChannelStatus: mocks.getTelegramChannelStatus }));
-vi.mock("./entitlements-service", () => ({ canUseFeature: mocks.canUseFeature }));
+vi.mock("./entitlements-service", () => ({
+  canUseFeature: mocks.canUseFeature,
+  isFeatureEnabled: vi.fn(async () => ({ enabled: true, limit: -1 })),
+  hasFeature: vi.fn(async () => true),
+}));
 vi.mock("./catalog-video-service", () => ({
   assertPublicationMediaAvailable: mocks.assertPublicationMediaAvailable,
   telegramVideoLimitErrorForUrl: mocks.telegramVideoLimitErrorForUrl,

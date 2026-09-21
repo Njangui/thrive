@@ -1,4 +1,5 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { assertGatedFeature } from "./feature-gate-service";
 import { pauseScheduledPostsForProduct } from "./marketing-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { trackEvent } from "./analytics-service";
@@ -34,6 +35,8 @@ export interface CreateOrderInput {
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<{ orderId: string; total: number }> {
+  // Lot O : commandes verrouillées par l'offre (Starter+) — garde serveur, pas seulement UI.
+  await assertGatedFeature(input.organizationId, "orders");
   const supabase = getSupabaseServiceClient();
   const total = input.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
@@ -113,6 +116,7 @@ export async function markOrderCompleted(
   orderId: string,
   actorUserId?: string,
 ): Promise<void> {
+  await assertGatedFeature(organizationId, "orders");
   const supabase = getSupabaseServiceClient();
 
   const { data, error } = await supabase.rpc("complete_order_transaction", {
@@ -158,6 +162,7 @@ export async function markOrderCompleted(
 }
 
 export async function cancelOrder(organizationId: string, orderId: string): Promise<void> {
+  await assertGatedFeature(organizationId, "orders");
   const supabase = getSupabaseServiceClient();
   const { error } = await supabase
     .from("orders")

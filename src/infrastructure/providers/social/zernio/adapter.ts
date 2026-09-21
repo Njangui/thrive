@@ -24,10 +24,20 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
    * jamais casser une publication déjà fonctionnelle (voir
    * RAPPORT_LOT_3.md, section "Risques production" pour l'impact exact).
    */
+  private readonly profileIds: readonly string[];
+
+  /**
+   * Lot O : un ou PLUSIEURS profils Zernio (profil principal + profils
+   * additionnels, un compte TikTok par profil). Aucun profil = liste vide —
+   * jamais `listAccounts()` sans filtre, qui remonterait les comptes de
+   * TOUS les tenants de la clé API partagée.
+   */
   constructor(
     private readonly client: ZernioSocialClient,
-    private readonly profileId?: string,
-  ) {}
+    profileId?: string | readonly string[],
+  ) {
+    this.profileIds = profileId === undefined ? [] : typeof profileId === "string" ? [profileId] : [...profileId];
+  }
 
   async createPost(
     request: Omit<CreateSocialPostRequest, "scheduledFor" | "publishNow">,
@@ -37,6 +47,7 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
         content: request.content,
         mediaItems: request.mediaUrls?.map((url) => ({ type: guessMediaType(url), url })),
         platforms: request.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })),
+        ...firstCommentField(request),
         // Ni scheduledFor ni publishNow => brouillon (comportement confirmé).
       },
       randomUUID(),
@@ -50,6 +61,7 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
         content: request.content,
         mediaItems: request.mediaUrls?.map((url) => ({ type: guessMediaType(url), url })),
         platforms: request.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })),
+        ...firstCommentField(request),
         scheduledFor: request.scheduledFor,
         timezone: request.timezone ?? "Africa/Douala",
       },
@@ -68,6 +80,7 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
         content: request.content,
         mediaItems: request.mediaUrls?.map((url) => ({ type: guessMediaType(url), url })),
         platforms: request.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })),
+        ...firstCommentField(request),
         publishNow: true,
       },
       randomUUID(),
@@ -103,9 +116,13 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
   }
 
   async getDailyMetrics(fromDate: string, toDate: string): Promise<SocialDailyMetric[]> {
-    if (!this.profileId) return [];
-    const response = await this.client.getDailyMetrics(this.profileId, fromDate, toDate);
-    return (response.dailyData ?? []).map((day) => ({
+    if (this.profileIds.length === 0) return [];
+    const perProfile = await Promise.all(this.profileIds.map((profileId) => this.client.getDailyMetrics(profileId, fromDate, toDate)));
+    return mergeDailyMetrics(perProfile.map((response) => this.mapDailyMetrics(response.dailyData ?? [])));
+  }
+
+  private mapDailyMetrics(dailyData: NonNullable<Awaited<ReturnType<ZernioSocialClient["getDailyMetrics"]>>["dailyData"]>): SocialDailyMetric[] {
+    return dailyData.map((day) => ({
       date: day.date,
       postCount: day.postCount ?? 0,
       platforms: day.platforms ?? {},
@@ -164,13 +181,49 @@ export class ZernioSocialAdapter implements SocialPublishingProvider {
   }
 
   async listAccounts(): Promise<SocialAccountSummary[]> {
-    const response = await this.client.listAccounts(this.profileId);
-    return response.accounts.map((a) => ({
-      accountId: a._id,
-      platform: a.platform,
-      username: a.username ?? null,
-    }));
+    if (this.profileIds.length === 0) return [];
+    const responses = await Promise.all(this.profileIds.map((profileId) => this.client.listAccounts(profileId)));
+    return responses.flatMap((response) =>
+      response.accounts.map((a) => ({
+        accountId: a._id,
+        platform: a.platform,
+        username: a.username ?? null,
+      })),
+    );
   }
+
+  async postTopLevelComment(providerPostId: string, accountId: string, message: string): Promise<{ commentId?: string }> {
+    return this.client.postTopLevelInboxComment(providerPostId, accountId, message);
+  }
+
+  async pinComment(providerPostId: string, accountId: string, commentId: string): Promise<void> {
+    await this.client.pinInboxComment(providerPostId, accountId, commentId);
+  }
+}
+
+/** Plateformes où Zernio publie lui-même le `firstComment` (docs.zernio.com — YouTube, LinkedIn, Facebook, Instagram). */
+export const ZERNIO_FIRST_COMMENT_PLATFORMS = new Set(["facebook", "instagram", "linkedin", "youtube"]);
+
+function firstCommentField(request: { firstComment?: string; targets: { platform: string }[] }): { firstComment?: string } {
+  const text = request.firstComment?.trim();
+  if (!text) return {};
+  return request.targets.some((target) => ZERNIO_FIRST_COMMENT_PLATFORMS.has(target.platform)) ? { firstComment: text } : {};
+}
+
+/** Fusionne les métriques journalières de plusieurs profils (somme par date). */
+export function mergeDailyMetrics(perProfile: SocialDailyMetric[][]): SocialDailyMetric[] {
+  if (perProfile.length === 1) return perProfile[0]!;
+  const merged = new Map<string, SocialDailyMetric>();
+  for (const days of perProfile) {
+    for (const day of days) {
+      const current = merged.get(day.date) ?? { date: day.date, postCount: 0, platforms: {}, metrics: { impressions: 0, reach: 0, likes: 0, comments: 0, shares: 0, saves: 0, clicks: 0, views: 0, follows: 0 } };
+      current.postCount += day.postCount;
+      for (const [key, value] of Object.entries(day.platforms)) current.platforms[key] = (current.platforms[key] ?? 0) + value;
+      for (const key of Object.keys(current.metrics) as Array<keyof SocialDailyMetric["metrics"]>) current.metrics[key] += day.metrics[key] ?? 0;
+      merged.set(day.date, current);
+    }
+  }
+  return [...merged.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function guessMediaType(url: string): "image" | "video" {

@@ -30,7 +30,8 @@ export default async function BookingPage({
   // contact, la demande n'aurait aucun destinataire — 404 plutôt qu'un
   // formulaire qui envoie dans le vide.
   const reachable = capabilities.hasServices || capabilities.hasWhatsApp || Boolean(tenant.phone) || Boolean(tenant.email);
-  if (!reachable) notFound();
+  // Lot O : rendez-vous réservés à Starter+ — la page publique n'existe pas sans l'offre.
+  if (!capabilities.bookingEnabled || !reachable) notFound();
 
   const services = await listActiveServicesForStorefront(tenant.organizationId, 100);
 

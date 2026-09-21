@@ -50,7 +50,6 @@ if (hasCredentials && pointsAtAppEnv) {
   // On le signale bruyamment plutôt que de sauter silencieusement — un
   // `skip` silencieux ici pourrait laisser croire que l'isolation a été
   // vérifiée alors que la suite entière n'a jamais tourné.
-  // eslint-disable-next-line no-console
   console.error(
     "tests/integration/tenant-isolation.test.ts : SUPABASE_TEST_URL == NEXT_PUBLIC_SUPABASE_URL — " +
       "ça ressemble à l'URL de l'application (dev ou production), pas à un projet Supabase dédié aux " +

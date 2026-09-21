@@ -14,7 +14,7 @@ import { Container } from "../storefront/storefront-ui";
 export function CtaSection({ site }: { site: StorefrontSite }) {
   const { tenant, whatsappHref, capabilities, blueprint } = site;
 
-  const fallbackHref = capabilities.hasServices
+  const fallbackHref = capabilities.hasServices && capabilities.bookingEnabled
     ? STOREFRONT_PATHS.booking
     : capabilities.hasContactDetails || capabilities.hasOpeningHours
       ? STOREFRONT_PATHS.contact

@@ -1,4 +1,4 @@
-import type { TelegramApiResponse, TelegramFile, TelegramInlineKeyboardMarkup, TelegramMessage, TelegramSendAudioParams, TelegramSendDocumentParams, TelegramSendMessageParams, TelegramSendPhotoParams, TelegramSendVideoParams, TelegramSendVoiceParams, TelegramUser } from "./types";
+import type { TelegramApiResponse, TelegramFile, TelegramInlineKeyboardMarkup, TelegramMessage, TelegramSendAudioParams, TelegramSendDocumentParams, TelegramSendMessageParams, TelegramSendPhotoParams, TelegramSendVideoParams, TelegramSendVoiceParams, TelegramUser, TelegramChat, TelegramChatMember } from "./types";
 
 /**
  * Client bas niveau Bot API Telegram pour le canal CLIENT — un tenant
@@ -119,7 +119,17 @@ export class TelegramMessagingClient {
 
   /** Enregistre le webhook DÉDIÉ à ce tenant (URL + secret propres à cette connexion) — voir telegram-channel-service.ts. */
   async setWebhook(url: string, secretToken: string): Promise<true> {
-    return this.call<true>("setWebhook", { url, secret_token: secretToken, allowed_updates: ["message"] });
+    return this.call<true>("setWebhook", { url, secret_token: secretToken, allowed_updates: ["message", "my_chat_member"] });
+  }
+
+  /** Lot O — infos d'un canal/groupe (`@username` ou identifiant numérique) pour valider une destination. */
+  async getChat(chatId: number | string): Promise<TelegramChat> {
+    return this.call<TelegramChat>("getChat", { chat_id: chatId });
+  }
+
+  /** Lot O — statut du bot (ou d'un membre) dans un chat : le bot doit être administrateur d'un canal pour y publier. */
+  async getChatMember(chatId: number | string, userId: number): Promise<TelegramChatMember> {
+    return this.call<TelegramChatMember>("getChatMember", { chat_id: chatId, user_id: userId });
   }
 
   async deleteWebhook(): Promise<true> {

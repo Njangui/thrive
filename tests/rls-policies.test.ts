@@ -89,6 +89,11 @@ const SERVICE_ROLE_ONLY_TABLES = new Set([
   "notchpay_sync_runs",
   "affiliate_payout_items",
   "affiliate_fraud_flags",
+  // Lot O (0067) : tables portant des secrets ou du routage interne, lues
+  // uniquement par le serveur via service-role (jamais exposées aux membres).
+  "telegram_bots", // jeton (Vault) + secret de webhook par bot
+  "youtube_accounts", // référence Vault des jetons OAuth
+  "zernio_social_profiles", // profils Zernio additionnels (routage interne)
 ]);
 
 /**

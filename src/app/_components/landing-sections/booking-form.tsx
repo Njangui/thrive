@@ -11,7 +11,7 @@ const DURATION_OPTIONS = [
   { minutes: 120, label: "2h" },
 ];
 
-const INPUT_CLASS = "rounded-brand border border-ink/15 px-4 py-3 text-sm outline-none focus:border-brand";
+const INPUT_CLASS = "rounded-brand border border-ink/15 px-4 py-3 text-sm outline-hidden focus:border-brand";
 
 export function BookingForm({
   organizationId,
