@@ -21,6 +21,12 @@ async function purchaseAddonAction(formData: FormData) {
     if (!result.paymentUrl) throw new Error("URL de paiement manquante dans la réponse du prestataire de paiement.");
     paymentUrl = result.paymentUrl;
   } catch (error) {
+    // Voir subscription/page.tsx::payPlanAction — même correctif : logguer
+    // la cause réelle côté serveur avant le message générique client.
+    console.error(
+      `purchaseAddonAction: échec purchaseAddon (org=${organizationId}, addon=${addonKey}):`,
+      error,
+    );
     const message = error instanceof AppError ? error.message : "Erreur lors de l'achat de l'add-on.";
     redirect(`/dashboard/addons?error=${encodeURIComponent(message)}`);
   }

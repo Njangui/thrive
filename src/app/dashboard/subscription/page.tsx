@@ -77,6 +77,15 @@ async function payPlanAction(formData: FormData) {
     if (!result.paymentUrl) throw new Error("URL de paiement manquante dans la réponse du prestataire de paiement.");
     paymentUrl = result.paymentUrl;
   } catch (error) {
+    // Journalisation serveur AVANT le message générique renvoyé au client
+    // (voir lib/errors.ts::toClientErrorResponse — "à l'appelant de le
+    // faire") : sans cette ligne, la cause réelle (ex: FAPSHI_API_USER/
+    // FAPSHI_API_KEY manquants, base URL sandbox vs live, échec HTTP
+    // Fapshi) n'apparaissait nulle part, y compris dans les logs Vercel.
+    console.error(
+      `payPlanAction: échec initiatePayment (org=${organizationId}, plan=${planKey}):`,
+      error,
+    );
     const message = error instanceof AppError ? error.message : "Erreur lors de l'initiation du paiement.";
     redirect(`/dashboard/subscription?error=${encodeURIComponent(message)}`);
   }
@@ -108,6 +117,7 @@ async function cancelPaymentAction(formData: FormData) {
   try {
     await cancelPendingPayment(organizationId, paymentId);
   } catch (error) {
+    console.error(`cancelPaymentAction: échec (org=${organizationId}, payment=${paymentId}):`, error);
     const message = error instanceof AppError ? error.message : "Erreur lors de l'annulation du paiement.";
     redirect(`/dashboard/subscription?error=${encodeURIComponent(message)}`);
   }
