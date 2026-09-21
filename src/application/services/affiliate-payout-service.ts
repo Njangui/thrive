@@ -7,11 +7,18 @@ import { writeAdminAuditLog } from "./admin-organizations-service";
 import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 
 /**
- * Paiement de commission = virement MANUEL (mobile money/bancaire) —
- * NotchPay (seul PaymentProvider implémenté) n'expose aucune API de
- * transfert sortant, voir docs/AFFILIATE_SYSTEM.md. Ce service ne fait
- * donc jamais transiter d'argent lui-même : il trace la demande, laisse
- * un opérateur l'exécuter hors-bande, puis enregistre la référence.
+ * Paiement de commission = virement MANUEL (mobile money/bancaire) — ce
+ * service ne fait jamais transiter d'argent lui-même : il trace la
+ * demande, laisse un opérateur l'exécuter hors-bande, puis enregistre la
+ * référence. Choix délibérément conservé lors de la migration NotchPay ->
+ * Fapshi (2026-09-20) : Fapshi expose bien une API `/payout` (contrairement
+ * à NotchPay, qui n'en avait aucune dans ce projet — voir
+ * docs/AFFILIATE_SYSTEM.md pour le contexte historique), mais l'activer
+ * exigerait un second compte de service Fapshi dédié rien qu'aux payouts
+ * (Fapshi interdit de mélanger collecte et payout sur un même compte) —
+ * décision produit qui reste à prendre, hors périmètre de cette
+ * migration. Cette fonction automatiserait alors l'appel plutôt que de
+ * changer d'approche.
  */
 
 export interface AffiliatePayoutSummary {

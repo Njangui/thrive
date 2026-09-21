@@ -7,25 +7,25 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * On ne fait QUE l'extraction ici et on la propage via un header interne ;
  * la résolution effective en organization_id se fait dans un layout/server
- * component qui a accès à Supabase (le middleware Edge n'a pas toujours
- * un accès DB pratique/rapide — voir docs/tenancy.md).
+ * component qui a accès à Supabase (ce fichier s'exécute avant CHAQUE
+ * requête : un accès DB ici ajouterait sa latence à toutes — voir
+ * docs/tenancy.md).
  *
  * Volontairement PAS basé sur un ?tenant= en query string (section 23 :
  * "ne pas coder une solution fragile basée uniquement sur des paramètres URL").
  *
- * Rate limiting (voir src/lib/rate-limit.ts) : PAS branché ici. Ce fichier
- * tourne en Edge Runtime (imposé par Next.js pour tout middleware), et
- * @upstash/redis tire une dépendance qui utilise process.version (API
- * Node.js absente du runtime Edge — averti au build : "A Node.js API is
- * used ... which is not supported in the Edge Runtime"). Une défaillance
- * ici bloquerait TOUTE requête, pas seulement le rate limiting. Branché
- * à la place directement dans les route handlers concernés
- * (/api/webhooks/notchpay/route.ts, runtime Node.js par défaut) — voir
- * son propre commentaire. Le webhook Zernio (/api/webhooks/zernio/route.ts)
- * n'a volontairement pas été touché : il appartient au périmètre du
- * Lot 3, en cours ailleurs au moment de cet ajout.
+ * Rate limiting (voir src/lib/rate-limit.ts) : PAS branché ici. Sous Next 14
+ * ce fichier (alors `middleware.ts`) tournait en Edge Runtime, où
+ * @upstash/redis échouait (process.version, API Node.js absente). Depuis
+ * Next 16 (`proxy.ts`), le runtime par défaut est Node.js — la contrainte
+ * technique a disparu, mais la raison de fond reste : une défaillance ici
+ * bloquerait TOUTE requête, pas seulement le rate limiting. Il reste donc
+ * branché directement dans les route handlers et Server Actions concernés
+ * (/api/webhooks/fapshi/route.ts via webhook-pipeline.ts, actions publiques de vitrine). Le
+ * webhook Zernio (/api/webhooks/zernio/route.ts) n'a volontairement pas été
+ * touché : il appartient au périmètre du Lot 3.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") ?? "";
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost:3000";
 

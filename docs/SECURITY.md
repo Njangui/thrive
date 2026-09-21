@@ -114,18 +114,24 @@ table, une connection string...). Testé dans `errors.test.ts`.
 - Un événement dupliqué ou une erreur de traitement isolée ne fait jamais
   planter tout le batch (voir `route.ts`).
 
-## Vulnérabilités connues des dépendances (dernière vérification : 28 août 2026)
+## Vulnérabilités connues des dépendances (dernière vérification : 20 septembre 2026)
 
-| Dépendance | Vulnérabilité | Impact réel | Action |
-|---|---|---|---|
-| `next@14.2.35` (résiduel) | CVE-2026-64643 — divulgation d'endpoints Server Function internes | Modérée, ne s'applique qu'aux apps utilisant `"use cache"` — **non utilisé dans ce projet** | Documenté, pas de correctif 14.x disponible (nécessite 15.5.21+/16.2.11+) |
-| `next` (bundled postcss) | XSS/path traversal PostCSS | Build-time uniquement, CSS 100% auteur (jamais d'input utilisateur/externe traité) | Documenté |
-| `vitest@1.6.1` (devDependency) | RCE si serveur UI Vitest exposé | Dev uniquement, jamais buildé en prod ; notre script `npm test` utilise `vitest run` (pas de serveur écoutant) | Ne pas utiliser `vitest --ui` sans upgrade avant correctif |
+`npm audit` sur l'arbre fusionné (Next 16.3.5, React 19.3.0, Vitest 5.0.1…) :
+**0 vulnérabilité** (info/low/moderate/high/critical = 0, 603 dépendances).
 
-Aucune de ces vulnérabilités résiduelles n'a été jugée comme justifiant un
-saut de version majeure (breaking changes) sans validation explicite du
-mainteneur du projet — conforme à la règle "ne pas changer de stack sans
-justification technique extrêmement forte".
+Les trois entrées suivies jusqu'au 28 août 2026 sont **résolues par la migration de dépendances
+de la fusion #18** (voir `RAPPORT_FUSION_18.md` et `SECURITY_DEPENDENCY_AUDIT_2026-09-20.md`) :
+
+| Ancienne entrée | Statut |
+|---|---|
+| `next@14.2.35` — CVE-2026-64643 (endpoints Server Function internes, `"use cache"`) | Résolu : `next@16.3.5` |
+| `next` (postcss embarqué) — XSS/path traversal, build-time | Résolu : plus signalé par `npm audit` |
+| `vitest@1.6.1` — RCE si serveur UI exposé | Résolu : `vitest@5.0.1` |
+
+Rappel de la règle du projet : ne pas changer de stack sans justification technique forte. La
+montée de versions majeures de la fusion #18 est justifiée par les avis de sécurité Next.js de
+décembre 2025 (branches 13.x à 16.x) — voir §9 de l'audit du 20/09/2026. À rejouer `npm audit`
+avant chaque mise en production.
 
 ## Audit log
 

@@ -104,18 +104,18 @@ Utiliser la fonctionnalité "Test webhook" du dashboard Zernio avant
 d'aller en prod, pour confirmer le format exact des payloads (voir
 `docs/ZERNIO_INTEGRATION.md`).
 
-## 3bis. Webhook NotchPay (Lot G)
+## 3bis. Webhook Fapshi (Lot G ; migré NotchPay → Fapshi le 20/09/2026)
 
-Configurer dans Settings > Webhooks du dashboard NotchPay
-(business.notchpay.co) une souscription pointant vers
-`https://votre-domaine.com/api/webhooks/notchpay`. Le secret de signature
-qui y est affiché va dans `NOTCHPAY_WEBHOOK_SECRET` (**distinct** de
-`NOTCHPAY_API_KEY`). Le webhook n'est jamais cru sur parole : chaque
-paiement confirmé est re-vérifié via l'API NotchPay avant tout crédit —
-voir `docs/PAYMENT_INTEGRATION.md` pour le détail des verdicts
-SUPPORTED/PARTIAL/NOT_SUPPORTED (paiement récurrent réel et remboursement
-via API : NOT_SUPPORTED, aucune ressource "subscription"/"refund" dans
-l'API NotchPay).
+Configurer dans le dashboard Fapshi (Developers > Webhooks) l'URL
+`https://votre-domaine.com/api/webhooks/fapshi`. Le secret affiché à la
+création (**non relisible ensuite** — le noter) va dans
+`FAPSHI_WEBHOOK_SECRET` ; les identifiants API vont dans `FAPSHI_API_USER`
+et `FAPSHI_API_KEY` (deux valeurs), avec `PAYMENT_PROVIDER_DEFAULT=fapshi`.
+Tester d'abord en sandbox (`FAPSHI_BASE_URL=https://sandbox.fapshi.com`),
+puis passer à `https://live.fapshi.com`. Le webhook n'est jamais cru sur
+parole : chaque paiement est re-vérifié via l'API Fapshi avant tout
+crédit — voir `docs/PAYMENT_INTEGRATION.md` et `RAPPORT_MIGRATION_FAPSHI.md`
+(Fapshi ne traite que le XAF, Cameroun).
 
 ## 4. Déploiement Vercel
 
@@ -160,12 +160,12 @@ l'API Zernio (pas un bug de cette route).
 
 Une publication en échec est conservée avec son message d'erreur et déclenche une notification commerçant.
 
-## 4ter. Réconciliation des paiements NotchPay (section 62, 07/09/2026) — cron externe
+## 4ter. Réconciliation des paiements Fapshi (section 62, 07/09/2026) — cron externe
 
 `app/api/cron/process-payment-reconciliation/route.ts` reprend tout
 paiement resté `pending` plus de 20 minutes et le revérifie directement
-auprès de l'API NotchPay — filet de sécurité pour le cas où le webhook
-NotchPay n'est simplement jamais arrivé (livraison échouée, endpoint
+auprès de l'API Fapshi — filet de sécurité pour le cas où le webhook
+Fapshi n'est simplement jamais arrivé (livraison échouée, endpoint
 indisponible au mauvais moment) : sans ce job, un tel paiement resterait
 `pending` indéfiniment bien que le client ait réellement payé.
 
@@ -203,7 +203,7 @@ n'est relancé ni repris. Le prix mensuel se règle depuis `/admin/addons`
 
 ## 5. Domaines custom par tenant
 
-`middleware.ts` gère déjà la résolution par sous-domaine
+`proxy.ts` (ex-`middleware.ts`, renommé par Next.js 16) gère déjà la résolution par sous-domaine
 (`tenant.sme-os.app`). Pour un domaine client (`client.com`) :
 1. Le commerçant pointe son DNS vers Vercel
 2. Ajouter le domaine dans Vercel (Project Settings → Domains)
@@ -261,12 +261,11 @@ jamais une vérification de sécurité.
 - [ ] Programmer aussi `/api/cron/process-phone-number-renewals` (toutes les
       1 à 4 h, même `CRON_SECRET`, section 4quater) — sans lui, aucun numéro
       WhatsApp dédié n'est relancé ni repris à échéance
-- [ ] Configurer le webhook NotchPay + `NOTCHPAY_WEBHOOK_SECRET` (Lot G,
+- [ ] Configurer le webhook Fapshi + `FAPSHI_WEBHOOK_SECRET` (Lot G,
       section 3bis) avant d'annoncer le paiement d'abonnement/add-ons
-- [ ] Vérifier l'activation carte bancaire NotchPay dans le dashboard du
-      compte marchand de production (Mobile Money confirmé fonctionnel
-      dès l'intégration, carte bancaire à confirmer par pays — voir
-      `docs/PAYMENT_INTEGRATION.md`)
+- [ ] Tester un paiement Mobile Money complet (abonnement, add-on, numéro dédié)
+      en sandbox Fapshi puis en live avant d'annoncer le paiement — Fapshi ne
+      traite que le XAF (Cameroun), voir `RAPPORT_MIGRATION_FAPSHI.md`
 - [ ] Configurer `RESEND_API_KEY`/`EMAIL_FROM_ADDRESS` (Lot L) avant
       d'annoncer les invitations d'équipe par email comme disponibles —
       sans clé, un repli console (log serveur) s'active automatiquement,

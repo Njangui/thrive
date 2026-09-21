@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { JSX } from "react";
 import { usePathname } from "next/navigation";
 import type { ModuleKey } from "@/application/config/modules";
 import type { CreditStatus } from "@/application/services/ai-credits-service";

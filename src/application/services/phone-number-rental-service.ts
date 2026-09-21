@@ -228,19 +228,10 @@ export async function initiateDedicatedNumberPayment(
   const currencyCode = "XAF";
   validateMoney(amount, currencyCode);
 
+  // Notre id local — transmis au provider comme `orderId` pour
+  // réconciliation, jamais utilisé comme provider_reference (voir
+  // "ABSTRACTION PROVIDER" en tête de subscription-payment-service.ts).
   const paymentId = randomUUID();
-  const { error: insertError } = await supabase.from("subscription_payments").insert({
-    id: paymentId,
-    organization_id: organizationId,
-    payment_type: "dedicated_number",
-    phone_number_id: phoneNumberId,
-    amount_fcfa: amount,
-    currency_code: currencyCode,
-    provider: "notchpay",
-    provider_reference: paymentId,
-    status: "pending",
-  });
-  if (insertError) throw new Error(`Impossible de créer le paiement: ${insertError.message}`);
 
   const provider = await getPaymentProvider(organizationId);
   const result = await provider.createPayment({
@@ -251,6 +242,22 @@ export async function initiateDedicatedNumberPayment(
     customerEmail: payerEmail,
     description: `CRESYVA — Numéro WhatsApp dédié aux groupes (${number.phone_e164})`,
   });
+
+  // Créée APRÈS l'appel provider, avec sa vraie référence : certains
+  // providers (Fapshi) la génèrent côté serveur et ne permettent pas
+  // d'en imposer une à l'avance.
+  const { error: insertError } = await supabase.from("subscription_payments").insert({
+    id: paymentId,
+    organization_id: organizationId,
+    payment_type: "dedicated_number",
+    phone_number_id: phoneNumberId,
+    amount_fcfa: amount,
+    currency_code: currencyCode,
+    provider: provider.providerName,
+    provider_reference: result.providerReference,
+    status: "pending",
+  });
+  if (insertError) throw new Error(`Impossible de créer le paiement: ${insertError.message}`);
 
   console.info(`[audit] actor=${actorUserId} org=${organizationId} action=DEDICATED_NUMBER_PAYMENT_INITIATED phoneNumberId=${phoneNumberId}`);
 

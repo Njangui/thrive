@@ -46,7 +46,7 @@ export const MessageSchema = z.object({
   sender: z.enum(["contact", "ai", "human"]),
   content: z.string(),
   externalMessageId: z.string().nullable(),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
   createdAt: z.string(),
 });
 

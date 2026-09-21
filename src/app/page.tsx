@@ -1,7 +1,19 @@
 import type { Metadata } from "next";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
-import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
-import { resolveOrganizationSeo, buildOrganizationJsonLd } from "@/lib/seo";
+import {
+  resolveRequestTenant,
+  resolveCanonicalOrigin,
+  resolveMarketingOrigin,
+} from "@/infrastructure/tenant/resolve-request-tenant";
+import {
+  resolveOrganizationSeo,
+  buildOrganizationJsonLd,
+  buildSocialMetadata,
+  buildWebSiteJsonLd,
+  buildPlatformOrganizationJsonLd,
+} from "@/lib/seo";
+import { JsonLd } from "./_components/json-ld";
+import { buildMarketingMetadata, PLATFORM_NAME } from "./_lib/marketing-page";
 import { getStorefrontSite } from "@/application/services/storefront-service";
 import { StorefrontShell } from "./_components/storefront/storefront-shell";
 import { TenantLanding } from "./_components/tenant-landing";
@@ -18,49 +30,46 @@ import { MarketingLanding } from "./_components/marketing-landing";
  * `src/lib/seo.ts::resolveOrganizationSeo` : jamais de balise vide
  * (critère d'acceptation Lot H), repli sur le nom de l'entreprise si aucun
  * champ SEO n'est renseigné. `alternates.canonical` utilise l'origine
- * RÉELLE de la requête (`resolveRequestOrigin`), pas `NEXT_PUBLIC_APP_URL`
- * (qui pointerait vers le domaine générique de la plateforme, jamais vers
- * le sous-domaine/domaine custom effectivement visité).
+ * OFFICIELLE du tenant (`resolveCanonicalOrigin` : son domaine custom
+ * principal s'il en a un, sinon l'hôte visité), pas `NEXT_PUBLIC_APP_URL`
+ * (qui pointerait vers le domaine générique de la plateforme).
+ *
+ * Audit SEO (sept. 2026) : la branche « sans tenant » (landing marketing)
+ * n'avait ni canonique, ni image de partage, et n'était pas `noindex` sur
+ * un hôte non reconnu — elle passe désormais par `buildMarketingMetadata`.
  */
+const MARKETING_TITLE = "CRESYVA — Gérez votre entreprise depuis un seul endroit";
+const MARKETING_DESCRIPTION =
+  "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés. CRESYVA aide les commerçants et prestataires à organiser leur activité, sans compétences techniques.";
+
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await resolveRequestTenant();
 
   // Lot 2 — sans tenant résolu, cette route sert la landing marketing de
   // CRESYVA lui-même (avant ce lot : aucune métadonnée du tout, `{}`).
   if (!tenant) {
-    return {
-      title: "CRESYVA — Gérez votre entreprise depuis un seul endroit",
-      description:
-        "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés. CRESYVA aide les commerçants et prestataires à organiser leur activité, sans compétences techniques.",
-      openGraph: {
-        type: "website",
-        title: "CRESYVA — Gérez votre entreprise depuis un seul endroit",
-        description:
-          "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés, pour les commerçants et prestataires.",
-      },
-    };
+    return buildMarketingMetadata({
+      path: "/",
+      title: MARKETING_TITLE,
+      description: MARKETING_DESCRIPTION,
+    });
   }
 
-  const origin = await resolveRequestOrigin();
+  const origin = await resolveCanonicalOrigin();
   const seo = resolveOrganizationSeo(tenant);
 
   return {
     title: seo.title,
     description: seo.description,
     alternates: { canonical: origin },
-    openGraph: {
-      type: "website",
+    ...buildSocialMetadata({
       title: seo.title,
       description: seo.description,
       url: origin,
-      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
-    },
-    twitter: {
-      card: seo.ogImageUrl ? "summary_large_image" : "summary",
-      title: seo.title,
-      description: seo.description,
-      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
-    },
+      imageUrl: seo.ogImageUrl,
+      imageIsSquare: seo.ogImageIsSquare,
+      siteName: tenant.name,
+    }),
     icons: tenant.faviconUrl ? { icon: tenant.faviconUrl } : undefined,
   };
 }
@@ -97,11 +106,25 @@ export default async function RootPage({
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    const marketingOrigin = resolveMarketingOrigin();
     return (
-      <MarketingLanding
-        waitlistFeedback={{ success: waitlist_success, error: waitlist_error }}
-        isAuthenticated={Boolean(user)}
-      />
+      <>
+        {/* Entité « CRESYVA » + nom du site : ce que Google lit pour afficher
+            le nom de la marque (et non le domaine brut) dans les résultats. */}
+        <JsonLd
+          data={buildPlatformOrganizationJsonLd({
+            name: PLATFORM_NAME,
+            url: marketingOrigin,
+            logoUrl: `${marketingOrigin}/images/cresyva-mark-512.png`,
+            description: MARKETING_DESCRIPTION,
+          })}
+        />
+        <JsonLd data={buildWebSiteJsonLd({ name: PLATFORM_NAME, url: marketingOrigin })} />
+        <MarketingLanding
+          waitlistFeedback={{ success: waitlist_success, error: waitlist_error }}
+          isAuthenticated={Boolean(user)}
+        />
+      </>
     );
   }
 
@@ -110,8 +133,7 @@ export default async function RootPage({
   // La page vue est comptée par <StorefrontPageTracker /> (navigateur) — voir
   // landing-analytics-service.ts. Ne pas la recompter ici côté serveur.
 
-  const origin = await resolveRequestOrigin();
-
+  const origin = await resolveCanonicalOrigin();
 
   // JSON-LD (schema.org) — au-delà du strict minimum du cahier Lot H, mais
   // rien dans son "Hors scope" ne l'exclut (voir src/lib/seo.ts). Aide au
@@ -126,6 +148,7 @@ export default async function RootPage({
     email: tenant.email,
     address: tenant.address,
     openingHours: tenant.openingHours,
+    socialLinks: tenant.socialLinks,
   });
 
   // Modèle de site complet (secteur, capacités réelles, navigation,
@@ -135,7 +158,8 @@ export default async function RootPage({
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <JsonLd data={jsonLd} />
+      <JsonLd data={buildWebSiteJsonLd({ name: tenant.name, url: origin })} />
       <StorefrontShell site={site} home>
         <TenantLanding site={site} bookingFeedback={{ success: bookingSuccess, error: bookingError }} />
       </StorefrontShell>

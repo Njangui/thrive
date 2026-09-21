@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { getPaymentProvider } from "@/infrastructure/providers/registry";
-import type { NotchPayWebhookEvent } from "@/infrastructure/providers/payment/notchpay/types";
 import { listPlans, resolvePlanPriceForCountry, type PlanKey } from "./plans-repository";
 import { DEFAULT_COUNTRY_CODE } from "./country-service";
 import { validateMoney } from "./currency-service";
@@ -14,12 +13,30 @@ import { computeDiscountedAmountFcfa } from "@/domain/entities/affiliate";
 import { resetCreditBalanceForPlan } from "./ai-credits-service";
 
 /**
- * Lot G, Partie 1 — Paiement d'abonnement. Flow : initiatePayment() crée
- * une ligne `pending` + renvoie une URL de checkout NotchPay ->
- * l'utilisateur paie sur la page NotchPay -> handlePaymentWebhook()
+ * Lot G, Partie 1 — Paiement d'abonnement. Flow : initiatePayment()
+ * appelle le PaymentProvider actif (Fapshi depuis la migration du
+ * 2026-09-20, voir registry.ts) pour obtenir une URL de checkout, PUIS
+ * crée la ligne locale `pending` avec la vraie référence provider ->
+ * l'utilisateur paie sur la page du provider -> handlePaymentWebhook()
  * confirme et applique l'effet (extension d'abonnement OU add-on, voir
  * markPaymentCompleted). Jamais l'inverse : aucune capacité n'est
  * accordée avant confirmation réelle du paiement (critère d'acceptation).
+ *
+ * ABSTRACTION PROVIDER — ce fichier ne doit JAMAIS importer un type ou un
+ * nom de provider en dur (fini le `import type { NotchPayWebhookEvent }`
+ * d'avant la migration Fapshi) :
+ * - `handlePaymentWebhook()` ne prend qu'une référence provider (string),
+ *   jamais la forme brute d'un webhook — c'est à la route webhook de
+ *   CHAQUE provider de traduire son propre payload vers cette référence
+ *   (voir payment/webhook-pipeline.ts).
+ * - `provider.providerName` (jamais un littéral `"fapshi"`) est ce qui
+ *   est stocké dans `subscription_payments.provider` — colonne libre
+ *   depuis la migration 0066 (plus de CHECK figé sur un provider).
+ * - `provider_reference` est TOUJOURS la valeur renvoyée par
+ *   `provider.createPayment()`, jamais notre propre `paymentId` : certains
+ *   providers (Fapshi) génèrent leur propre référence côté serveur et ne
+ *   permettent pas d'en imposer une — voir le commentaire de
+ *   `initiatePayment()` plus bas.
  */
 
 export interface SubscriptionPaymentSummary {
@@ -144,9 +161,10 @@ async function getOrganizationCountryCode(organizationId: string): Promise<strin
 /**
  * Initie le paiement d'un forfait (souscription initiale ou changement de
  * forfait). `payerEmail` = email de session de l'acteur (toujours
- * disponible via Supabase Auth, contrairement à un numéro de téléphone —
- * voir NotchPayAdapter.createPayment) : c'est le Server Action appelant
- * qui le fournit, ce service reste agnostique de la session.
+ * disponible via Supabase Auth, contrairement à un numéro de téléphone,
+ * jamais transmis à aucun provider par ce service) : c'est le Server
+ * Action appelant qui le fournit, ce service reste agnostique de la
+ * session.
  *
  * Country Engine (section 25/26) : le montant et la devise sont
  * TOUJOURS résolus côté serveur à partir du pays de l'organisation —
@@ -171,7 +189,7 @@ export async function initiatePayment(
     // Rien à facturer — le downgrade vers "free" passe par
     // plans-repository.ts::switchToFreePlan (dashboard/subscription/
     // page.tsx en fait un chemin distinct de payPlanAction), jamais par
-    // ce pipeline de paiement NotchPay.
+    // ce pipeline de paiement provider.
     throw new ValidationError('Le plan "free" ne nécessite aucun paiement — utilisez switchToFreePlan().');
   }
 
@@ -191,31 +209,15 @@ export async function initiatePayment(
   // éventuellement déduite) doit rester un entier valide dans la plus
   // petite unité de sa devise avant toute écriture financière (section
   // 16/62) — une configuration Super Admin corrompue (ex: prix négatif
-  // saisi par erreur) ne doit jamais atteindre NotchPay.
+  // saisi par erreur) ne doit jamais atteindre le provider.
   validateMoney(amount, currencyCode);
 
-  const supabase = getSupabaseServiceClient();
-  // Générée AVANT l'appel NotchPay (convention node:crypto randomUUID du
-  // projet) pour pouvoir insérer la ligne "pending" avant même la
-  // réponse HTTP — c'est ce qui rend le webhook idempotent par design
-  // (voir commentaire de tête de 0019_subscription_payments.sql).
+  // Convention node:crypto randomUUID du projet — notre id local
+  // (subscription_payments.id), transmis au provider comme `orderId`
+  // pour réconciliation manuelle éventuelle (ex: Fapshi le stocke en
+  // `externalId`), MAIS jamais utilisé comme provider_reference : voir
+  // le commentaire d'en-tête de ce fichier ("ABSTRACTION PROVIDER").
   const paymentId = randomUUID();
-
-  const { error: insertError } = await supabase.from("subscription_payments").insert({
-    id: paymentId,
-    organization_id: organizationId,
-    payment_type: "plan_subscription",
-    plan_key: planKey,
-    amount_fcfa: amount,
-    currency_code: currencyCode,
-    provider: "notchpay",
-    provider_reference: paymentId,
-    status: "pending",
-  });
-
-  if (insertError) {
-    throw new Error(`Impossible de créer le paiement: ${insertError.message}`);
-  }
 
   const provider = await getPaymentProvider(organizationId);
   const result = await provider.createPayment({
@@ -227,10 +229,27 @@ export async function initiatePayment(
     description: `Abonnement CRESYVA — forfait ${plan.name}`,
   });
 
-  if (result.providerReference !== paymentId) {
-    console.error(
-      `initiatePayment: providerReference (${result.providerReference}) diffère du paymentId local (${paymentId}) — à surveiller.`,
-    );
+  // La ligne locale n'est créée qu'APRÈS l'appel provider, avec sa vraie
+  // référence (`result.providerReference`) : certains providers (Fapshi)
+  // génèrent cette référence côté serveur et ne permettent pas de la
+  // choisir à l'avance — l'ancienne convention "insérer avant l'appel
+  // avec provider_reference = paymentId" ne fonctionnait que par
+  // coïncidence avec NotchPay (qui échouait la référence transmise).
+  const supabase = getSupabaseServiceClient();
+  const { error: insertError } = await supabase.from("subscription_payments").insert({
+    id: paymentId,
+    organization_id: organizationId,
+    payment_type: "plan_subscription",
+    plan_key: planKey,
+    amount_fcfa: amount,
+    currency_code: currencyCode,
+    provider: provider.providerName,
+    provider_reference: result.providerReference,
+    status: "pending",
+  });
+
+  if (insertError) {
+    throw new Error(`Impossible de créer le paiement: ${insertError.message}`);
   }
 
   console.info(
@@ -242,10 +261,11 @@ export async function initiatePayment(
 
 /**
  * Annule un paiement encore `pending` (initié par erreur, changement
- * d'avis avant complétion). Best-effort côté provider : si NotchPay
- * refuse (le paiement a déjà avancé côté utilisateur), on logue sans
- * bloquer — le webhook fera foi de l'issue réelle si le paiement aboutit
- * malgré tout côté NotchPay.
+ * d'avis avant complétion). Best-effort côté provider (via
+ * `provider.cancelPayment?.()`, optionnel dans le port — voir
+ * domain/ports/payment-provider.ts) : si le provider refuse (le paiement
+ * a déjà avancé côté utilisateur), on logue sans bloquer — le webhook
+ * fera foi de l'issue réelle si le paiement aboutit malgré tout.
  */
 export async function cancelPendingPayment(organizationId: string, paymentId: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
@@ -279,15 +299,20 @@ export async function cancelPendingPayment(organizationId: string, paymentId: st
 }
 
 /**
- * Traite un événement webhook NotchPay DÉJÀ vérifié (signature) et parsé
- * — jamais de body brut/signature ici, c'est le rôle de
- * infrastructure/providers/payment/notchpay/webhook-handler.ts et de la
- * route /api/webhooks/notchpay (pipeline External Webhook -> Signature
- * Verification -> Provider Adapter -> Normalize Event -> Application
- * Service, même discipline que le webhook Zernio).
+ * Traite un webhook de paiement — reçoit UNIQUEMENT la référence
+ * provider déjà extraite d'un payload authentifié (signature/secret
+ * vérifié) et parsé par le pipeline générique
+ * (infrastructure/providers/payment/webhook-pipeline.ts) + la route
+ * `/api/webhooks/<provider>` correspondante. Volontairement une simple
+ * `string`, jamais une forme de payload spécifique à un SDK provider :
+ * c'est ce qui permet à CE fichier de ne dépendre d'aucun provider
+ * concret (voir "ABSTRACTION PROVIDER" en tête de fichier). On ne fait
+ * d'ailleurs JAMAIS confiance au statut annoncé par le webhook lui-même
+ * — seulement à cette référence, pour retrouver la ligne locale et la
+ * revérifier via `provider.verifyPayment()` (voir
+ * `verifyAndReconcilePayment` ci-dessous).
  */
-export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise<void> {
-  const reference = event.data.reference;
+export async function handlePaymentWebhook(providerReference: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
 
   const { data: payment, error } = await supabase
@@ -295,15 +320,15 @@ export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise
     .select(
       "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, phone_number_id, amount_fcfa, currency_code, provider_reference, status",
     )
-    .eq("provider_reference", reference)
+    .eq("provider_reference", providerReference)
     .maybeSingle();
 
   if (error) {
-    console.error(`handlePaymentWebhook: erreur lecture subscription_payments (${reference}):`, error.message);
+    console.error(`handlePaymentWebhook: erreur lecture subscription_payments (${providerReference}):`, error.message);
     return;
   }
   if (!payment) {
-    console.warn(`handlePaymentWebhook: aucun paiement local pour la référence "${reference}" — ignoré.`);
+    console.warn(`handlePaymentWebhook: aucun paiement local pour la référence "${providerReference}" — ignoré.`);
     return;
   }
 
@@ -316,28 +341,30 @@ export async function handlePaymentWebhook(event: NotchPayWebhookEvent): Promise
  * d'un seul webhook") — extrait de `handlePaymentWebhook` (comportement
  * strictement inchangé pour le webhook lui-même) pour être réutilisable
  * par `reconcileStalePayments()` ci-dessous : un paiement `pending`
- * n'arrive ici QUE si NotchPay a effectivement livré un webhook pour sa
- * référence. Si la livraison échoue purement et simplement (NotchPay ne
- * réessaie qu'un temps, ou notre endpoint était indisponible au mauvais
- * moment), rien ne déclenchait jamais de seconde vérification — le
- * paiement restait `pending` indéfiniment, l'abonnement jamais activé
- * bien que le client ait payé.
+ * n'arrive ici QUE si le provider a effectivement livré un webhook pour
+ * sa référence. Si la livraison échoue purement et simplement (retries
+ * limités dans le temps côté provider, ou notre endpoint était
+ * indisponible au mauvais moment), rien ne déclenchait jamais de seconde
+ * vérification — le paiement restait `pending` indéfiniment, l'abonnement
+ * jamais activé bien que le client ait payé.
  */
 async function verifyAndReconcilePayment(payment: SubscriptionPaymentRow): Promise<"completed" | "failed" | "still_pending"> {
   const supabase = getSupabaseServiceClient();
 
   // Idempotence (critère d'acceptation) : un webhook rejoué deux fois
-  // (même provider_reference, NotchPay documente des retries) — ou cette
-  // même fonction appelée à la fois par le webhook et par la
-  // réconciliation programmée pour le même paiement — ne doit produire
-  // aucun second effet.
+  // (même provider_reference — les providers documentent généralement
+  // des retries) — ou cette même fonction appelée à la fois par le
+  // webhook et par la réconciliation programmée pour le même paiement —
+  // ne doit produire aucun second effet.
   if (payment.status !== "pending") {
     return payment.status === "completed" ? "completed" : "failed";
   }
 
   // Ne JAMAIS faire confiance au seul corps du webhook — revérifier via
-  // l'API avant de livrer quoi que ce soit ("Best Practices" NotchPay :
-  // "Always verify the payment status using the API before fulfilling").
+  // l'API avant de livrer quoi que ce soit (recommandation standard de
+  // tout provider de paiement, explicite chez NotchPay comme chez
+  // Fapshi : le webhook peut être rejoué, retardé, voire falsifié si la
+  // vérification de signature/secret échouait un jour silencieusement).
   const provider = await getPaymentProvider(payment.organization_id);
   const verified = await provider.verifyPayment(payment.provider_reference);
 
@@ -379,16 +406,18 @@ async function verifyAndReconcilePayment(payment: SubscriptionPaymentRow): Promi
     return "failed";
   }
 
-  // 'pending'/'processing' côté NotchPay : rien à faire, un futur event (ou la prochaine réconciliation) le confirmera.
+  // Statut encore transitoire côté provider (CREATED/PENDING chez
+  // Fapshi) : rien à faire, un futur event (ou la prochaine
+  // réconciliation) le confirmera.
   return "still_pending";
 }
 
 /**
  * Section 62 de la mission : job de réconciliation. Reprend tout paiement
  * resté `pending` plus de `staleAfterMinutes` (défaut 20 — le temps
- * qu'un webhook NotchPay arrive normalement, avec de la marge avant de
- * le considérer suspect) et le revérifie via l'API NotchPay, exactement
- * comme le ferait un webhook — même fonction partagée
+ * qu'un webhook provider arrive normalement, avec de la marge avant de
+ * le considérer suspect) et le revérifie via l'API du provider,
+ * exactement comme le ferait un webhook — même fonction partagée
  * (`verifyAndReconcilePayment`), donc mêmes garanties d'idempotence et
  * la même règle "jamais confiance au corps, toujours revérifier via
  * l'API". Conçu pour tourner sur cron (voir
@@ -437,8 +466,10 @@ export async function reconcileStalePayments(staleAfterMinutes = 20): Promise<{
 
 /**
  * Trouve un email de contact pour porter un paiement déclenché par le
- * SYSTÈME (cron), sans session utilisateur — NotchPay exige email OU
- * phone (voir NotchPayAdapter). On prend l'owner le plus ancien de
+ * SYSTÈME (cron), sans session utilisateur — tous les appelants de ce
+ * fichier transmettent toujours un email au provider, jamais un
+ * téléphone (voir FapshiAdapter.createPayment). On prend l'owner le plus
+ * ancien de
  * l'organisation (memberships.role='owner') et son email réel via
  * l'API Admin Supabase (`auth.admin.getUserById` — service-role
  * uniquement, jamais exposée côté client, voir

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { parsePageParam } from "@/lib/seo";
 import {
   listStorefrontProducts,
   countStorefrontProducts,
@@ -11,12 +13,18 @@ import { requireStorefront, buildStorefrontMetadata } from "../_lib/storefront-p
 
 const PAGE_SIZE = 24;
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
+  const { page } = await searchParams;
   const site = await requireStorefront();
   return buildStorefrontMetadata({
     path: STOREFRONT_PATHS.promotions,
     title: site.blueprint.headings.promotions ?? "Promotions",
     description: site.blueprint.subheadings.promotions ?? null,
+    page: parsePageParam(page),
   });
 }
 
@@ -25,7 +33,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
   const site = await requireStorefront();
   const { tenant, blueprint } = site;
 
-  const page = Math.max(1, Number(pageParam) || 1);
+  const page = parsePageParam(pageParam);
 
   const [products, totalCount] = await Promise.all([
     listStorefrontProducts(tenant.organizationId, {
@@ -36,6 +44,9 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
     }),
     countStorefrontProducts(tenant.organizationId, { promotionsOnly: true }),
   ]);
+
+  // Page au-delà de la dernière : 404 franc, pas une liste vide en 200 (soft 404).
+  if (page > Math.max(1, Math.ceil(totalCount / PAGE_SIZE))) notFound();
 
   // Catalogue V2, itération 2 (0057) — échéance la plus proche parmi les
   // promotions affichées, pour la bannière ci-dessous. `promotionEndsAt`

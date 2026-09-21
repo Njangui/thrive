@@ -101,25 +101,22 @@ describe("addHoursToNaiveIso", () => {
   });
 });
 
-describe("createCampaignFromProducts — enforcement Lot 3 (comptage réel des comptes connectés, corrige §39)", () => {
+describe("createCampaignFromProducts — enforcement par plateforme (grille commerciale Facebook/Instagram/LinkedIn/TikTok/YouTube)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSocialPublishingProvider.mockResolvedValue({});
   });
 
-  it("refuse la création AVANT tout accès DB si le nombre RÉEL de comptes connectés dépasse le quota — jamais le nombre de comptes ciblés par cette seule campagne", async () => {
-    mockCanUseFeature.mockResolvedValue({ allowed: false, limit: 3, used: 0, remaining: 3 });
-    // 5 comptes réellement connectés côté Zernio, alors que CETTE
-    // campagne n'en cible que 2 — c'est le nombre réel qui doit compter,
-    // pas le sous-ensemble ciblé ici (c'est exactement le bug corrigé).
-    mockGetSocialPublishingProvider.mockResolvedValue({
-      listAccounts: vi.fn().mockResolvedValue([
-        { accountId: "acc-1", platform: "facebook", username: null },
-        { accountId: "acc-2", platform: "instagram", username: null },
-        { accountId: "acc-3", platform: "tiktok", username: null },
-        { accountId: "acc-4", platform: "linkedin", username: null },
-        { accountId: "acc-5", platform: "facebook", username: null },
-      ]),
-    });
+  // Le vrai garde-fou contre un nombre de comptes connectés dépassant le
+  // quota est appliqué à la CONNEXION du compte (voir
+  // dashboard/channels/page.tsx::connectSocialAction, canUseFeature avant
+  // toute connexion) — un plan ne peut donc jamais avoir plus de comptes
+  // connectés que sa limite. Ici, createCampaignFromProducts revérifie
+  // par plateforme, à partir des comptes CIBLÉS par cette campagne
+  // (jamais un plafond global : Discover doit pouvoir utiliser son compte
+  // YouTube inclus même à la limite Facebook).
+  it("refuse AVANT tout accès DB si une plateforme ciblée dépasse son quota (comptes distincts ciblés par CETTE campagne, pour cette plateforme)", async () => {
+    mockCanUseFeature.mockResolvedValue({ allowed: false, limit: 1, used: 1, remaining: 0 });
 
     await expect(
       createCampaignFromProducts({
@@ -128,29 +125,23 @@ describe("createCampaignFromProducts — enforcement Lot 3 (comptage réel des c
         productIds: ["p1"],
         targets: [
           { platform: "facebook", accountId: "acc-1" },
-          { platform: "instagram", accountId: "acc-2" },
+          { platform: "facebook", accountId: "acc-2" },
         ],
         firstSlotAt: "2026-09-01T18:00:00",
         intervalHours: 24,
       }),
-    ).rejects.toThrow(/comptes sociaux connectés/);
+    ).rejects.toThrow(/facebook/);
 
-    // Point d'application exact du correctif : le nombre RÉEL de comptes
-    // connectés (5), jamais le nombre de cibles de cette campagne (2).
-    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "social_accounts", 5);
+    // 2 comptes Facebook DISTINCTS ciblés par cette campagne, jamais un
+    // total toutes plateformes confondues (voir entitlementByPlatform).
+    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "facebook_pages", 2);
     // Aucun accès DB avant la vérification de droits (enforcement serveur réel).
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("autorisé : sous la limite de comptes réellement connectés, la campagne peut cibler un sous-ensemble de ces comptes", async () => {
+  it("autorisé : sous la limite de la plateforme ciblée, la vérification passe (échec plus loin sur la création DB, hors périmètre de ce test)", async () => {
     mockCanUseFeature.mockResolvedValue({ allowed: true, limit: 10, used: 0, remaining: 10 });
-    mockGetSocialPublishingProvider.mockResolvedValue({
-      listAccounts: vi.fn().mockResolvedValue([{ accountId: "acc-1", platform: "facebook", username: null }]),
-    });
 
-    // Pas de configuration DB au-delà de l'entitlement : la fonction va
-    // échouer plus loin (campagne non créée, mock par défaut) — seul le
-    // point d'application de l'entitlement nous intéresse dans ce test.
     await expect(
       createCampaignFromProducts({
         organizationId: "org-1",
@@ -162,7 +153,22 @@ describe("createCampaignFromProducts — enforcement Lot 3 (comptage réel des c
       }),
     ).rejects.toThrow();
 
-    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "social_accounts", 1);
+    expect(mockCanUseFeature).toHaveBeenCalledWith("org-1", "facebook_pages", 1);
+  });
+
+  it("une plateforme hors grille commerciale est refusée explicitement, jamais silencieusement ignorée", async () => {
+    await expect(
+      createCampaignFromProducts({
+        organizationId: "org-1",
+        name: "Promo rentrée",
+        productIds: ["p1"],
+        targets: [{ platform: "snapchat", accountId: "acc-1" }],
+        firstSlotAt: "2026-09-01T18:00:00",
+        intervalHours: 24,
+      }),
+    ).rejects.toThrow(/snapchat/);
+
+    expect(mockCanUseFeature).not.toHaveBeenCalled();
   });
 });
 

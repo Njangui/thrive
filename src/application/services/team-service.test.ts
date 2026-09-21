@@ -113,6 +113,12 @@ beforeEach(() => {
   updateCalls.length = 0;
   deleteCalls.length = 0;
   mockGetUserById = vi.fn(async (_id: string): Promise<GetUserByIdResult> => ({ data: { user: { email: null } }, error: null }));
+  // Défaut illimité (fail-closed à 0 sinon depuis le passage freemium,
+  // "team_members" étant une clé connue — voir plans-repository.ts). Ce
+  // fichier teste la logique d'invitation/acceptation, jamais l'exécution
+  // du quota lui-même : un test qui veut vraiment le tester repousse sa
+  // propre valeur sur "plan_entitlements" après ce beforeEach.
+  pushResult("plan_entitlements", { data: { limit_value: -1 }, error: null });
 });
 
 describe("inviteMember", () => {

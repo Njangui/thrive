@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { notFound } from "next/navigation";
 import { requirePlatformAdmin } from "@/application/services/platform-admin-service";
@@ -91,9 +92,9 @@ export default async function AdminCountryDetailPage({
     <div className="flex flex-col gap-8">
       <div>
         <p className="text-sm text-slate-500">
-          <a href="/admin/countries" className="underline">
+          <Link href="/admin/countries" className="underline">
             ← Pays
-          </a>
+          </Link>
         </p>
         <h1 className="font-jakarta text-2xl font-bold tracking-tight">
           {country.name} <span className="text-slate-500">({country.isoCode})</span>

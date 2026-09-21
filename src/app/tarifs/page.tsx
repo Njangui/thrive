@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { listPlans, type PlanSummary } from "@/application/services/plans-repository";
 import { PLAN_ORDER, PRICING_FEATURES } from "@/application/config/pricing";
+import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
 
-export const metadata: Metadata = {
-  title: "Tarifs — CRESYVA",
-  description: "Discover gratuit, Starter et Pro : des offres CRESYVA simples et progressives.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingMetadata({
+    path: "/tarifs",
+    title: "Tarifs — CRESYVA",
+    description: "Discover gratuit, Starter et Pro : des offres CRESYVA simples et progressives.",
+  });
+}
 
 function planValue(value: string | boolean): { included: boolean; label: string } {
   if (value === true) return { included: true, label: "Inclus" };

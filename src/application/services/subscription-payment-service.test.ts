@@ -18,7 +18,7 @@ const mockVerifyPayment = vi.fn();
 const mockCancelPayment = vi.fn();
 vi.mock("@/infrastructure/providers/registry", () => ({
   getPaymentProvider: vi.fn(async () => ({
-    providerName: "notchpay",
+    providerName: "fapshi",
     createPayment: mockCreatePayment,
     verifyPayment: mockVerifyPayment,
     cancelPayment: mockCancelPayment,
@@ -41,7 +41,6 @@ import {
 import { listPlans, resolvePlanPriceForCountry } from "./plans-repository";
 import { notifyOrgAdmins } from "./notification-service";
 import { confirmAddonPurchase } from "./addons-service";
-import type { NotchPayWebhookEvent } from "@/infrastructure/providers/payment/notchpay/types";
 
 const mockListPlans = vi.mocked(listPlans);
 const mockResolvePlanPriceForCountry = vi.mocked(resolvePlanPriceForCountry);
@@ -151,19 +150,13 @@ function configureSubscriptionPaymentsMock(initialRow: MockPaymentRow | null) {
   };
 }
 
-function makeWebhookEvent(reference: string, status: "complete" | "failed" = "complete"): NotchPayWebhookEvent {
-  return {
-    id: "evt_1",
-    event: status === "complete" ? "payment.complete" : "payment.failed",
-    data: {
-      reference,
-      status,
-      amount: 5000,
-      currency: "XAF",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    },
-  };
+// handlePaymentWebhook ne prend plus qu'une référence provider (string) —
+// voir le commentaire "ABSTRACTION PROVIDER" en tête de
+// subscription-payment-service.ts. Ce helper ne fait plus que documenter
+// l'intention aux points d'appel ci-dessous (avant : construisait un
+// NotchPayWebhookEvent complet).
+function webhookReference(reference: string): string {
+  return reference;
 }
 
 beforeEach(() => {
@@ -196,10 +189,10 @@ describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => 
     });
     mockVerifyPayment.mockResolvedValue({ providerReference: "pay-1", status: "succeeded" });
 
-    const event = makeWebhookEvent("pay-1");
+    const event = webhookReference("pay-1");
 
     await handlePaymentWebhook(event);
-    await handlePaymentWebhook(event); // rejeu — NotchPay documente des retries
+    await handlePaymentWebhook(event); // rejeu — un provider peut relivrer un même événement
 
     expect(mock.getOrganizationSubscriptionsUpsertCount()).toBe(1);
     expect(mock.getState()?.status).toBe("completed");
@@ -220,7 +213,7 @@ describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => 
     });
     mockVerifyPayment.mockResolvedValue({ providerReference: "pay-2", status: "succeeded" });
 
-    const event = makeWebhookEvent("pay-2");
+    const event = webhookReference("pay-2");
     await handlePaymentWebhook(event);
     await handlePaymentWebhook(event);
 
@@ -236,7 +229,7 @@ describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => 
 
   it("aucune ligne locale pour la référence reçue : ignore silencieusement, ne lève jamais", async () => {
     configureSubscriptionPaymentsMock(null);
-    const event = makeWebhookEvent("ref-inconnue");
+    const event = webhookReference("ref-inconnue");
 
     await expect(handlePaymentWebhook(event)).resolves.not.toThrow();
     expect(mockVerifyPayment).not.toHaveBeenCalled();
@@ -255,7 +248,7 @@ describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => 
       status: "completed",
     });
 
-    await handlePaymentWebhook(makeWebhookEvent("pay-3"));
+    await handlePaymentWebhook(webhookReference("pay-3"));
 
     expect(mockVerifyPayment).not.toHaveBeenCalled();
     expect(mock.getOrganizationSubscriptionsUpsertCount()).toBe(0);
@@ -276,7 +269,7 @@ describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => 
     });
     mockVerifyPayment.mockResolvedValue({ providerReference: "pay-4", status: "failed" });
 
-    await handlePaymentWebhook(makeWebhookEvent("pay-4", "failed"));
+    await handlePaymentWebhook(webhookReference("pay-4"));
 
     expect(mockVerifyPayment).toHaveBeenCalledWith("pay-4"); // jamais de confiance aveugle au seul event.data.status
     expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
@@ -291,13 +284,13 @@ describe("initiatePayment", () => {
     ] as never);
     mockCreatePayment.mockImplementation(async (req: { orderId: string }) => ({
       providerReference: req.orderId,
-      paymentUrl: "https://pay.notchpay.co/checkout/abc",
+      paymentUrl: "https://checkout.fapshi.com/pay/abc",
       status: "pending",
     }));
 
     const result = await initiatePayment("org-1", "business" as never, "user-1", "user@example.com");
 
-    expect(result.paymentUrl).toBe("https://pay.notchpay.co/checkout/abc");
+    expect(result.paymentUrl).toBe("https://checkout.fapshi.com/pay/abc");
     expect(mockCreatePayment).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org-1", amount: 15000, currency: "XAF", customerEmail: "user@example.com" }),
     );
@@ -320,7 +313,7 @@ describe("initiatePayment", () => {
     mockResolvePlanPriceForCountry.mockResolvedValue({ amount: 25000, currencyCode: "GHS", source: "country_specific" });
     mockCreatePayment.mockImplementation(async (req: { orderId: string }) => ({
       providerReference: req.orderId,
-      paymentUrl: "https://pay.notchpay.co/checkout/gh",
+      paymentUrl: "https://checkout.fapshi.com/pay/gh",
       status: "pending",
     }));
 
@@ -430,7 +423,7 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
     // "diffère du paymentId local" — on le fait écho depuis orderId reçu.
     mockCreatePayment.mockImplementation(async (req: { orderId: string }) => ({
       providerReference: req.orderId,
-      paymentUrl: "https://pay.notchpay.co/checkout/renewal",
+      paymentUrl: "https://checkout.fapshi.com/pay/renewal",
       status: "pending",
     }));
 
@@ -581,7 +574,7 @@ describe("cancelPendingPayment", () => {
 
 /**
  * Repasse fiabilité P0 (07/09/2026, section 62 de la mission) — filet de
- * sécurité pour un paiement dont le webhook NotchPay n'est jamais
+ * sécurité pour un paiement dont le webhook provider n'est jamais
  * arrivé du tout (pas un rejeu, une absence totale de livraison).
  * Mock dédié : la requête multi-lignes de `reconcileStalePayments`
  * (`select().eq().lt().not()`, pas de `.maybeSingle()`) a une forme
@@ -680,7 +673,7 @@ describe("reconcileStalePayments (section 62)", () => {
       { ...BASE_ROW, id: "p2", organization_id: "org-2", provider_reference: "ref-ok" },
     ]);
     mockVerifyPayment.mockImplementation(async (reference: string) => {
-      if (reference === "ref-boom") throw new Error("NotchPay indisponible");
+      if (reference === "ref-boom") throw new Error("Fapshi indisponible");
       return { status: "succeeded" };
     });
 

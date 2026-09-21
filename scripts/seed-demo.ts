@@ -20,7 +20,7 @@
  *      une insertion directe pour la démo ("le seed ne passe jamais par
  *      de vrais appels Zernio").
  *   3. Abonnement business + add-on — `purchaseAddon()` appelle
- *      réellement NotchPay. On simule un paiement déjà confirmé (ligne
+ *      réellement le provider de paiement. On simule un paiement déjà confirmé (ligne
  *      `subscription_payments` à `status: 'completed'`) puis on délègue
  *      la suite à `confirmAddonPurchase()`, qui elle est pure DB.
  *

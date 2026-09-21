@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { resolveCanonicalOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { JsonLd } from "@/app/_components/json-ld";
 import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
 import { buildOrganizationJsonLd } from "@/lib/seo";
 import { ContactDetails, buildGoogleMapsSearchUrl } from "@/app/_components/landing-sections/contact";
@@ -19,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ContactPage() {
   const site = await requireStorefront();
   const { tenant, capabilities, whatsappHref } = site;
-  const origin = await resolveRequestOrigin();
+  const origin = await resolveCanonicalOrigin();
 
   // `LocalBusiness` sur la page contact plutôt que seulement sur
   // l'accueil : c'est la page qui porte l'adresse et les horaires, donc
@@ -34,6 +35,7 @@ export default async function ContactPage() {
     email: tenant.email,
     address: tenant.address,
     openingHours: tenant.openingHours,
+    socialLinks: tenant.socialLinks,
   });
 
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(origin, [
@@ -43,8 +45,8 @@ export default async function ContactPage() {
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <JsonLd data={organizationJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
 
       <PageHeader
         title="Nous contacter"

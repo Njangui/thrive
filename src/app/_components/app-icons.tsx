@@ -12,7 +12,7 @@
  * les 9 pages `/admin/**`.
  *
  * Toujours aucune dépendance d'icônes (pas de lucide-react/heroicons —
- * cohérent avec tailwind.config.ts) : trait (stroke, 24x24, viewBox
+ * cohérent avec tailwind.config.js) : trait (stroke, 24x24, viewBox
  * cohérent), `currentColor` partout pour hériter la couleur du texte
  * parent sans prop dédiée.
  */

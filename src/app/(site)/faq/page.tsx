@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { listActiveFaqsForLanding } from "@/application/services/landing-config-service";
-import { resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { resolveCanonicalOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { JsonLd } from "@/app/_components/json-ld";
 import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
 import { FaqList } from "@/app/_components/landing-sections/faq";
 import { Container, EmptyState, PageHeader, Breadcrumbs } from "@/app/_components/storefront/storefront-ui";
@@ -19,13 +20,14 @@ export default async function FaqPage() {
   const site = await requireStorefront();
   const [faqs, origin] = await Promise.all([
     listActiveFaqsForLanding(site.tenant.organizationId),
-    resolveRequestOrigin(),
+    resolveCanonicalOrigin(),
   ]);
 
-  // schema.org/FAQPage : c'est ce balisage qui permet aux réponses
-  // d'apparaître directement dans les résultats Google. Pour une PME sans
-  // budget publicitaire, c'est l'une des rares surfaces gratuites
-  // réellement atteignables — et elle ne coûte que ce bloc.
+  // schema.org/FAQPage. Depuis 2023, Google ne réserve plus l'affichage
+  // enrichi des questions/réponses qu'aux sites institutionnels et de santé :
+  // pour une boutique, ce balisage n'ouvre plus de « rich result ». Il reste
+  // valide et lisible par les autres moteurs et assistants ; on le garde
+  // parce qu'il ne coûte que ce bloc, sans en attendre d'effet dans Google.
   const faqJsonLd =
     faqs.length > 0
       ? {
@@ -46,8 +48,8 @@ export default async function FaqPage() {
 
   return (
     <>
-      {faqJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <JsonLd data={faqJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
 
       <PageHeader
         title="Questions fréquentes"

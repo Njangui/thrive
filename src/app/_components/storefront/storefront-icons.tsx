@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import type { JSX, SVGProps } from "react";
 import type { StorefrontIconKey } from "@/application/config/storefront-blueprint";
 import type { PaymentMethodKey } from "@/domain/entities/landing";
 

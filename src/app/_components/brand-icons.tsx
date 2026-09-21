@@ -13,7 +13,7 @@
  * nouvel écran qui affiche un badge réseau reprenne exactement les mêmes
  * couleurs sans les redéfinir.
  */
-import type { SVGProps } from "react";
+import type { JSX, SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 

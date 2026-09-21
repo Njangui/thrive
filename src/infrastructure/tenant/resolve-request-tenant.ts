@@ -2,6 +2,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { env } from "@/lib/env";
+import { classifySurface, buildPlatformOrigin, type RequestSurface } from "@/lib/request-surface";
 
 export interface TenantContext {
   organizationId: string;
@@ -129,7 +130,7 @@ export const resolveRequestTenant = cache(async function resolveRequestTenant():
  * marketing-service.ts, pour les liens WhatsApp), qui pointe vers le
  * domaine générique de la plateforme et ne reflète JAMAIS le sous-domaine
  * ni le domaine custom d'un tenant, ceci lit le header `host` déjà propagé
- * par `src/middleware.ts` pour CETTE requête précise — indispensable pour
+ * par `src/proxy.ts` pour CETTE requête précise — indispensable pour
  * qu'un sitemap.xml ou une URL canonique pointent vers le bon domaine.
  * `https` par défaut (tous les domaines tenant en production le sont),
  * `http` uniquement en local (hostname commençant par localhost/127.0.0.1).
@@ -148,6 +149,75 @@ export const resolveRequestOrigin = cache(async function resolveRequestOrigin():
   const host = headerList.get("host") ?? "localhost:3000";
   const protocol = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
   return `${protocol}://${host}`;
+});
+
+/**
+ * Quel « site » répond à cette requête : landing marketing de la plateforme,
+ * vitrine d'un tenant, ou hôte non reconnu (sous-domaine inconnu, tenant
+ * suspendu, prévisualisation Vercel). La règle est dans
+ * `lib/request-surface.ts` (pure, testée) ; ici, seulement la lecture des
+ * headers. Sert à `robots.ts`, `sitemap.ts` et aux métadonnées des pages
+ * marketing — voir docs/SEO.md.
+ */
+export const resolveRequestSurface = cache(async function resolveRequestSurface(): Promise<RequestSurface> {
+  const [tenant, headerList] = await Promise.all([resolveRequestTenant(), headers()]);
+  return classifySurface({
+    hasTenant: tenant !== null,
+    host: headerList.get("host") ?? "",
+    rootDomain: env.NEXT_PUBLIC_ROOT_DOMAIN,
+  });
+});
+
+/**
+ * Origine canonique de la PLATEFORME (landing marketing). Voir
+ * `buildPlatformOrigin` pour le choix de la source (domaine racine, pas
+ * `NEXT_PUBLIC_APP_URL`).
+ */
+export function resolveMarketingOrigin(): string {
+  return buildPlatformOrigin(env.NEXT_PUBLIC_ROOT_DOMAIN);
+}
+
+/**
+ * Origine à déclarer comme CANONIQUE (`<link rel="canonical">`, `og:url`,
+ * URL des JSON-LD) pour la vitrine courante.
+ *
+ * Différence avec `resolveRequestOrigin()` : celle-ci renvoie l'hôte
+ * effectivement visité. Or un tenant qui a branché un domaine custom vérifié
+ * est joignable sur DEUX hôtes (`boutique.cresyva.com` ET `boutique.com`)
+ * avec un contenu identique — chacun se déclarait sa propre canonique, donc
+ * deux versions concurrentes de chaque page dans l'index. Ici, les deux
+ * pointent vers le domaine custom principal (`is_primary`, sinon le premier
+ * vérifié) : même règle que `getTenantPublicOrigin`, celle qui construit les
+ * liens partagés sur WhatsApp/Telegram — un seul hôte « officiel ».
+ *
+ * `robots.ts` et `sitemap.ts` gardent volontairement `resolveRequestOrigin()` :
+ * un sitemap ne peut lister que des URL de l'hôte qui le sert.
+ *
+ * Ne lève jamais : sans tenant, sans domaine custom ou sur erreur de lecture,
+ * on retombe sur l'hôte de la requête (comportement d'avant).
+ */
+export const resolveCanonicalOrigin = cache(async function resolveCanonicalOrigin(): Promise<string> {
+  const [tenant, requestOrigin] = await Promise.all([resolveRequestTenant(), resolveRequestOrigin()]);
+  if (!tenant) return requestOrigin;
+
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { data } = await supabase
+      .from("tenant_domains")
+      .select("domain")
+      .eq("organization_id", tenant.organizationId)
+      .eq("verified", true)
+      .order("is_primary", { ascending: false })
+      // Départage déterministe : sans lui, deux domaines vérifiés non
+      // principaux pourraient alterner d'une requête à l'autre.
+      .order("domain", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    return data?.domain ? `https://${data.domain}` : requestOrigin;
+  } catch {
+    return requestOrigin;
+  }
 });
 
 /**

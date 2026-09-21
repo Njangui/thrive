@@ -1,54 +1,57 @@
-# Intégration paiement — NotchPay
+# Intégration paiement — Fapshi (migré depuis NotchPay le 2026-09-20)
 
-**Statut :** SUPPORTED (paiement + webhook), PARTIAL (méthodes de paiement selon pays/compte), NOT_SUPPORTED (paiement récurrent réel, remboursement via API).
-**Consulté :** 31 août 2026, [developer.notchpay.co](https://developer.notchpay.co) — `/api-reference/payments`, `/get-started/webhooks`, `/api-reference/resources`.
-**Adapter :** `src/infrastructure/providers/payment/notchpay/` (types, client, adapter, webhook-handler).
+**Statut :** SUPPORTED (paiement + webhook + annulation), PARTIAL (remboursement, payout), NOT_SUPPORTED (paiement récurrent réel, multi-pays).
+**Consulté :** 20 septembre 2026, [docs.fapshi.com](https://docs.fapshi.com) — `en/api-reference/endpoint/*`, `en/api-reference/preliminary-knowledge/environment`. Recherche web uniquement : cet environnement n'a pas d'accès réseau pour taper l'API réellement — **à revalider en sandbox (sandbox.fapshi.com) avant toute mise en production.**
+**Adapter :** `src/infrastructure/providers/payment/fapshi/` (types, client, adapter, webhook-handler).
+**Pipeline webhook générique (partagé par tous les providers) :** `src/infrastructure/providers/payment/webhook-pipeline.ts`.
 
-Ce document tranche, capacité par capacité, ce que l'intégration fait réellement — pour que personne (Marc-well, un futur agent) n'ait à re-deviner ce qui a été vérifié vs supposé.
+Ce document tranche, capacité par capacité, ce que l'intégration fait réellement — pour que personne (un futur agent inclus) n'ait à re-deviner ce qui a été vérifié vs supposé.
 
 ## Résumé
 
 | Capacité | Verdict | Détail |
 |---|---|---|
-| Créer un paiement + obtenir une URL de checkout | **SUPPORTED** | `POST /payments` → `authorization_url` |
-| Vérifier le statut d'un paiement | **SUPPORTED** | `GET /payments/{reference}` |
-| Recevoir une confirmation par webhook | **SUPPORTED** | Signature HMAC-SHA256 vérifiable (`X-Notch-Signature`) |
-| Annuler un paiement | **PARTIAL** | `DELETE /payments/{reference}` — uniquement si encore `pending` |
-| Mobile Money (MTN/Orange Cameroun) | **SUPPORTED** | Canaux confirmés `cm.mtn` / `cm.orange` |
-| Carte bancaire | **PARTIAL** | Existe côté NotchPay (guide de test mentionné) mais l'activation réelle par pays/compte marchand n'a pas pu être vérifiée depuis la documentation seule — à confirmer au moment de la configuration du compte NotchPay de production |
-| Paiement récurrent réel (abonnement automatique) | **NOT_SUPPORTED** | Aucune ressource "subscription"/"recurring" dans l'API — chaque renouvellement est un nouveau `POST /payments` initié manuellement (voir `/dashboard/subscription`, bouton "Renouveler") |
-| Remboursement via API | **NOT_SUPPORTED** | Aucun endpoint de remboursement dans `/api-reference` (`payments`, `transfers`, `customers`, `beneficiaries`, `webhooks`, `balance`, `resources` — c'est la liste complète). Le dashboard NotchPay permet d'émettre un remboursement manuellement ; ce projet ne l'automatise pas |
+| Créer un paiement + obtenir une URL de checkout | **SUPPORTED** | `POST /initiate-pay` → `link` (page hébergée, valide 24h) |
+| Vérifier le statut d'un paiement | **SUPPORTED** | `GET /payment-status/{transId}` |
+| Recevoir une confirmation par webhook | **SUPPORTED** | Secret statique vérifiable (`x-wh-secret`, comparaison directe — PAS de HMAC) |
+| Annuler un paiement | **PARTIAL** | `POST /expire-pay` — uniquement si encore `PENDING`/`CREATED`, et seulement pour un paiement créé via `initiate-pay` (jamais `direct-pay`, non utilisé dans ce projet) |
+| Mobile Money (MTN/Orange Cameroun) | **SUPPORTED** | Seuls canaux Fapshi, confirmés `mobile money` / `orange money` |
+| Autres pays / autres devises | **NOT_SUPPORTED** | Fapshi ne traite QUE le XAF (Cameroun) — voir "Contrainte multi-pays" ci-dessous |
+| Paiement récurrent réel (abonnement automatique) | **NOT_SUPPORTED** | Aucune ressource "subscription"/"recurring" documentée — chaque renouvellement reste un nouveau `POST /initiate-pay` initié manuellement (comportement hérité de NotchPay, inchangé par cette migration) |
+| Remboursement via API | **NOT_SUPPORTED** | Aucun endpoint de remboursement dans la documentation consultée |
+| Virement sortant (payout) | **PARTIAL, non activé** | `POST /payout` existe (contrairement à NotchPay) mais nécessite un second compte de service Fapshi dédié (collecte et payout ne peuvent pas partager un compte) — décision produit non tranchée, voir `affiliate-payout-service.ts` |
 
 ## Ce qui est réellement branché
 
-- **Créer un paiement** — `POST https://api.notchpay.co/payments`, en-tête `Authorization: <clé publique>` (jamais de préfixe `Bearer`, à la différence de Zernio — vérifié explicitement, ce n'est pas un oubli). Body : `amount`, `currency`, `email` ou `phone`, `description`, `reference` (fournie par nous, jamais générée par NotchPay). Réponse : `transaction.reference` + `authorization_url` vers lequel rediriger l'utilisateur.
-- **Vérifier un paiement** — `GET /payments/{reference}`. Utilisé deux fois dans ce projet : au clic "Payer" pour obtenir l'URL de checkout, et **systématiquement dans le webhook** avant de créditer quoi que ce soit (voir plus bas).
-- **Annuler un paiement** — `DELETE /payments/{reference}`, confirmé fonctionner uniquement tant que le paiement est `pending` (répond une erreur sinon). Utilisé par "Annuler" sur un paiement en attente (`/dashboard/subscription`).
-- **Webhook** — POST vers l'URL configurée côté dashboard NotchPay (Settings > Webhooks). Corps : `{ id, event, data: { reference, status, amount, currency, ... } }`, un seul événement par delivery (pas de batch, contrairement à Zernio). Événements confirmés : `payment.created`, `payment.complete`, `payment.failed`, `payment.canceled`, `payment.expired`. Signature : en-tête `X-Notch-Signature`, HMAC-SHA256 hexadécimal du **corps brut**, comparaison en temps constant (`crypto.timingSafeEqual`).
+- **Créer un paiement** — `POST https://live.fapshi.com/initiate-pay` (ou `sandbox.fapshi.com` — voir `FAPSHI_BASE_URL`), en-têtes `apiuser`/`apikey` (DEUX valeurs, contrairement à NotchPay qui n'en exigeait qu'une). Body : `amount` (min 100 XAF), `email`, `externalId` (notre `paymentId` local, pour réconciliation manuelle côté dashboard Fapshi — **jamais** la référence provider elle-même), `userId` (notre `organizationId`), `message`. Réponse : `transId` (référence provider, **générée par Fapshi**, jamais par nous) + `link` (URL de checkout).
+- **Vérifier un paiement** — `GET /payment-status/{transId}`. Utilisé **systématiquement dans le webhook** avant de créditer quoi que ce soit (voir plus bas), et par la réconciliation programmée (`reconcileStalePayments`).
+- **Annuler un paiement** — `POST /expire-pay` avec `{ transId }`. Utilisé par "Annuler" sur un paiement en attente (`/dashboard/subscription`), best-effort (un échec ne bloque jamais l'annulation locale — voir `cancelPendingPayment`).
+- **Webhook** — POST vers l'URL configurée côté dashboard Fapshi (Developers > Webhooks). Corps : directement l'objet Transaction (**pas d'enveloppe `{id, event, data}` comme NotchPay**) — `{ transId, status, amount, externalId, userId, email, ... }`. Un seul événement par delivery, confirmé "Fapshi sends only one webhook request per event, regardless of whether your server responds or not". Statuts : `CREATED`, `PENDING`, `SUCCESSFUL`, `FAILED`, `EXPIRED`. Authentification : en-tête `x-wh-secret`, comparaison directe en temps constant (`crypto.timingSafeEqual`) — **pas de signature HMAC** (différence structurelle avec NotchPay, à ne pas rater si vous portez du code écrit pour NotchPay).
 
-## Pourquoi pas de paiement récurrent automatique
+## Différence structurelle majeure avec NotchPay : qui génère la référence ?
 
-La documentation NotchPay ne référence que sept ressources : `payments`, `transfers`, `customers`, `beneficiaries`, `webhooks`, `balance`, `resources`. Aucune ne modélise un abonnement récurrent (pas de `POST /subscriptions`, pas de "plan" côté NotchPay). Chaque paiement est un événement ponctuel. Ce projet en tire la conséquence directe : `organization_subscriptions.current_period_end` est étendu d'un mois **à chaque paiement confirmé**, jamais par un job récurrent qui déclencherait un débit automatique — c'est le tenant qui reclique "Renouveler" (ou passe à un autre forfait) à l'échéance. Un rappel proactif avant expiration n'est pas dans le périmètre de ce lot (candidat naturel pour Lot H, section notifications/observabilité).
+NotchPay acceptait une `reference` fournie par l'appelant et la renvoyait telle quelle — ce projet en profitait pour utiliser `paymentId` (notre UUID local) directement comme `provider_reference`, généré et stocké *avant* même l'appel API. **Fapshi génère son propre `transId` côté serveur** : impossible de le connaître avant la réponse à `initiate-pay`.
 
-## Pourquoi pas de remboursement via API
+Conséquence sur le code (pas seulement un renommage) : `initiatePayment()` (et `purchaseAddon()`, `initiateDedicatedNumberPayment()`) appellent désormais `provider.createPayment()` **avant** d'insérer la ligne locale, et stockent `result.providerReference` (jamais `paymentId`) comme `provider_reference`. Voir le commentaire "ABSTRACTION PROVIDER" en tête de `subscription-payment-service.ts`.
 
-Aucun des endpoints documentés (`/api-reference/*`) ne couvre un remboursement. Le dashboard NotchPay indique explicitement permettre d'"émettre des remboursements" — mais uniquement comme action manuelle dans l'interface marchand, jamais via un appel REST documenté. `PaymentProvider` (port, `src/domain/ports/payment-provider.ts`) n'expose donc volontairement aucune méthode `refund()` : l'ajouter aurait supposé une capacité non vérifiée. Un statut `refunded` existe dans le schéma `subscription_payments` (et dans `PaymentStatusResult`) pour rester cohérent avec un éventuel futur remboursement traité manuellement puis reflété en base par un Super Admin — mais aucun code de ce lot ne l'écrit automatiquement.
+## Contrainte multi-pays (à lire avant d'activer un pays hors Cameroun)
 
-## Différences avec le webhook Zernio (déjà dans le projet)
+Le Country Engine (`countries.notchpay_supported`, `payment_channels` — noms de colonnes hérités de l'époque NotchPay, voir `docs/notchpay-resources.md`) avait pré-rempli NG/GH/CI/SN/GA/KE/UG comme `coming_soon`, sur la base des revendications publiques de NotchPay. **Fapshi ne traite que le XAF/Cameroun** — cette roadmap n'a plus de prestataire technique réel derrière elle tant qu'aucune décision n'est prise. `FapshiAdapter.createPayment()` refuse déjà explicitement toute devise ≠ XAF (échec net et loggé plutôt qu'un appel API voué à échouer côté Fapshi), mais ça ne résout que la sécurité technique — pas la question produit ("quel provider pour les autres pays ?"). Cette migration n'a pas touché au Country Engine lui-même : décision volontairement laissée ouverte.
 
-Pour qui compare les deux adapters côte à côte :
+## Ajouter un nouveau provider (objectif de l'abstraction mise en place le 2026-09-20)
 
-| | Zernio | NotchPay |
-|---|---|---|
-| En-tête d'auth | `Authorization: Bearer <clé>` | `Authorization: <clé>` (sans préfixe) |
-| En-tête de signature webhook | `X-Zernio-Signature` (à vérifier dans le code existant) | `X-Notch-Signature` |
-| Forme du webhook | Tableau d'événements possible (normalisé côté adapter) | Un seul objet par delivery (jamais de tableau) |
+Le port `PaymentProvider` (`src/domain/ports/payment-provider.ts`) existait déjà avant cette migration ; ce qui a changé, c'est que plus aucun code en dehors de `payment/<provider>/` et `registry.ts` ne connaît le nom d'un provider concret. Pour brancher un provider `X` :
 
-## Bonnes pratiques appliquées (section "Best Practices" de la doc NotchPay)
+1. Créer `src/infrastructure/providers/payment/x/{types,client,adapter,webhook-handler}.ts`. L'adapter implémente `PaymentProvider` (`providerName`, `createPayment`, `verifyPayment`, `getPaymentStatus`, `cancelPayment?`) ; le webhook-handler expose une fonction de vérification (signature/secret) et une fonction de parsing — pures, testables isolément (voir `fapshi/webhook-handler.test.ts`).
+2. Ajouter un `case "x":` dans `registry.ts::getPaymentProvider()` + les variables d'env correspondantes dans `env.ts`/`.env.example`.
+3. Créer `src/app/api/webhooks/x/route.ts` — quelques lignes, appelle `handlePaymentWebhookRequest()` (`payment/webhook-pipeline.ts`) avec la config `{ providerName, verify, parse }` du provider. Rate limiting, idempotence (`webhook_events`), gestion d'erreurs : déjà faits, une seule fois, pour tous les providers.
+4. **Rien d'autre.** `subscription-payment-service.ts`, `addons-service.ts`, `phone-number-rental-service.ts` lisent `provider.providerName`/`result.providerReference` dynamiquement — aucune chaîne de provider en dur. `subscription_payments.provider` est une colonne texte libre depuis la migration `0066_fapshi_payment_provider.sql` (plus de `CHECK` figé) : changer `PAYMENT_PROVIDER_DEFAULT` ne demande plus de migration SQL.
 
-- **Ne jamais faire confiance au seul corps du webhook** — `handlePaymentWebhook()` revérifie systématiquement via `GET /payments/{reference}` avant de créditer un abonnement ou un add-on, même si `event.data.status` indique déjà `complete`.
-- **Gérer les retries** — la route webhook répond toujours `200` (même sur événement dupliqué ou déjà traité), pour ne jamais provoquer un retry NotchPay infini sur une erreur qui nous est propre.
-- **Idempotence** — chaque paiement a une `provider_reference` générée par nous (jamais par NotchPay) *avant* l'appel API, ce qui permet au webhook de toujours retrouver une ligne préexistante plutôt que d'en créer une à la volée à partir du seul événement reçu.
+## Bonnes pratiques appliquées (héritées de NotchPay, valables pour tout provider)
+
+- **Ne jamais faire confiance au seul corps du webhook** — `handlePaymentWebhook()` revérifie systématiquement via `provider.verifyPayment()` avant de créditer un abonnement ou un add-on, même si le webhook annonce déjà `SUCCESSFUL`.
+- **Gérer les retries** — la route webhook répond toujours `200` (même sur événement dupliqué ou déjà traité), pour ne jamais provoquer un retry infini côté provider sur une erreur qui nous est propre.
+- **Idempotence** — `webhook_events` impose `unique (provider, external_event_id)`. Pour Fapshi, `external_event_id = transId` : un `transId` n'atteint un statut terminal qu'une seule fois (confirmé : "No payments can be made after status is SUCCESSFUL or EXPIRED"), donc `transId` seul suffit comme clé — pas besoin d'un identifiant d'événement séparé comme NotchPay en fournissait un (`event.id`).
 
 ## Domaines — verdict (voir aussi RAPPORT_LOT_G.md)
 

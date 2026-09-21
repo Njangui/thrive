@@ -13,7 +13,7 @@ import type { FontChoice } from "@/domain/entities/landing";
  * --font-body"` sur `<html>` à partir de deux objets factices
  * (`const displayFont = { variable: "--font-display" }`). Résultat :
  * `--font-display` / `--font-body` n'étaient JAMAIS définies nulle part,
- * donc `font-display` / `font-body` (tailwind.config.ts) retombaient sur
+ * donc `font-display` / `font-body` (tailwind.config.js) retombaient sur
  * `sans-serif` — la vitrine publique de TOUS les tenants s'affichait en
  * police système, et les 3 choix de police du dashboard (« Moderne /
  * Classique / Chaleureux ») n'avaient strictement aucun effet visible.

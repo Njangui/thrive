@@ -74,7 +74,7 @@ async function payPlanAction(formData: FormData) {
   let paymentUrl: string;
   try {
     const result = await initiatePayment(organizationId, planKey, membership.userId, email as string);
-    if (!result.paymentUrl) throw new Error("URL de paiement manquante dans la réponse NotchPay.");
+    if (!result.paymentUrl) throw new Error("URL de paiement manquante dans la réponse du prestataire de paiement.");
     paymentUrl = result.paymentUrl;
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de l'initiation du paiement.";
@@ -84,7 +84,7 @@ async function payPlanAction(formData: FormData) {
   redirect(paymentUrl);
 }
 
-/** Downgrade immédiat vers "free", sans passer par payPlanAction/NotchPay (rien à facturer — voir switchToFreePlan). */
+/** Downgrade immédiat vers "free", sans passer par payPlanAction/le provider de paiement (rien à facturer — voir switchToFreePlan). */
 async function switchToFreeAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");

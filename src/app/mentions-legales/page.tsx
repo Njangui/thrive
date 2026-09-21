@@ -1,26 +1,41 @@
 import type { Metadata } from "next";
 import { LegalPageLayout } from "@/app/_components/legal-page-layout";
+import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
+import { LEGAL_ENTITY, isLegalEntityComplete, legalField } from "@/application/config/legal-entity";
 
-export const metadata: Metadata = { title: "Mentions légales — CRESYVA" };
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingMetadata({
+    path: "/mentions-legales",
+    title: "Mentions légales — CRESYVA",
+    description: "Éditeur, hébergeur et informations légales du service CRESYVA.",
+    // Une page légale à trous n'a pas à être indexée (voir legal-entity.ts).
+    noIndex: !isLegalEntityComplete(),
+  });
+}
 
 export default function MentionsLegalesPage() {
+  const entity = LEGAL_ENTITY;
+  const companyName = legalField(entity.companyName, "dénomination sociale");
+
   return (
     <LegalPageLayout title="Mentions légales">
       <h2>Éditeur du site</h2>
       <p>
-        Le service CRESYVA est édité par <strong>[À COMPLÉTER — dénomination sociale]</strong>, [À COMPLÉTER — forme
-        juridique], au capital de [À COMPLÉTER] FCFA, immatriculée au Registre du Commerce et du Crédit Mobilier
-        (RCCM) sous le numéro [À COMPLÉTER], dont le siège social est situé [À COMPLÉTER — adresse], [À COMPLÉTER —
-        ville, pays].
+        Le service CRESYVA est édité par <strong>{companyName}</strong>, {legalField(entity.legalForm, "forme juridique")}
+        {entity.shareCapital.trim() ? `, au capital de ${entity.shareCapital.trim()} FCFA` : ""}, immatriculée au
+        Registre du Commerce et du Crédit Mobilier (RCCM) sous le numéro {legalField(entity.rccm, "numéro RCCM")}, dont
+        le siège social est situé {legalField(entity.address, "adresse")}, {legalField(entity.city, "ville")},{" "}
+        {legalField(entity.country, "pays")}.
       </p>
       <p>
-        Numéro de contribuable (NIU) : [À COMPLÉTER].
+        Numéro d&apos;identifiant unique du contribuable (NIU) : {legalField(entity.niu, "NIU")}.
         <br />
-        Téléphone : [À COMPLÉTER]. Email : [À COMPLÉTER].
+        {entity.phone.trim() ? `Téléphone : ${entity.phone.trim()}. ` : ""}Email :{" "}
+        {legalField(entity.contactEmail, "email de contact")}.
       </p>
 
       <h2>Directeur de la publication</h2>
-      <p>[À COMPLÉTER — nom du représentant légal].</p>
+      <p>{legalField(entity.publicationDirector, "nom du représentant légal")}.</p>
 
       <h2>Hébergement</h2>
       <p>
@@ -33,11 +48,13 @@ export default function MentionsLegalesPage() {
       <h2>Propriété intellectuelle</h2>
       <p>
         La marque CRESYVA, son logo, et l&apos;ensemble des éléments graphiques et logiciels de la plateforme sont la
-        propriété de [À COMPLÉTER]. Toute reproduction non autorisée est interdite.
+        propriété de {companyName}. Toute reproduction non autorisée est interdite.
       </p>
 
       <h2>Contact</h2>
-      <p>Pour toute question relative à ces mentions légales : [À COMPLÉTER — email de contact].</p>
+      <p>
+        Pour toute question relative à ces mentions légales : {legalField(entity.contactEmail, "email de contact")}.
+      </p>
     </LegalPageLayout>
   );
 }

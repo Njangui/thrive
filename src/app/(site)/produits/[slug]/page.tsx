@@ -3,11 +3,12 @@ import { StorefrontVideo } from "@/app/_components/storefront/storefront-video";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { resolveRequestTenant, resolveCanonicalOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getProductBySlug, listStorefrontProducts } from "@/application/services/catalog-service";
 import { trackEvent } from "@/application/services/analytics-service";
-import { resolveProductSeo, buildProductJsonLd, type ProductJsonLdAvailability } from "@/lib/seo";
+import { resolveProductSeo, buildProductJsonLd, buildSocialMetadata, type ProductJsonLdAvailability } from "@/lib/seo";
+import { JsonLd } from "@/app/_components/json-ld";
 import { STOREFRONT_PATHS, productPath } from "@/application/config/storefront-routes";
 import { TrackedCtaLink } from "@/app/_components/tracked-cta-link";
 import { formatPrice } from "@/lib/format";
@@ -26,6 +27,9 @@ const STATUS_LABELS: Record<string, { label: string; available: boolean }> = {
   inactive: { label: "Indisponible", available: false },
 };
 
+/** Statuts dont la fiche a sa place dans l'index Google (voir `generateMetadata`). */
+const INDEXABLE_STATUSES = new Set(["active", "out_of_stock"]);
+
 /** Section 18 (Lot H) -> disponibilité schema.org, seulement pour un produit actif (voir plus bas). */
 const JSON_LD_AVAILABILITY: Record<string, ProductJsonLdAvailability> = {
   active: "InStock",
@@ -40,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const product = await getProductBySlug(tenant.organizationId, slug);
   if (!product) return {};
 
-  const origin = await resolveRequestOrigin();
+  const origin = await resolveCanonicalOrigin();
   const canonicalUrl = `${origin}${productPath(slug)}`;
   const seo = resolveProductSeo({
     productName: product.name,
@@ -55,19 +59,20 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: seo.title,
     description: seo.description,
     alternates: { canonical: canonicalUrl },
-    openGraph: {
-      type: "website",
+    // Une fiche `draft`/`inactive` reste consultable par lien direct (on ne
+    // casse pas un lien déjà partagé) mais n'a rien à faire dans l'index :
+    // même règle que pour le JSON-LD Product ci-dessous. `out_of_stock`, en
+    // revanche, reste indexée — la rupture est temporaire, et Google
+    // recommande de conserver ces pages (avec `availability: OutOfStock`).
+    robots: INDEXABLE_STATUSES.has(product.status) ? undefined : { index: false, follow: true },
+    ...buildSocialMetadata({
       title: seo.title,
       description: seo.description,
       url: canonicalUrl,
-      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
-    },
-    twitter: {
-      card: seo.ogImageUrl ? "summary_large_image" : "summary",
-      title: seo.title,
-      description: seo.description,
-      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
-    },
+      imageUrl: seo.ogImageUrl,
+      imageIsSquare: seo.ogImageIsSquare,
+      siteName: tenant.name,
+    }),
     icons: tenant.faviconUrl ? { icon: tenant.faviconUrl } : undefined,
   };
 }
@@ -93,7 +98,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       )
     : null;
 
-  const origin = await resolveRequestOrigin();
+  const origin = await resolveCanonicalOrigin();
 
   // Produits similaires : même vitrine, hors produit courant. Une fiche
   // produit sans rebond est un cul-de-sac — le visiteur arrivé par un
@@ -121,6 +126,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         unitPrice: product.unitPrice,
         currency: tenant.currency,
         availability: jsonLdAvailability,
+        sellerName: tenant.name,
+        category: product.categoryName,
+        // `promotionEndsAt` est déjà null pour une promotion expirée ou sans
+        // échéance (voir getProductBySlug) : jamais une date passée ici.
+        priceValidUntil: product.promotionEndsAt,
       })
     : null;
 
@@ -134,10 +144,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   return (
     <>
-      {productJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
-      )}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <JsonLd data={productJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
 
       <Container className="py-6 sm:py-10">
         <Breadcrumbs
@@ -161,12 +169,18 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             </div>
             {product.images.length > 1 && (
               <div className="grid grid-cols-4 gap-2">
-                {product.images.slice(1, 5).map((url) => (
+                {product.images.slice(1, 5).map((url, index) => (
                   <div
                     key={url}
                     className="relative aspect-square overflow-hidden rounded-brand border border-black/[0.08] bg-black/[0.03]"
                   >
-                    <StorefrontImage src={url} alt={product.name} sizes="120px" fallbackLabel="" />
+                    <StorefrontImage
+                      src={url}
+                      // Alt distinct par vue : cinq fois le même texte n'apporte rien à Google Images ni aux lecteurs d'écran.
+                      alt={`${product.name} — vue ${index + 2}`}
+                      sizes="120px"
+                      fallbackLabel=""
+                    />
                   </div>
                 ))}
               </div>

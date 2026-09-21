@@ -1,5 +1,3 @@
-import type { Config } from "tailwindcss";
-
 /**
  * Trois familles de tokens couleur, volontairement séparées :
  *  - `brand-*` : personnalisable PAR TENANT (logo pour l'instant — les
@@ -24,7 +22,7 @@ import type { Config } from "tailwindcss";
  *    sans collision, cf. `adm-*`/`mkt-*` dans globals.css qui consomment
  *    ces tokens.
  */
-const config: Config = {
+const config = {
   darkMode: "class",
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
@@ -68,4 +66,4 @@ const config: Config = {
   plugins: [],
 };
 
-export default config;
+module.exports = config;

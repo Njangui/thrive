@@ -4,6 +4,17 @@ import {
   resolveProductSeo,
   buildOrganizationJsonLd,
   buildProductJsonLd,
+  buildServiceJsonLd,
+  buildSocialMetadata,
+  buildWebSiteJsonLd,
+  buildPlatformOrganizationJsonLd,
+  parseOpeningRanges,
+  parsePageParam,
+  withPageParam,
+  serializeJsonLd,
+  toMetaDescription,
+  toIsoDate,
+  latestIsoDate,
   type OrganizationSeoInput,
 } from "./seo";
 
@@ -171,15 +182,68 @@ describe("buildOrganizationJsonLd", () => {
     expect(jsonLd.openingHoursSpecification).toBeUndefined();
   });
 
-  it("convertit les horaires d'ouverture renseignés en OpeningHoursSpecification", () => {
+  it("convertit les horaires en OpeningHoursSpecification VALIDE : jour schema.org + opens/closes HH:MM", () => {
     const jsonLd = buildOrganizationJsonLd({
       name: "Salon Élégance",
       url: "https://salon-elegance.sme-os.app",
       openingHours: { lundi: "08:00-18:00", dimanche: "" },
     });
     expect(jsonLd.openingHoursSpecification).toEqual([
-      { "@type": "OpeningHoursSpecification", dayOfWeek: "lundi", description: "08:00-18:00" },
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: "https://schema.org/Monday",
+        opens: "08:00",
+        closes: "18:00",
+      },
     ]);
+  });
+
+  it("n'écrit JAMAIS le nom français du jour ni une plage brute — Google les ignore", () => {
+    const jsonLd = buildOrganizationJsonLd({
+      name: "Salon Élégance",
+      url: "https://salon-elegance.sme-os.app",
+      openingHours: { mardi: "8h-17h", samedi: "9h à 13h" },
+    });
+    const serialized = JSON.stringify(jsonLd.openingHoursSpecification);
+    expect(serialized).not.toContain("mardi");
+    expect(serialized).not.toContain("samedi");
+    expect(serialized).not.toContain("description");
+  });
+
+  it("omet un jour dont les horaires ne sont pas interprétables plutôt que de les inventer", () => {
+    const jsonLd = buildOrganizationJsonLd({
+      name: "Salon Élégance",
+      url: "https://salon-elegance.sme-os.app",
+      openingHours: { lundi: "Fermé", mardi: "sur rendez-vous", mercredi: "24h/24" },
+    });
+    expect(jsonLd.openingHoursSpecification).toBeUndefined();
+  });
+
+  it("reprend logo (image + logo) et n'inclut dans sameAs que de vraies URL http(s)", () => {
+    const jsonLd = buildOrganizationJsonLd({
+      name: "Salon Élégance",
+      url: "https://salon-elegance.sme-os.app",
+      logoUrl: "https://cdn.example.com/logo.png",
+      socialLinks: {
+        facebook: "https://facebook.com/salon-elegance",
+        instagram: "@salon_elegance",
+        whatsapp: "237600000000",
+        tiktok: "javascript:alert(1)",
+        doublon: "https://facebook.com/salon-elegance",
+      },
+    });
+    expect(jsonLd.image).toBe("https://cdn.example.com/logo.png");
+    expect(jsonLd.logo).toBe("https://cdn.example.com/logo.png");
+    expect(jsonLd.sameAs).toEqual(["https://facebook.com/salon-elegance"]);
+  });
+
+  it("n'écrit pas sameAs quand aucune URL exploitable n'existe", () => {
+    const jsonLd = buildOrganizationJsonLd({
+      name: "Salon Élégance",
+      url: "https://salon-elegance.sme-os.app",
+      socialLinks: { instagram: "@salon" },
+    });
+    expect(jsonLd.sameAs).toBeUndefined();
   });
 });
 
@@ -230,5 +294,297 @@ describe("buildProductJsonLd", () => {
       availability: "InStock",
     });
     expect(jsonLd.description).toBeUndefined();
+  });
+});
+
+describe("resolveOrganizationSeo / resolveProductSeo — replis d'image de partage", () => {
+  it("préfère l'image SEO dédiée, puis la bannière, puis le logo", () => {
+    const base = { ...ORG_MINIMAL, bannerUrl: "https://cdn.example.com/banner.png", logoUrl: "https://cdn.example.com/logo.png" };
+
+    expect(resolveOrganizationSeo({ ...base, seoOgImageUrl: "https://cdn.example.com/og.png" }).ogImageUrl).toBe(
+      "https://cdn.example.com/og.png",
+    );
+    expect(resolveOrganizationSeo(base).ogImageUrl).toBe("https://cdn.example.com/banner.png");
+    expect(resolveOrganizationSeo({ ...base, bannerUrl: null }).ogImageUrl).toBe("https://cdn.example.com/logo.png");
+    expect(resolveOrganizationSeo(ORG_MINIMAL).ogImageUrl).toBeUndefined();
+  });
+
+  it("signale un logo comme image carrée (Twitter Card `summary`), pas une bannière", () => {
+    expect(resolveOrganizationSeo({ ...ORG_MINIMAL, logoUrl: "https://cdn.example.com/logo.png" }).ogImageIsSquare).toBe(true);
+    expect(resolveOrganizationSeo({ ...ORG_MINIMAL, bannerUrl: "https://cdn.example.com/b.png" }).ogImageIsSquare).toBe(false);
+    expect(resolveOrganizationSeo(ORG_MINIMAL).ogImageIsSquare).toBe(false);
+  });
+
+  it("une photo produit l'emporte sur tout repli de l'organisation, et compte comme carrée", () => {
+    const seo = resolveProductSeo({
+      productName: "Sac",
+      productSeoTitle: null,
+      productSeoDescription: null,
+      productDescription: null,
+      productImageUrl: "https://cdn.example.com/sac.png",
+      organization: { ...ORG_MINIMAL, bannerUrl: "https://cdn.example.com/banner.png" },
+    });
+    expect(seo.ogImageUrl).toBe("https://cdn.example.com/sac.png");
+    expect(seo.ogImageIsSquare).toBe(true);
+  });
+});
+
+describe("toMetaDescription", () => {
+  it("replie les retours à la ligne et espaces multiples sur un seul espace", () => {
+    expect(toMetaDescription("Sac en cuir\n\n  fait main.\t Livraison rapide.")).toBe(
+      "Sac en cuir fait main. Livraison rapide.",
+    );
+  });
+
+  it("retourne undefined pour une valeur vide ou blanche", () => {
+    expect(toMetaDescription(null)).toBeUndefined();
+    expect(toMetaDescription("   \n ")).toBeUndefined();
+  });
+
+  it("laisse intact un texte déjà assez court", () => {
+    expect(toMetaDescription("Court et net.")).toBe("Court et net.");
+  });
+
+  it("coupe un texte long sur une frontière de mot, avec une ellipse, sans dépasser la limite", () => {
+    const long = "mot ".repeat(100).trim();
+    const result = toMetaDescription(long)!;
+    expect(Array.from(result).length).toBeLessThanOrEqual(160);
+    expect(result.endsWith("…")).toBe(true);
+    expect(result.endsWith("mot…")).toBe(true);
+  });
+
+  it("ne coupe jamais un emoji en deux", () => {
+    const result = toMetaDescription("😀".repeat(300))!;
+    expect(result.endsWith("…")).toBe(true);
+    // Un demi-emoji laisserait un substitut isolé (U+D800–U+DFFF) dans la chaîne.
+    expect(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(result)).toBe(false);
+  });
+
+  it("ne réduit pas un long mot unique à quelques caractères", () => {
+    const result = toMetaDescription(`a ${"x".repeat(300)}`)!;
+    expect(Array.from(result).length).toBeGreaterThan(100);
+  });
+
+  it("s'applique aux replis de description, pas à une seo_description saisie explicitement", () => {
+    const longDescription = "phrase ".repeat(60).trim();
+    const explicit = "Une seo_description volontairement plus longue que la limite de cent soixante caractères, choisie par le commerçant lui-même pour son référencement.";
+    expect(Array.from(resolveOrganizationSeo({ ...ORG_MINIMAL, description: longDescription }).description!).length).toBeLessThanOrEqual(160);
+    expect(resolveOrganizationSeo({ ...ORG_MINIMAL, seoDescription: explicit }).description).toBe(explicit);
+  });
+});
+
+describe("serializeJsonLd — anti-injection dans <script type=\"application/ld+json\">", () => {
+  it("neutralise une fermeture </script> saisie dans un nom, une description ou une FAQ", () => {
+    const hostile = { name: "Boutique</script><script>alert(document.cookie)</script>" };
+    const output = serializeJsonLd(hostile);
+
+    expect(output).not.toContain("</script>");
+    expect(output).not.toContain("<script>");
+    expect(output).not.toContain("<");
+    expect(output).not.toContain(">");
+  });
+
+  it("reste du JSON valide et restitue EXACTEMENT la donnée d'origine", () => {
+    const data = {
+      name: "Café & Thé <Spécial> — l'été",
+      note: "ligne\u2028séparateur\u2029paragraphe",
+      nested: { list: ["</script>", "a&b"], n: 5 },
+    };
+    expect(JSON.parse(serializeJsonLd(data))).toEqual(data);
+  });
+
+  it("échappe U+2028 / U+2029 (terminateurs de ligne JavaScript, valides en JSON)", () => {
+    const output = serializeJsonLd({ v: "a\u2028b\u2029c" });
+    expect(output).not.toContain("\u2028");
+    expect(output).not.toContain("\u2029");
+  });
+
+  it("ne lève pas et produit du JSON valide pour undefined", () => {
+    expect(serializeJsonLd(undefined)).toBe("null");
+  });
+});
+
+describe("parseOpeningRanges", () => {
+  it.each([
+    ["08:00-18:00", [{ opens: "08:00", closes: "18:00" }]],
+    ["8h-18h", [{ opens: "08:00", closes: "18:00" }]],
+    ["8h30 à 17h", [{ opens: "08:30", closes: "17:00" }]],
+    ["de 8:00 – 12:30", [{ opens: "08:00", closes: "12:30" }]],
+    ["8h-12h / 14h-18h", [{ opens: "08:00", closes: "12:00" }, { opens: "14:00", closes: "18:00" }]],
+    ["0h-24h", [{ opens: "00:00", closes: "23:59" }]],
+  ])("interprète %s", (input, expected) => {
+    expect(parseOpeningRanges(input)).toEqual(expected);
+  });
+
+  it.each(["", "Fermé", "sur rendez-vous", "24h/24", "8h", "26h-28h", "8h61-18h", "8h-12h-14h"])(
+    "renvoie [] pour la valeur ambiguë ou invalide %j — jamais d'horaire deviné",
+    (input) => {
+      expect(parseOpeningRanges(input)).toEqual([]);
+    },
+  );
+});
+
+describe("buildSocialMetadata", () => {
+  const base = { title: "Sac — Boutique", description: "Un sac.", url: "https://boutique.example.com/produits/sac" };
+
+  it("pose type, locale fr_FR et siteName (absents avant, Facebook supposait en_US)", () => {
+    const { openGraph } = buildSocialMetadata({ ...base, siteName: "Boutique" });
+    expect(openGraph).toMatchObject({ type: "website", locale: "fr_FR", siteName: "Boutique", url: base.url });
+  });
+
+  it("Twitter Card : summary_large_image pour une bannière, summary pour un carré ou sans image", () => {
+    expect(buildSocialMetadata({ ...base, imageUrl: "https://cdn.example.com/b.png" }).twitter).toMatchObject({
+      card: "summary_large_image",
+    });
+    expect(
+      buildSocialMetadata({ ...base, imageUrl: "https://cdn.example.com/l.png", imageIsSquare: true }).twitter,
+    ).toMatchObject({ card: "summary" });
+    expect(buildSocialMetadata(base).twitter).toMatchObject({ card: "summary" });
+  });
+
+  it("n'écrit pas `images` quand il n'y a pas d'image (jamais un tableau vide ni une chaîne vide)", () => {
+    const { openGraph, twitter } = buildSocialMetadata(base);
+    expect((openGraph as { images?: unknown }).images).toBeUndefined();
+    expect((twitter as { images?: unknown }).images).toBeUndefined();
+  });
+});
+
+describe("parsePageParam / withPageParam", () => {
+  it.each([
+    [undefined, 1],
+    [null, 1],
+    ["", 1],
+    ["1", 1],
+    ["3", 3],
+    ["0", 1],
+    ["-2", 1],
+    ["1.5", 1],
+    ["abc", 1],
+    ["1e9", 1],
+    ["99999999", 1],
+    ["99999", 10000],
+  ])("parsePageParam(%j) = %d", (input, expected) => {
+    expect(parsePageParam(input as string | undefined)).toBe(expected);
+  });
+
+  it("la première page n'a jamais de ?page=1 — une seule URL par contenu", () => {
+    expect(withPageParam("/produits", 1)).toBe("/produits");
+    expect(withPageParam("/produits", 0)).toBe("/produits");
+    expect(withPageParam("/produits", 2)).toBe("/produits?page=2");
+  });
+});
+
+describe("toIsoDate / latestIsoDate", () => {
+  it("normalise une date valide en ISO 8601 et écarte le reste", () => {
+    expect(toIsoDate("2026-09-19T10:00:00+00:00")).toBe("2026-09-19T10:00:00.000Z");
+    expect(toIsoDate("pas une date")).toBeUndefined();
+    expect(toIsoDate(null)).toBeUndefined();
+    expect(toIsoDate("")).toBeUndefined();
+  });
+
+  it("latestIsoDate retient la plus récente et ignore les valeurs invalides", () => {
+    expect(latestIsoDate(["2026-01-01T00:00:00Z", null, "n'importe quoi", "2026-09-19T00:00:00Z", "2026-05-05T00:00:00Z"])).toBe(
+      "2026-09-19T00:00:00.000Z",
+    );
+    expect(latestIsoDate([null, "x"])).toBeUndefined();
+    expect(latestIsoDate([])).toBeUndefined();
+  });
+});
+
+describe("buildProductJsonLd — champs enrichis", () => {
+  const input = {
+    name: "Sac",
+    images: [],
+    url: "https://boutique.example.com/produits/sac",
+    unitPrice: 15000,
+    currency: "XAF",
+    availability: "InStock" as const,
+  };
+
+  it("déclare le vendeur, la catégorie et la fin de promotion quand ils sont connus", () => {
+    const jsonLd = buildProductJsonLd({
+      ...input,
+      sellerName: "Boutique",
+      category: "Sacs",
+      priceValidUntil: "2026-10-31T23:59:00Z",
+    });
+    const offers = jsonLd.offers as Record<string, unknown>;
+    expect(offers.seller).toEqual({ "@type": "Organization", name: "Boutique" });
+    expect(offers.priceValidUntil).toBe("2026-10-31");
+    expect(jsonLd.category).toBe("Sacs");
+  });
+
+  it("n'écrit ni vendeur, ni catégorie, ni priceValidUntil quand ils sont absents ou invalides", () => {
+    const jsonLd = buildProductJsonLd({ ...input, sellerName: " ", category: null, priceValidUntil: "n'importe quoi" });
+    const offers = jsonLd.offers as Record<string, unknown>;
+    expect(offers.seller).toBeUndefined();
+    expect(offers.priceValidUntil).toBeUndefined();
+    expect(jsonLd.category).toBeUndefined();
+  });
+});
+
+describe("buildServiceJsonLd", () => {
+  const input = {
+    name: "Coupe + Brushing",
+    url: "https://salon.example.com/services/coupe",
+    provider: { name: "Salon Élégance", address: "Rue de la Joie, Douala" },
+    price: 5000,
+    currency: "XAF",
+    available: true,
+  };
+
+  it("déclare le prestataire avec un PostalAddress (pas une chaîne brute) et l'offre", () => {
+    const jsonLd = buildServiceJsonLd({ ...input, images: ["https://cdn.example.com/coupe.png"], serviceType: "Coiffure" });
+    expect(jsonLd["@type"]).toBe("Service");
+    expect(jsonLd.provider).toEqual({
+      "@type": "LocalBusiness",
+      name: "Salon Élégance",
+      address: { "@type": "PostalAddress", streetAddress: "Rue de la Joie, Douala" },
+    });
+    expect(jsonLd.image).toEqual(["https://cdn.example.com/coupe.png"]);
+    expect(jsonLd.serviceType).toBe("Coiffure");
+    expect(jsonLd.offers).toEqual({
+      "@type": "Offer",
+      url: input.url,
+      price: 5000,
+      priceCurrency: "XAF",
+      availability: "https://schema.org/InStock",
+    });
+  });
+
+  it("prestataire sans adresse -> Organization, jamais un LocalBusiness inventé", () => {
+    const jsonLd = buildServiceJsonLd({ ...input, provider: { name: "Salon Élégance" } });
+    expect(jsonLd.provider).toEqual({ "@type": "Organization", name: "Salon Élégance" });
+  });
+
+  it("n'annonce aucune offre pour une prestation non active", () => {
+    expect(buildServiceJsonLd({ ...input, available: false }).offers).toBeUndefined();
+  });
+});
+
+describe("buildWebSiteJsonLd / buildPlatformOrganizationJsonLd", () => {
+  it("WebSite : nom + URL + langue", () => {
+    expect(buildWebSiteJsonLd({ name: "Salon Élégance", url: "https://salon.example.com" })).toEqual({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Salon Élégance",
+      url: "https://salon.example.com",
+      inLanguage: "fr",
+    });
+  });
+
+  it("Organization plateforme : omet logo/description absents", () => {
+    const minimal = buildPlatformOrganizationJsonLd({ name: "CRESYVA", url: "https://cresyva.com" });
+    expect(minimal.logo).toBeUndefined();
+    expect(minimal.description).toBeUndefined();
+
+    const full = buildPlatformOrganizationJsonLd({
+      name: "CRESYVA",
+      url: "https://cresyva.com",
+      logoUrl: "https://cresyva.com/images/cresyva-mark-512.png",
+      description: "Gérez votre entreprise depuis un seul endroit.",
+    });
+    expect(full.logo).toBe("https://cresyva.com/images/cresyva-mark-512.png");
+    expect(full.description).toBe("Gérez votre entreprise depuis un seul endroit.");
   });
 });

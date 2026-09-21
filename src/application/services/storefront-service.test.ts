@@ -187,7 +187,8 @@ describe("resolveStorefrontHighlights", () => {
   /**
    * Régression : le premier jet de `resolveStorefrontHighlights` filtrait
    * par ICÔNE plutôt que par le champ `requires` explicite de la
-   * promesse. "Délais annoncés" (professional_services) partage l'icône
+   * promesse. "Délais annoncés" (professional_services ; renommée "Prochaines
+   * étapes visibles" au polish V15, même icône, toujours sans `requires`) partage l'icône
    * `clock` avec la promesse générique d'horaires de boutique, mais son
    * texte parle de délais de projet — aucune dépendance aux horaires. Un
    * filtre par icône l'aurait masquée chez tout cabinet de conseil sans
@@ -198,15 +199,15 @@ describe("resolveStorefrontHighlights", () => {
     const noOpeningHours = makeCapabilities({ hasOpeningHours: false });
     const result = resolveStorefrontHighlights({ highlights: null }, servicesBlueprint, noOpeningHours);
 
-    expect(result.some((h) => h.title === "Délais annoncés")).toBe(true);
+    expect(result.some((h) => h.title === "Prochaines étapes visibles")).toBe(true);
   });
 
-  it("symétriquement, 'Visite organisée' (real_estate, icône headset) ne dépend pas de WhatsApp", () => {
+  it("symétriquement, 'Organiser une visite' (real_estate ; ex-'Visite organisée' à icône headset, passée à calendar au polish V15) ne dépend pas de WhatsApp", () => {
     const realEstateBlueprint = STOREFRONT_BLUEPRINTS.real_estate;
     const noWhatsapp = makeCapabilities({ hasWhatsApp: false });
     const result = resolveStorefrontHighlights({ highlights: null }, realEstateBlueprint, noWhatsapp);
 
-    expect(result.some((h) => h.title === "Visite organisée")).toBe(true);
+    expect(result.some((h) => h.title === "Organiser une visite")).toBe(true);
   });
 
   it("highlights === [] -> retrait explicite du commerçant, respecté tel quel (pas de repli sur le secteur)", () => {

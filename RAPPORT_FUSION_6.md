@@ -255,7 +255,7 @@ tests approfondis non faits ici).
 
 `src/lib/rate-limit.ts` (Upstash Redis, repli ouvert si non configuré,
 jamais un crash). **Premier essai incorrect** : branché dans
-`src/middleware.ts`, qui tourne obligatoirement en Edge Runtime — le
+`src/proxy.ts`, qui tourne obligatoirement en Edge Runtime — le
 build a averti que `@upstash/redis` tire une dépendance utilisant
 `process.version` (API Node.js absente d'Edge Runtime). Une défaillance
 là aurait bloqué TOUTE requête (résolution tenant comprise), pas

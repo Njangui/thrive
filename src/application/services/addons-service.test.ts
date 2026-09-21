@@ -5,7 +5,7 @@ vi.mock("./ai-credits-service", () => ({ grantCredits: vi.fn() }));
 
 const mockCreatePayment = vi.fn();
 vi.mock("@/infrastructure/providers/registry", () => ({
-  getPaymentProvider: vi.fn(async () => ({ providerName: "notchpay", createPayment: mockCreatePayment })),
+  getPaymentProvider: vi.fn(async () => ({ providerName: "fapshi", createPayment: mockCreatePayment })),
 }));
 
 const mockFrom = vi.fn();
@@ -96,13 +96,13 @@ describe("purchaseAddon — critère d'acceptation : jamais d'incrément avant c
     });
     mockCreatePayment.mockImplementation(async (req: { orderId: string }) => ({
       providerReference: req.orderId,
-      paymentUrl: "https://pay.notchpay.co/checkout/xyz",
+      paymentUrl: "https://checkout.fapshi.com/pay/xyz",
       status: "pending",
     }));
 
     const result = await purchaseAddon("org-1", "extra_credits", 2, "user-1", "user@example.com");
 
-    expect(result.paymentUrl).toBe("https://pay.notchpay.co/checkout/xyz");
+    expect(result.paymentUrl).toBe("https://checkout.fapshi.com/pay/xyz");
     expect(mockCreatePayment).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 4000, currency: "XAF", customerEmail: "user@example.com" }),
     );

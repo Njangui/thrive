@@ -100,7 +100,7 @@ son propre `NOTES.md`).
 
 ```
 next.config.mjs                                    — repris de B (correctif CSP)
-src/middleware.ts                                   — repris de C (sécurité)
+src/proxy.ts                                   — repris de C (sécurité)
 src/middleware.test.ts                               — nouveau, de C
 src/app/login/page.tsx                              — réécrit (contenu B + habillage A)
 src/app/reset-password/page.tsx                      — nouveau (contenu B + habillage A)

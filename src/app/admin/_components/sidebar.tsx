@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { JSX } from "react";
 import { usePathname } from "next/navigation";
 import { CresyvaBrand } from "@/app/_components/cresyva-brand";
 import {

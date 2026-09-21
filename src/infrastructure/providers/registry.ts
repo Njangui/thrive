@@ -15,15 +15,15 @@ import { MistralAdapter } from "./ai/mistral-adapter";
 import { ClaudeAdapter } from "./ai/claude-adapter";
 import { OpenAIAdapter } from "./ai/openai-adapter";
 import { SupabaseStorageAdapter } from "./storage/supabase-storage-adapter";
-import { NotchPayAdapter } from "./payment/notchpay/adapter";
-import { NotchPayClient } from "./payment/notchpay/client";
+import { FapshiAdapter } from "./payment/fapshi/adapter";
+import { FapshiClient } from "./payment/fapshi/client";
 import { ManualDomainAdapter } from "./domain/manual/adapter";
 import { OpenProviderAdapter } from "./domain/openprovider/adapter";
 import { OpenProviderClient } from "./domain/openprovider/client";
 import { ResendAdapter } from "./email/resend/adapter";
 import { ResendClient } from "./email/resend/client";
 import { ConsoleLogEmailAdapter } from "./email/console-log/adapter";
-import { resolveProviderCredential, resolveCredential } from "./secrets-resolver";
+import { resolveCredential } from "./secrets-resolver";
 import { TelegramMessagingAdapter } from "./messaging/telegram/adapter";
 import { TelegramMessagingClient } from "./messaging/telegram/client";
 import type { NotificationProvider } from "@/domain/ports/notification-provider";
@@ -55,28 +55,49 @@ export async function getStorageProvider(_organizationId: string): Promise<Stora
 }
 
 /**
- * PaymentProvider (Lot G, Partie 1) : même posture que StorageProvider —
- * un abonnement se paie AU platform (une seule ligne comptable NotchPay
- * plateforme), pas à un compte NotchPay propre à chaque tenant. Pas de
- * lookup `provider_connections` ici (ça n'aurait pas de sens : aucun
- * commerçant ne "connecte" son propre NotchPay pour payer CRESYVA).
- * `organizationId` accepté pour la même raison que StorageProvider : ne
- * pas casser les appelants si un jour plusieurs comptes providers
- * plateforme coexistent (ex: NotchPay + CinetPay selon la devise/pays).
+ * PaymentProvider (Lot G, Partie 1 ; migré NotchPay -> Fapshi le
+ * 2026-09-20) : même posture que StorageProvider — un abonnement se paie
+ * AU platform (une seule ligne comptable Fapshi plateforme), pas à un
+ * compte Fapshi propre à chaque tenant. Pas de lookup
+ * `provider_connections` ici (ça n'aurait pas de sens : aucun commerçant
+ * ne "connecte" son propre Fapshi pour payer CRESYVA). `organizationId`
+ * accepté pour la même raison que StorageProvider : ne pas casser les
+ * appelants si un jour plusieurs comptes providers plateforme
+ * coexistent (voir contrainte XAF-only ci-dessous, qui rend ce jour
+ * plausible).
+ *
+ * ABSTRACTION (objectif explicite de la migration Fapshi, pas seulement
+ * un renommage) : ce switch est désormais le SEUL endroit du code qui
+ * choisit un provider de paiement concret. `subscription-payment-
+ * service.ts`, `addons-service.ts` et `phone-number-rental-service.ts`
+ * ne connaissent plus jamais un nom de provider en dur — ils appellent
+ * `getPaymentProvider()` puis lisent `provider.providerName` pour
+ * savoir quoi stocker en base (`subscription_payments.provider`). La
+ * route webhook de chaque provider (`src/app/api/webhooks/<provider>/
+ * route.ts`) est elle aussi réduite à sa vérification/son parsing
+ * propres, le reste factorisé dans `payment/webhook-pipeline.ts`. Un
+ * prochain changement de provider ne devrait donc toucher QUE : ce
+ * switch (+ son import), un nouveau dossier `payment/<provider>/`, les
+ * variables d'env correspondantes, et une nouvelle route webhook — plus
+ * jamais les 3 services applicatifs ni la contrainte SQL sur
+ * `subscription_payments.provider` (colonne libre depuis la migration
+ * 0066, comme `webhook_events.provider`). Voir
+ * docs/PAYMENT_INTEGRATION.md, section "Ajouter un nouveau provider".
+ *
+ * CONTRAINTE RÉELLE À CONNAÎTRE avant d'activer un pays hors Cameroun
+ * dans le Country Engine (countries.notchpay_supported, NG/GH/CI/SN/GA/
+ * KE/UG — nom de colonne hérité, voir docs/notchpay-resources.md) :
+ * Fapshi ne traite QUE le XAF (Cameroun, MTN MoMo/Orange Money),
+ * contrairement à NotchPay qui revendiquait une couverture multi-pays.
+ * `FapshiAdapter.createPayment` refuse déjà toute devise différente,
+ * mais ça ne résout que la sécurité technique — la question business
+ * ("quel provider pour les autres pays ?") reste ouverte et n'a pas été
+ * tranchée ici.
  */
 export async function getPaymentProvider(_organizationId: string): Promise<PaymentProvider> {
-  // Branche sur PAYMENT_PROVIDER_DEFAULT (env.ts) plutôt que de renvoyer
-  // NotchPay en dur — même discipline switch/default que
-  // getMessagingProvider/getAIProvider, pour que l'ajout futur d'un
-  // adapter CinetPay n'implique de toucher que ce switch. Lot G : seul
-  // "notchpay" est réellement implémenté (voir RAPPORT_LOT_G.md) — la
-  // valeur par défaut d'env.ts a été corrigée de "cinetpay" (jamais
-  // implémenté, scaffolding orphelin) vers "notchpay" en conséquence.
   switch (env.PAYMENT_PROVIDER_DEFAULT) {
-    case "notchpay": {
-      const apiKey = resolveProviderCredential("notchpay");
-      return new NotchPayAdapter(new NotchPayClient(apiKey));
-    }
+    case "fapshi":
+      return new FapshiAdapter(new FapshiClient(env.FAPSHI_API_USER, env.FAPSHI_API_KEY));
     default:
       throw new Error(`PaymentProvider "${env.PAYMENT_PROVIDER_DEFAULT}" non implémenté.`);
   }

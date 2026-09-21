@@ -10,7 +10,7 @@ import { AppError } from "@/lib/errors";
  * Country Engine — liste d'attente publique (section 54). Volontairement
  * minimal : pas de compte, pas de session, donc l'IP est le seul signal
  * disponible pour le rate limiting (même limitation que
- * webhooks/notchpay/route.ts, documentée dans src/lib/rate-limit.ts).
+ * webhooks/fapshi/route.ts, documentée dans src/lib/rate-limit.ts).
  * Toujours passer par cette Server Action — jamais un insert anon-key
  * direct depuis le navigateur (country_waitlist n'a d'ailleurs AUCUNE
  * policy RLS pour les rôles clients, 0040_country_engine.sql : ce

@@ -1,12 +1,24 @@
 import type { Metadata } from "next";
 import { LegalPageLayout } from "@/app/_components/legal-page-layout";
+import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
+import { LEGAL_ENTITY, isLegalEntityComplete, legalField } from "@/application/config/legal-entity";
 
-export const metadata: Metadata = { title: "Conditions générales d'utilisation — CRESYVA" };
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingMetadata({
+    path: "/cgu",
+    title: "Conditions générales d'utilisation — CRESYVA",
+    description: "Les conditions d'utilisation de la plateforme CRESYVA : compte, abonnements, paiement et responsabilités.",
+    // Une page légale à trous n'a pas à être indexée (voir legal-entity.ts).
+    noIndex: !isLegalEntityComplete(),
+  });
+}
 
 export default function CguPage() {
+  const entity = LEGAL_ENTITY;
+
   return (
     <LegalPageLayout title="Conditions générales d'utilisation (CGU)">
-      <p>Dernière mise à jour : [À COMPLÉTER — date].</p>
+      <p>Dernière mise à jour : {entity.lastUpdated}.</p>
 
       <h2>1. Objet</h2>
       <p>
@@ -29,25 +41,35 @@ export default function CguPage() {
         fonctionnalités et les limites propres à chaque offre sont détaillées sur la page tarifs ; certaines
         fonctionnalités sont réservées aux offres payantes, selon les plans et tarifs affichés sur la page tarifs au
         moment de la souscription. Le Client peut à tout moment repasser à l&apos;offre gratuite depuis son tableau
-        de bord. Le paiement des offres payantes est traité par notre prestataire de paiement (NotchPay) ; CRESYVA ne
-        stocke aucune donnée de carte bancaire ou de compte Mobile Money. Les abonnements payants sont [À COMPLÉTER —
-        mensuels/annuels], renouvelés automatiquement sauf résiliation avant la date de renouvellement. [À COMPLÉTER —
-        conséquences d&apos;un défaut de paiement sur les fonctionnalités payantes.]
+        de bord. Le paiement des offres payantes est traité par notre prestataire de paiement (Fapshi) ; CRESYVA ne
+        stocke aucune donnée de carte bancaire ou de compte Mobile Money.
+      </p>
+      <p>
+        Chaque paiement d&apos;une offre payante donne droit à une période d&apos;un (1) mois. L&apos;abonnement
+        n&apos;est pas reconduit automatiquement et aucun prélèvement automatique n&apos;est effectué : le Client
+        renouvelle son offre en effectuant un nouveau paiement depuis la rubrique « Mon abonnement » de son tableau
+        de bord. CRESYVA s&apos;efforce de lui envoyer un rappel environ trois (3) jours avant l&apos;échéance. Si
+        l&apos;échéance est dépassée sans paiement, l&apos;abonnement passe en statut « en retard de paiement » et le
+        Client en est notifié ; il peut alors renouveler son offre ou repasser à l&apos;offre gratuite. Les
+        fonctionnalités réservées aux offres payantes peuvent être limitées tant que l&apos;abonnement n&apos;est pas
+        renouvelé.
       </p>
 
-      <h2>4. Résiliation</h2>
+      <h2>4. Fin de l&apos;abonnement</h2>
       <p>
-        Le Client peut résilier son abonnement à tout moment depuis son tableau de bord. La résiliation prend effet
-        à la fin de la période déjà payée — aucun remboursement au prorata n&apos;est effectué sauf disposition
-        légale contraire. [À COMPLÉTER — politique de remboursement le cas échéant].
+        L&apos;abonnement payant n&apos;étant pas reconduit automatiquement, il prend fin à l&apos;échéance de la
+        période payée si le Client ne le renouvelle pas. Le Client peut aussi, à tout moment, repasser à
+        l&apos;offre gratuite depuis « Mon abonnement » : ce changement est immédiat, et la partie de la période
+        payée non consommée n&apos;est pas remboursée, sauf disposition légale contraire.
       </p>
 
       <h2>5. Propriété des données</h2>
       <p>
         Les données saisies par le Client (catalogue, contacts, conversations, contenu de son site) restent sa
         propriété. CRESYVA ne les utilise que pour fournir le service, et ne les cède ni ne les vend à des tiers —
-        voir la <a href="/confidentialite">politique de confidentialité</a>. En cas de résiliation, le Client
-        dispose de [À COMPLÉTER — délai] pour exporter ses données avant leur suppression définitive.
+        voir la <a href="/confidentialite">politique de confidentialité</a>. En cas de fermeture de son
+        compte, le Client dispose de {legalField(entity.postClosureRetention, "délai d'export des données")} pour
+        exporter ses données avant leur suppression définitive.
       </p>
 
       <h2>6. Usage acceptable</h2>
@@ -62,14 +84,19 @@ export default function CguPage() {
       <p>
         CRESYVA met en œuvre des moyens raisonnables pour assurer la disponibilité du service, sans garantie
         d&apos;absence totale d&apos;interruption. Certaines fonctionnalités dépendent de prestataires tiers
-        (Zernio pour WhatsApp/réseaux sociaux, NotchPay pour le paiement, OpenProvider pour les domaines) dont la
+        (Zernio pour WhatsApp/réseaux sociaux, Fapshi pour le paiement, OpenProvider pour les domaines) dont la
         disponibilité échappe à notre contrôle direct.
       </p>
 
       <h2>8. Limitation de responsabilité</h2>
       <p>
-        [À COMPLÉTER — clause de limitation de responsabilité, à faire rédiger/valider par un juriste compte tenu
-        du droit applicable].
+        CRESYVA est tenue à une obligation de moyens. Dans la mesure permise par la loi, CRESYVA ne saurait être
+        tenue responsable des dommages indirects (perte de chiffre d&apos;affaires, de clientèle ou d&apos;image),
+        des interruptions ou dysfonctionnements imputables aux prestataires tiers mentionnés à l&apos;article 7, à un
+        cas de force majeure ou à un usage non conforme du service par le Client, ni de la perte de données non
+        exportées par le Client. Toujours dans la mesure permise par la loi, la responsabilité totale de CRESYVA au
+        titre du service est limitée aux sommes effectivement payées par le Client au cours des douze (12) derniers
+        mois.
       </p>
 
       <h2>9. Modification des CGU</h2>
@@ -80,8 +107,10 @@ export default function CguPage() {
 
       <h2>10. Droit applicable et litiges</h2>
       <p>
-        Les présentes CGU sont soumises au droit [À COMPLÉTER — camerounais / OHADA]. Tout litige sera soumis aux
-        juridictions compétentes de [À COMPLÉTER], à défaut de résolution amiable préalable.
+        Les présentes CGU sont soumises au droit camerounais, y compris les actes uniformes de l&apos;OHADA
+        applicables. Tout litige sera soumis aux juridictions compétentes de{" "}
+        {legalField(entity.jurisdictionCity, "ville du tribunal compétent")}, à défaut de résolution amiable
+        préalable.
       </p>
     </LegalPageLayout>
   );

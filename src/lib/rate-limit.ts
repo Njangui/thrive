@@ -11,12 +11,14 @@ import { Redis } from "@upstash/redis";
  * partagé garanti entre deux invocations successives — un compteur en
  * mémoire donnerait une fausse impression de protection. Upstash est le
  * choix standard pour ce cas avec Next.js/Vercel. Utilisé UNIQUEMENT
- * dans des route handlers runtime Node.js (`/api/webhooks/notchpay/
- * route.ts`), jamais dans `src/middleware.ts` — ce dernier tourne en Edge
- * Runtime, où une dépendance de `@upstash/redis` utilisant `process.version`
- * (API Node.js) casse la compatibilité (avertissement au build : "A
- * Node.js API is used ... which is not supported in the Edge Runtime").
- * Voir le commentaire de `src/middleware.ts` pour le détail.
+ * dans des route handlers / Server Actions runtime Node.js
+ * (`/api/webhooks/fapshi/route.ts`, `/api/webhooks/zernio/route.ts`, actions
+ * publiques de vitrine), jamais dans `src/proxy.ts` : sous Next 14, son
+ * ancêtre `middleware.ts` tournait en Edge Runtime, où une dépendance de
+ * `@upstash/redis` utilisant `process.version` (API Node.js) cassait la
+ * compatibilité ; depuis Next 16 le proxy tourne en Node.js, mais une
+ * défaillance du limiteur y bloquerait TOUTES les requêtes.
+ * Voir le commentaire de `src/proxy.ts` pour le détail.
  *
  * Repli explicite si non configuré (`UPSTASH_REDIS_REST_URL`/
  * `UPSTASH_REDIS_REST_TOKEN` absents) : ne bloque JAMAIS l'application au
@@ -27,7 +29,7 @@ import { Redis } from "@upstash/redis";
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 // Lues directement sur `process.env` plutôt que via `src/lib/env.ts`,
-// délibérément : ce module est importé par `src/middleware.ts`, sur le
+// délibérément : ce module est importé par `src/proxy.ts`, sur le
 // chemin critique de CHAQUE requête (résolution tenant comprise).
 // `env.ts` échoue fort et bloquerait alors TOUTE requête si jamais une
 // variable Supabase venait à manquer — un risque bien plus large que la
@@ -46,7 +48,7 @@ function warnNotConfigured() {
 
 const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
 
-/** 10 requêtes / 10s par IP — webhooks provider (Zernio/NotchPay signent leurs requêtes, mais un minimum de défense en profondeur reste utile contre un flood). */
+/** 10 requêtes / 10s par IP — webhooks provider (Zernio/Fapshi signent/authentifient leurs requêtes, mais un minimum de défense en profondeur reste utile contre un flood). */
 const webhookLimiter = redis
   ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(10, "10 s"), prefix: "ratelimit:webhook" })
   : null;
@@ -89,7 +91,15 @@ const affiliateClickLimiter = redis
   ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(30, "60 s"), prefix: "ratelimit:affiliate_click" })
   : null;
 
-export type RateLimitKind = "webhook" | "auth" | "waitlist" | "affiliate_click" | "booking";
+/** 120 événements / 60s par IP — analytics publiques des vitrines.
+ * Ce limiteur protège les Server Actions publiques contre le remplissage
+ * artificiel de `analytics_events` et les coûts DB associés.
+ */
+const publicAnalyticsLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(120, "60 s"), prefix: "ratelimit:public_analytics" })
+  : null;
+
+export type RateLimitKind = "webhook" | "auth" | "waitlist" | "affiliate_click" | "booking" | "public_analytics";
 
 /**
  * Retourne `null` quand la requête est autorisée à continuer (soit
@@ -107,7 +117,9 @@ export async function checkRateLimit(kind: RateLimitKind, identifier: string): P
           ? affiliateClickLimiter
           : kind === "booking"
             ? bookingLimiter
-            : authLimiter;
+            : kind === "public_analytics"
+              ? publicAnalyticsLimiter
+              : authLimiter;
   if (!limiter) {
     warnNotConfigured();
     return null;

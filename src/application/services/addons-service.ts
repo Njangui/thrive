@@ -128,7 +128,7 @@ export async function getOrganizationAddonBonus(organizationId: string, entitlem
 /**
  * Initie l'achat d'un add-on. Ne modifie AUCUNE capacité tout de suite —
  * crée une ligne `subscription_payments` (payment_type='addon',
- * status='pending') et renvoie l'URL de checkout NotchPay.
+ * status='pending') et renvoie l'URL de checkout du prestataire de paiement.
  * `confirmAddonPurchase()` fait le vrai travail, uniquement sur webhook
  * confirmé (voir subscription-payment-service.ts).
  */
@@ -152,23 +152,11 @@ export async function purchaseAddon(
   }
 
   const amountFcfa = addon.price_fcfa * quantity;
+  // Notre id local — transmis au provider comme `orderId` pour
+  // réconciliation, jamais utilisé comme provider_reference (voir le
+  // commentaire "ABSTRACTION PROVIDER" en tête de
+  // subscription-payment-service.ts, qui s'applique ici aussi).
   const paymentId = randomUUID();
-
-  const { error: insertError } = await supabase.from("subscription_payments").insert({
-    id: paymentId,
-    organization_id: organizationId,
-    payment_type: "addon",
-    addon_key: addonKey,
-    addon_quantity: quantity,
-    amount_fcfa: amountFcfa,
-    provider: "notchpay",
-    provider_reference: paymentId,
-    status: "pending",
-  });
-
-  if (insertError) {
-    throw new Error(`Impossible de créer le paiement de l'add-on: ${insertError.message}`);
-  }
 
   const provider = await getPaymentProvider(organizationId);
   const result = await provider.createPayment({
@@ -180,16 +168,23 @@ export async function purchaseAddon(
     description: `Add-on CRESYVA : ${addon.name} × ${quantity}`,
   });
 
-  if (result.providerReference !== paymentId) {
-    // Ne devrait jamais arriver (NotchPay renvoie la référence qu'on lui
-    // a transmise) — loggué plutôt qu'une exception qui bloquerait un
-    // checkout par ailleurs valide ; le webhook retrouvera quand même la
-    // ligne par provider_reference réellement renvoyée s'il le fallait,
-    // mais ce cas signalerait un changement de comportement côté
-    // NotchPay à surveiller.
-    console.error(
-      `purchaseAddon: providerReference (${result.providerReference}) diffère de paymentId (${paymentId}) — à surveiller.`,
-    );
+  // Créée APRÈS l'appel provider, avec sa vraie référence : certains
+  // providers (Fapshi) la génèrent côté serveur et ne permettent pas
+  // d'en imposer une à l'avance.
+  const { error: insertError } = await supabase.from("subscription_payments").insert({
+    id: paymentId,
+    organization_id: organizationId,
+    payment_type: "addon",
+    addon_key: addonKey,
+    addon_quantity: quantity,
+    amount_fcfa: amountFcfa,
+    provider: provider.providerName,
+    provider_reference: result.providerReference,
+    status: "pending",
+  });
+
+  if (insertError) {
+    throw new Error(`Impossible de créer le paiement de l'add-on: ${insertError.message}`);
   }
 
   console.info(`[audit] actor=${actorUserId} org=${organizationId} action=ADDON_PURCHASE_INITIATED addon=${addonKey} qty=${quantity}`);

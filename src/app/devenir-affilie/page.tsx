@@ -2,8 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CresyvaBrand } from "@/app/_components/cresyva-brand";
 import { getPlatformSettingNumber } from "@/application/services/platform-settings-service";
+import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
 
-export const metadata: Metadata = { title: "Devenir affilié — CRESYVA", description: "Recommandez CRESYVA et gagnez une commission sur les nouveaux abonnements." };
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingMetadata({
+    path: "/devenir-affilie",
+    title: "Devenir affilié — CRESYVA",
+    description: "Recommandez CRESYVA et gagnez une commission sur les nouveaux abonnements.",
+  });
+}
 
 export default async function BecomeAffiliatePage() {
   const rate = await getPlatformSettingNumber("affiliate_commission_rate_bps", 2000);

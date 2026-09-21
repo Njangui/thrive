@@ -54,7 +54,7 @@ export function StorefrontShell({ site, children, home = false }: { site: Storef
         searchEnabled={capabilities.hasProducts}
         catalogHref="/produits"
         ctaLabel={site.sector === "restaurant" ? "Réserver une table" : blueprint.primaryCtaTarget === "booking" ? "Prendre RDV" : "Nous écrire"}
-        homeOverlay={home && site.sector === "restaurant"}
+        homeOverlay={home && (site.sector === "" || site.sector === "restaurant" || site.sector === "real_estate" || site.sector === "retail" || site.sector === "beauty" || site.sector === "professional_services")}
       />
 
       <main id="contenu" className="flex-1">

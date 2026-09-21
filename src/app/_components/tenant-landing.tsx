@@ -18,6 +18,7 @@ import { BookingSection } from "./landing-sections/booking";
 import { ContactSection, LocationSection, SocialLinksSection } from "./landing-sections/contact";
 import { CtaSection } from "./landing-sections/cta";
 import { VideosSection } from "./landing-sections/videos";
+import { BeautyHome, DefaultBusinessHome, ProfessionalServicesHome, RealEstateHome, RestaurantHome, RetailHome } from "./sector-home";
 
 /**
  * Composition de la PAGE D'ACCUEIL de la vitrine.
@@ -64,8 +65,15 @@ export async function TenantLanding({
   // fallback du hero lorsqu'aucune bannière n'a encore été configurée.
   // On charge donc le catalogue même si la section « produits » n'est pas
   // affichée sur la home par défaut.
-  const dataTypes = site.sector === "restaurant" && !dbBackedSections.includes("products")
-    ? [...dbBackedSections, "products" as LandingSectionType]
+  const specialTemplateTypes = ["", "restaurant", "retail", "beauty", "professional_services"].includes(site.sector)
+    ? (site.sector === "beauty" || site.sector === "professional_services"
+        ? ["services", "categories", "team", "testimonials"]
+        : site.sector === ""
+          ? ["products", "categories", "services", "gallery", "testimonials", "team"]
+          : ["products", "categories", "testimonials", ...(site.sector === "retail" ? ["promotions"] : [])]) as LandingSectionType[]
+    : [];
+  const dataTypes = specialTemplateTypes.length
+    ? Array.from(new Set([...dbBackedSections, ...specialTemplateTypes]))
     : dbBackedSections;
   const dataEntries = await Promise.all(
     dataTypes.map(
@@ -81,6 +89,56 @@ export async function TenantLanding({
   const videosAnchor = (["products", "gallery", "services", "hero"] as const).find((type) => enabledSections.includes(type));
 
   const hasBookingSection = enabledSections.includes("booking");
+
+  // Les vitrines sectorielles sont des templates complets :
+  // on conserve les mêmes données dynamiques, mais la composition, les
+  // proportions, l’ordre visuel et les traitements graphiques suivent
+  // volontairement les maquettes fournies. Les réglages de contenu restent
+  // prioritaires ; un reset revient à ces compositions par défaut.
+  const blueprintSections = site.blueprint.sections;
+  const usesDefaultSectorComposition =
+    site.enabledSections.length === blueprintSections.length &&
+    site.enabledSections.every((section, index) => section === blueprintSections[index]);
+
+  // Les templates sectoriels sont le mode « design de base ». Dès que le
+  // commerçant modifie réellement la structure (activation/désactivation ou
+  // ordre), on repasse par le compositeur générique plus bas : il respecte
+  // alors exactement les choix du Site Builder au lieu de les ignorer. Les
+  // personnalisations de couleurs, textes, images et identité continuent
+  // quant à elles d'utiliser le template sectoriel.
+  if (usesDefaultSectorComposition && (site.sector === "" || site.sector === "real_estate" || site.sector === "restaurant" || site.sector === "retail" || site.sector === "beauty" || site.sector === "professional_services")) {
+    const productData = dataByType.get("products");
+    const categoryData = dataByType.get("categories");
+    const serviceData = dataByType.get("services");
+    const testimonialData = dataByType.get("testimonials");
+    const promotionData = dataByType.get("promotions");
+    const products = productData?.type === "products" ? productData.products : [];
+    const categories = categoryData?.type === "categories" ? categoryData.categories : [];
+    const services = serviceData?.type === "services" ? serviceData.services : [];
+    const testimonials = testimonialData?.type === "testimonials" ? testimonialData.testimonials : [];
+    const promotions = promotionData?.type === "promotions" ? promotionData.products : [];
+    const galleryData = dataByType.get("gallery");
+    const teamData = dataByType.get("team");
+    const gallery = galleryData?.type === "gallery" ? galleryData.images : [];
+    const team = teamData?.type === "team" ? teamData.members : [];
+
+    if (site.sector === "") {
+      return <DefaultBusinessHome site={site} products={products} categories={categories} services={services} testimonials={testimonials} />;
+    }
+    if (site.sector === "beauty") {
+      return <BeautyHome site={site} services={services} gallery={gallery} testimonials={testimonials} team={team} />;
+    }
+    if (site.sector === "professional_services") {
+      return <ProfessionalServicesHome site={site} services={services} categories={categories} testimonials={testimonials} team={team} />;
+    }
+    if (site.sector === "real_estate") {
+      return <RealEstateHome site={site} products={products} categories={categories} services={services} testimonials={testimonials} />;
+    }
+    if (site.sector === "restaurant") {
+      return <RestaurantHome site={site} categories={categories} testimonials={testimonials} />;
+    }
+    return <RetailHome site={site} products={products} categories={categories} promotions={promotions} testimonials={testimonials} />;
+  }
 
   return (
     <>

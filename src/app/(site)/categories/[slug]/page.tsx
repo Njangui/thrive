@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { resolveRequestTenant, resolveCanonicalOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { parsePageParam } from "@/lib/seo";
+import { JsonLd } from "@/app/_components/json-ld";
 import {
   getStorefrontCategoryBySlug,
   listStorefrontProducts,
@@ -29,8 +31,15 @@ const PAGE_SIZE = 24;
  * chaussures ». Pour une PME dont le référencement local est souvent la
  * seule acquisition, c'est la différence entre une page indexée et zéro.
  */
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
   const { slug } = await params;
+  const { page } = await searchParams;
   const tenant = await resolveRequestTenant();
   if (!tenant) return {};
 
@@ -41,6 +50,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     path: categoryPath(slug),
     title: category.name,
     description: `${category.productCount} article${category.productCount > 1 ? "s" : ""} dans la catégorie ${category.name} chez ${tenant.name}.`,
+    page: parsePageParam(page),
+    imageUrl: category.imageUrl,
   });
 }
 
@@ -59,7 +70,7 @@ export default async function CategoryPage({
   const category = await getStorefrontCategoryBySlug(tenant.organizationId, slug);
   if (!category) notFound();
 
-  const page = Math.max(1, Number(pageParam) || 1);
+  const page = parsePageParam(pageParam);
 
   const [products, totalCount, siblings, origin] = await Promise.all([
     listStorefrontProducts(tenant.organizationId, {
@@ -70,10 +81,13 @@ export default async function CategoryPage({
     }),
     countStorefrontProducts(tenant.organizationId, { categoryId: category.id }),
     listStorefrontCategories(tenant.organizationId),
-    resolveRequestOrigin(),
+    resolveCanonicalOrigin(),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  // Une page au-delà de la dernière n'existe pas : 404 franc plutôt qu'une
+  // liste vide en 200 (soft 404, que Google écarte de l'index en le signalant).
+  if (page > totalPages) notFound();
   const otherCategories = siblings.filter((item) => item.id !== category.id);
 
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(origin, [
@@ -84,7 +98,7 @@ export default async function CategoryPage({
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <JsonLd data={breadcrumbJsonLd} />
 
       <PageHeader
         eyebrow={blueprint.headings.categories}

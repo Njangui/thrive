@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { resolveRequestTenant, resolveCanonicalOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { getStorefrontSite, type StorefrontSite } from "@/application/services/storefront-service";
-import { resolveOrganizationSeo } from "@/lib/seo";
+import { resolveOrganizationSeo, buildSocialMetadata, toMetaDescription, withPageParam } from "@/lib/seo";
 
 /**
  * Socle commun à toutes les pages du site vitrine.
@@ -28,51 +28,66 @@ export async function requireStorefront(): Promise<StorefrontSite> {
  * « Page — Entreprise », jamais un titre nu : dans un onglet ou un
  * résultat Google, « Contact » seul n'identifie aucune entreprise.
  *
- * `canonical` est construit sur l'origine RÉELLE de la requête
- * (sous-domaine ou domaine custom du tenant), jamais sur
- * `NEXT_PUBLIC_APP_URL` qui pointerait vers le domaine de la plateforme.
+ * `canonical` est construit sur l'origine OFFICIELLE du tenant
+ * (`resolveCanonicalOrigin` : son domaine custom principal s'il en a un,
+ * sinon l'hôte visité), jamais sur `NEXT_PUBLIC_APP_URL` qui pointerait
+ * vers le domaine de la plateforme.
+ *
+ * `page` : une liste paginée s'auto-référence. Avant, la canonique de
+ * `/produits?page=3` pointait vers `/produits` : Google en déduisait que
+ * les pages 2, 3… étaient de simples doublons de la première et n'avait
+ * plus de raison d'en suivre les produits. Titre et description reçoivent
+ * un suffixe « page N » pour que ces pages ne soient pas non plus des
+ * doublons de titre. La page 1 n'a jamais de `?page=1`.
+ *
+ * `imageUrl` : image de partage propre à la page (photo de la prestation,
+ * de la catégorie…) ; à défaut, celle de l'entreprise (`resolveOrganizationSeo`).
  */
 export async function buildStorefrontMetadata({
   path,
   title,
   description,
   noIndex = false,
+  page = 1,
+  imageUrl,
 }: {
   path: string;
   title: string;
   description?: string | null;
   noIndex?: boolean;
+  page?: number;
+  imageUrl?: string | null;
 }): Promise<Metadata> {
   const tenant = await resolveRequestTenant();
   if (!tenant) return {};
 
-  const origin = await resolveRequestOrigin();
+  const origin = await resolveCanonicalOrigin();
   const seo = resolveOrganizationSeo(tenant);
-  const fullTitle = `${title} — ${tenant.name}`;
-  const resolvedDescription = description?.trim() || seo.description;
-  const canonical = `${origin}${path}`;
+  const fullTitle = `${title} — ${tenant.name}${page > 1 ? ` — page ${page}` : ""}`;
+  const baseDescription = toMetaDescription(description) ?? seo.description;
+  const resolvedDescription = page > 1 && baseDescription ? `${baseDescription} (page ${page})` : baseDescription;
+  const canonical = `${origin}${withPageParam(path, page)}`;
+
+  const ownImage = imageUrl?.trim() || undefined;
 
   return {
     title: fullTitle,
     description: resolvedDescription,
     alternates: { canonical },
-    // `noIndex` sert les pages de RÉSULTATS filtrés (recherche, tri) :
-    // les laisser indexables produirait des dizaines d'URL quasi
-    // identiques pour un même catalogue, ce que les moteurs pénalisent.
+    // `noIndex` sert les pages de RÉSULTATS filtrés (recherche, tri) et les
+    // fiches retirées du catalogue : les laisser indexables produirait des
+    // dizaines d'URL quasi identiques pour un même catalogue, ce que les
+    // moteurs pénalisent.
     robots: noIndex ? { index: false, follow: true } : undefined,
-    openGraph: {
-      type: "website",
+    ...buildSocialMetadata({
       title: fullTitle,
       description: resolvedDescription,
       url: canonical,
-      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
-    },
-    twitter: {
-      card: seo.ogImageUrl ? "summary_large_image" : "summary",
-      title: fullTitle,
-      description: resolvedDescription,
-      images: seo.ogImageUrl ? [seo.ogImageUrl] : undefined,
-    },
+      imageUrl: ownImage ?? seo.ogImageUrl,
+      // Une image propre à la page (photo produit/prestation/catégorie) est carrée dans la vitrine.
+      imageIsSquare: ownImage ? true : seo.ogImageIsSquare,
+      siteName: tenant.name,
+    }),
     icons: tenant.faviconUrl ? { icon: tenant.faviconUrl } : undefined,
   };
 }

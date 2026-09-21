@@ -109,7 +109,7 @@ cahier et où je m'en suis tenu à sa lettre :
   le domaine générique de la plateforme, jamais vers le sous-domaine/
   domaine custom réellement visité — l'utiliser dans un sitemap aurait
   produit des URLs pointant vers le mauvais domaine. `resolveRequestOrigin`
-  lit le header `host` déjà propagé par `src/middleware.ts` pour la requête
+  lit le header `host` déjà propagé par `src/proxy.ts` pour la requête
   courante. Limite assumée et documentée dans le code : sur un domaine
   custom pas encore vérifié par le Lot G, le comportement reste celui du
   header `host` brut, pas une résolution DNS distincte.

@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { resolveRequestTenant, resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { resolveRequestTenant, resolveCanonicalOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getServiceBySlug, listRelatedServices } from "@/application/services/landing-config-service";
 import { STOREFRONT_PATHS, servicePath } from "@/application/config/storefront-routes";
 import { formatPrice } from "@/lib/format";
+import { buildServiceJsonLd } from "@/lib/seo";
+import { JsonLd } from "@/app/_components/json-ld";
 import { TrackedCtaLink } from "@/app/_components/tracked-cta-link";
 import { ServiceCard } from "@/app/_components/landing-sections/services";
 import { StorefrontImage } from "@/app/_components/storefront/storefront-image";
@@ -33,6 +35,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     path: servicePath(slug),
     title: service.name,
     description: service.description ?? `${service.name} — ${formatPrice(service.price)} chez ${tenant.name}.`,
+    imageUrl: service.images[0],
+    // Fiche d'une prestation retirée : consultable par lien direct, absente de l'index.
+    noIndex: service.status !== "active",
   });
 }
 
@@ -46,7 +51,7 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
 
   const [related, origin] = await Promise.all([
     listRelatedServices(tenant.organizationId, service.id),
-    resolveRequestOrigin(),
+    resolveCanonicalOrigin(),
   ]);
 
   const available = service.status === "active";
@@ -66,34 +71,24 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
   ]);
 
   // schema.org/Service : le pendant de `buildProductJsonLd` pour une
-  // prestation. Une fiche prestation sans données structurées n'apparaît
-  // jamais en résultat enrichi, là où une fiche produit le peut — écart
-  // corrigé ici. `offers` n'est déclaré que pour une prestation active,
-  // même règle que pour les produits.
-  const serviceJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Service",
+  // prestation (voir `buildServiceJsonLd`). `offers` n'est déclaré que pour
+  // une prestation active, même règle que pour les produits.
+  const serviceJsonLd = buildServiceJsonLd({
     name: service.name,
-    ...(service.description ? { description: service.description } : {}),
-    ...(service.categoryName ? { serviceType: service.categoryName } : {}),
-    provider: { "@type": "LocalBusiness", name: tenant.name, ...(tenant.address ? { address: tenant.address } : {}) },
+    description: service.description,
     url: `${origin}${servicePath(slug)}`,
-    ...(available
-      ? {
-          offers: {
-            "@type": "Offer",
-            price: service.price,
-            priceCurrency: tenant.currency,
-            availability: "https://schema.org/InStock",
-          },
-        }
-      : {}),
-  };
+    images: service.images,
+    serviceType: service.categoryName,
+    provider: { name: tenant.name, address: tenant.address },
+    price: service.price,
+    currency: tenant.currency,
+    available,
+  });
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <JsonLd data={serviceJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
 
       <Container className="py-6 sm:py-10">
         <Breadcrumbs
@@ -117,12 +112,17 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
             </div>
             {service.images.length > 1 && (
               <div className="grid grid-cols-4 gap-2">
-                {service.images.slice(1, 5).map((url) => (
+                {service.images.slice(1, 5).map((url, index) => (
                   <div
                     key={url}
                     className="relative aspect-square overflow-hidden rounded-brand border border-black/[0.08] bg-black/[0.03]"
                   >
-                    <StorefrontImage src={url} alt={service.name} sizes="120px" fallbackLabel="" />
+                    <StorefrontImage
+                      src={url}
+                      alt={`${service.name} — vue ${index + 2}`}
+                      sizes="120px"
+                      fallbackLabel=""
+                    />
                   </div>
                 ))}
               </div>

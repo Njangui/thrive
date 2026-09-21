@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { createAppointment } from "@/application/services/appointment-service";
 import { notifyOrgAdmins } from "@/application/services/notification-service";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { resolveRequestTenant } from "@/infrastructure/tenant/resolve-request-tenant";
 import { AppError, ValidationError } from "@/lib/errors";
 
 const DURATION_OPTIONS_MINUTES = [30, 60, 90, 120];
@@ -65,11 +66,13 @@ function buildBookingRedirect(
 }
 
 export async function requestAppointmentAction(formData: FormData): Promise<void> {
-  const organizationId = String(formData.get("organizationId") ?? "");
+  const suppliedOrganizationId = String(formData.get("organizationId") ?? "");
   const returnTo = String(formData.get("returnTo") ?? "/");
-  if (!organizationId) {
+  const tenant = await resolveRequestTenant();
+  if (!tenant || (suppliedOrganizationId && suppliedOrganizationId !== tenant.organizationId)) {
     redirect(buildBookingRedirect(returnTo, { bookingError: "Requête invalide." }));
   }
+  const organizationId = tenant.organizationId;
 
   // Même garde-fou que joinWaitlistAction (country-waitlist-actions.ts) :
   // aucune session à limiter côté formulaire public, seule l'IP protège

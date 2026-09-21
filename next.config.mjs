@@ -1,13 +1,41 @@
+/**
+ * Surfaces qui ne doivent JAMAIS figurer dans un index de recherche :
+ * authentifiées (dashboard, admin, affiliation), techniques (api, auth,
+ * invitation) ou à effet de bord (`/r/` : chaque visite enregistre un clic
+ * d'affiliation). Envoyé en en-tête `X-Robots-Tag` — filet de sécurité
+ * derrière robots.txt : `Disallow` interdit l'EXPLORATION mais pas
+ * l'indexation d'une URL découverte par un lien externe.
+ *
+ * `/login` et `/reset-password` sont publics et explorables (robots.txt ne
+ * les bloque pas, exprès : Google doit pouvoir lire ce `noindex`).
+ *
+ * ⚠ Ces motifs sont recopiés de `CRAWL_BLOCKED_PATHS` / `NOINDEX_ONLY_PATHS`
+ * (src/lib/request-surface.ts) — ce fichier ne peut pas importer du
+ * TypeScript. src/lib/request-surface.test.ts échoue si les deux divergent.
+ */
+const NOINDEX_SOURCES = [
+  "/dashboard/:path*",
+  "/admin/:path*",
+  "/api/:path*",
+  "/affiliate/:path*",
+  "/onboarding/:path*",
+  "/auth/:path*",
+  "/invite/:path*",
+  "/r/:path*",
+  "/login",
+  "/reset-password",
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Ne pas annoncer « X-Powered-By: Next.js » à chaque réponse.
+  poweredByHeader: false,
   // NOTE (Phase 2 - Custom Domains, section 23):
   // Le routing tenant-aware par sous-domaine / domaine custom est géré dans
-  // src/middleware.ts, pas ici. Ne rien coder ici qui suppose un tenant unique.
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
+  // src/proxy.ts (ex-middleware.ts, renommé par Next.js 16), pas ici. Ne rien
+  // coder ici qui suppose un tenant unique.
   experimental: {
-    // Par défaut, Next.js 14 refuse tout corps de Server Action > 1 Mo
+    // Par défaut, Next.js refuse tout corps de Server Action > 1 Mo
     // ("Body exceeded 1MB limit") — ce qui bloquait l'envoi de pièces
     // jointes/vocaux depuis la messagerie (et les photos produit > 1 Mo).
     // 4 Mo reste sous la limite de 4,5 Mo par requête des fonctions Vercel :
@@ -37,7 +65,7 @@ const nextConfig = {
   // `script-src` inclut `'unsafe-inline'` : Next.js App Router injecte un
   // `<script>` inline pour l'hydratation (`__NEXT_DATA__`) — un CSP strict
   // sans ce mot-clé le bloquerait. Une politique par nonce (générée dans
-  // `src/middleware.ts`, propagée automatiquement par Next.js aux scripts
+  // `src/proxy.ts`, propagée automatiquement par Next.js aux scripts
   // qu'il injecte) supprimerait ce compromis mais demande des tests
   // approfondis en conditions réelles avant d'être activée — pas fait ici,
   // documenté pour une prochaine itération. Ce CSP reste une réduction
@@ -99,6 +127,10 @@ const nextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
         ],
       },
+      ...NOINDEX_SOURCES.map((source) => ({
+        source,
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      })),
     ];
   },
 };

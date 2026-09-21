@@ -1,6 +1,8 @@
 import { listProductIdsWithActiveVideo } from "@/application/services/catalog-video-service";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { parsePageParam } from "@/lib/seo";
 import {
   listStorefrontProducts,
   countStorefrontProducts,
@@ -45,13 +47,16 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<CatalogSearchParams>;
 }): Promise<Metadata> {
-  const { q, category, tri } = await searchParams;
+  const { q, category, tri, page } = await searchParams;
   const site = await requireStorefront();
 
   return buildStorefrontMetadata({
     path: STOREFRONT_PATHS.catalog,
     title: q ? `Recherche « ${q} »` : site.blueprint.catalogLabel,
     description: site.blueprint.subheadings.products ?? null,
+    // Les pages 2, 3… du catalogue complet sont indexables et
+    // s'auto-référencent (voir `buildStorefrontMetadata`).
+    page: parsePageParam(page),
     // Une page filtrée/triée/recherchée n'est qu'une vue du même
     // catalogue : l'indexer créerait des dizaines d'URL en doublon.
     noIndex: Boolean(q || tri || category),
@@ -67,7 +72,7 @@ export default async function CatalogPage({
   const site = await requireStorefront();
   const { tenant, blueprint } = site;
 
-  const page = Math.max(1, Number(pageParam) || 1);
+  const page = parsePageParam(pageParam);
   const sort = parseSort(tri);
   const search = q?.trim() || undefined;
 
@@ -87,6 +92,9 @@ export default async function CatalogPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  // Une page au-delà de la dernière n'existe pas : 404 franc plutôt qu'une
+  // liste vide en 200 (soft 404, que Google écarte de l'index en le signalant).
+  if (page > totalPages) notFound();
 
   // Conserve les filtres actifs d'une page à l'autre : sans ça, cliquer
   // « Suivant » sur une recherche filtrée renvoie au catalogue complet.

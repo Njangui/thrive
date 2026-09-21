@@ -12,7 +12,7 @@ import {
   createTestimonial,
   deleteTestimonial,
 } from "@/application/services/landing-config-service";
-import { LANDING_SECTION_LABELS, LANDING_PRESET_KEYS, LANDING_PRESET_LABELS, buildDefaultSections } from "@/application/config/landing-presets";
+import { LANDING_SECTION_LABELS, LANDING_PRESET_KEYS, LANDING_PRESET_LABELS, LANDING_PRESET_DESCRIPTIONS, SECTOR_TO_PRESET, buildDefaultSections } from "@/application/config/landing-presets";
 import { getStorefrontBlueprint } from "@/application/config/storefront-blueprint";
 import {
   FONT_CHOICES,
@@ -549,6 +549,7 @@ export default async function SitePage({
   // personnalisation (voir resolveStorefrontHighlights, storefront-service.ts,
   // qui fait exactement ce calcul côté vitrine publique).
   const sectorBlueprint = getStorefrontBlueprint(industry);
+  const activePreset = SECTOR_TO_PRESET[sectorBlueprint.sector];
 
   return (
     <div className="site-editor-page mx-auto flex w-full max-w-7xl flex-col gap-4">
@@ -732,16 +733,58 @@ export default async function SitePage({
       <div id="sections" className="mt-2 flex flex-col gap-4 border-t border-navy-900/10 pt-6">
         <div>
           <div className="site-editor-section-heading mb-3"><span className="site-editor-section-dot">04</span><div><p className="text-sm font-bold">Structure de la page</p><p className="text-xs text-slate-500">Choisissez un modèle puis activez et réordonnez les sections.</p></div></div>
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {LANDING_PRESET_KEYS.filter((key) => key !== "default").map((preset) => (
-              <form key={preset} action={applyPresetAction} className="rounded-2xl border border-navy-900/[0.06] bg-[#F8FAFC] p-4">
-                <input type="hidden" name="organizationId" value={organizationId} />
-                <input type="hidden" name="preset" value={preset} />
-                <p className="text-sm font-bold">{LANDING_PRESET_LABELS[preset]}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Une structure optimisée pour ce type d&apos;activité.</p>
-                <SubmitButton pendingLabel="Application…" className="mt-3 w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700">Utiliser ce modèle</SubmitButton>
-              </form>
-            ))}
+          <div className="site-sector-identity">
+            <div className="site-sector-identity-mark" style={{ background: sectorBlueprint.defaultAccent.primary }}>✦</div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-extrabold text-navy-900">Template actif : {sectorBlueprint.eyebrow}</p>
+                <span className="site-sector-active-badge">Secteur de votre entreprise</span>
+              </div>
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">La vitrine publique utilise automatiquement la composition, le vocabulaire et la direction artistique de ce secteur. Vos couleurs et vos contenus personnalisés prennent ensuite le relais.</p>
+            </div>
+            <div className="hidden shrink-0 text-right sm:block">
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Palette de base</span>
+              <div className="mt-2 flex justify-end gap-1.5">
+                <span className="site-color-chip" style={{ background: sectorBlueprint.defaultAccent.primary }} />
+                <span className="site-color-chip" style={{ background: sectorBlueprint.defaultAccent.secondary }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {LANDING_PRESET_KEYS.filter((key) => key !== "default").map((preset) => {
+              const isActive = preset === activePreset;
+              return (
+                <form key={preset} action={applyPresetAction} className={`site-template-card ${isActive ? "is-active" : ""}`}>
+                  <input type="hidden" name="organizationId" value={organizationId} />
+                  <input type="hidden" name="preset" value={preset} />
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold">{LANDING_PRESET_LABELS[preset]}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{LANDING_PRESET_DESCRIPTIONS[preset]}</p>
+                    </div>
+                    {isActive && <span className="site-template-current">Actif</span>}
+                  </div>
+                  <SubmitButton pendingLabel="Application…" className={`mt-4 w-full rounded-xl px-3 py-2.5 text-xs font-bold ${isActive ? "bg-navy-900 text-white" : "border border-navy-900/10 bg-white text-navy-900 hover:bg-slate-50"}`}>{isActive ? "Réappliquer ce modèle" : "Utiliser cette structure"}</SubmitButton>
+                </form>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-navy-900/[0.06] bg-white p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Composition recommandée</p>
+                <p className="mt-1 text-sm font-semibold text-navy-900">{sectorBlueprint.heroTitle("votre entreprise")}</p>
+                <p className="mt-1 text-xs text-slate-500">Sections prévues par le template {sectorBlueprint.eyebrow.toLowerCase()}.</p>
+              </div>
+              <a href="#section-list" className="text-xs font-bold text-primary hover:underline">Modifier les sections ↓</a>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {sectorBlueprint.sections.map((type) => (
+                <span key={type} className="site-section-chip">{LANDING_SECTION_LABELS[type]}</span>
+              ))}
+            </div>
           </div>
 
           <form
@@ -896,7 +939,7 @@ export default async function SitePage({
           </p>
         </div>
 
-        <ul className="flex flex-col gap-2">
+        <ul id="section-list" className="flex flex-col gap-2">
           {landingConfig.sections.map((section, index) => (
             <li
               key={section.type}
@@ -958,7 +1001,7 @@ export default async function SitePage({
               <input
                 type="color"
                 name="brandColorPrimary"
-                defaultValue={landingConfig.brandColorPrimary ?? "#0f172a"}
+                defaultValue={landingConfig.brandColorPrimary ?? sectorBlueprint.defaultAccent.primary}
                 className="h-10 w-16 rounded-xl border border-navy-900/10"
               />
             </label>
@@ -967,7 +1010,7 @@ export default async function SitePage({
               <input
                 type="color"
                 name="brandColorSecondary"
-                defaultValue={landingConfig.brandColorSecondary ?? "#10b981"}
+                defaultValue={landingConfig.brandColorSecondary ?? sectorBlueprint.defaultAccent.secondary}
                 className="h-10 w-16 rounded-xl border border-navy-900/10"
               />
             </label>

@@ -5,7 +5,7 @@ import type { FontChoice } from "@/domain/entities/landing";
 /**
  * Couleurs de marque -> variables CSS scopées, posées sur le conteneur
  * racine de la vitrine. Les classes Tailwind `bg-brand`/`text-brand`/
- * `border-brand` (tailwind.config.ts) les consomment déjà ; les custom
+ * `border-brand` (tailwind.config.js) les consomment déjà ; les custom
  * properties étant héritées, il suffit de les définir sur un ancêtre.
  *
  * ÉVOLUTION (vitrine V2) : trois changements.
@@ -18,7 +18,7 @@ import type { FontChoice } from "@/domain/entities/landing";
  *
  *  2. Les variables sont toujours écrites, même en repli : la vitrine ne
  *     dépend plus des valeurs par défaut inscrites dans
- *     `tailwind.config.ts` (`var(--brand-primary, #0f172a)`), qui
+ *     `tailwind.config.js` (`var(--brand-primary, #0f172a)`), qui
  *     imposaient un bleu ardoise identique à tout le monde.
  *
  *  3. Deux variables DÉRIVÉES sont ajoutées, `--brand-soft` et

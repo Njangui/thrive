@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
-import { middleware } from "./middleware";
+import { proxy } from "./proxy";
 
 /**
  * Repasse sécurité P0 (07/09/2026, section 8/9 de la mission) — test de
@@ -16,7 +16,7 @@ import { middleware } from "./middleware";
  * next/headers — non appelable directement dans un test unitaire).
  */
 function requestHeaderAfterMiddleware(request: NextRequest, name: string): string | null {
-  const response = middleware(request);
+  const response = proxy(request);
   return response.headers.get(`x-middleware-request-${name}`);
 }
 

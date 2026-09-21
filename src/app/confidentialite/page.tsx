@@ -1,12 +1,25 @@
 import type { Metadata } from "next";
 import { LegalPageLayout } from "@/app/_components/legal-page-layout";
+import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
+import { LEGAL_ENTITY, isLegalEntityComplete, legalField } from "@/application/config/legal-entity";
 
-export const metadata: Metadata = { title: "Politique de confidentialité — CRESYVA" };
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMarketingMetadata({
+    path: "/confidentialite",
+    title: "Politique de confidentialité — CRESYVA",
+    description: "Comment CRESYVA traite les données de ses clients et celles que ses clients saisissent sur la plateforme.",
+    // Une page légale à trous n'a pas à être indexée (voir legal-entity.ts).
+    noIndex: !isLegalEntityComplete(),
+  });
+}
 
 export default function ConfidentialitePage() {
+  const entity = LEGAL_ENTITY;
+  const privacyEmail = legalField(entity.privacyEmail || entity.contactEmail, "email de contact");
+
   return (
     <LegalPageLayout title="Politique de confidentialité">
-      <p>Dernière mise à jour : [À COMPLÉTER — date].</p>
+      <p>Dernière mise à jour : {entity.lastUpdated}.</p>
 
       <h2>1. Deux niveaux de données</h2>
       <p>
@@ -39,7 +52,7 @@ export default function ConfidentialitePage() {
           Usage et navigation : pages vues, clics, événements d&apos;analytics agrégés — utilisés pour les
           statistiques affichées au Client sur son propre tableau de bord, jamais revendus.
         </li>
-        <li>Paiement : le numéro de carte/Mobile Money n&apos;est jamais stocké par CRESYVA — traité directement par NotchPay.</li>
+        <li>Paiement : le numéro de carte/Mobile Money n&apos;est jamais stocké par CRESYVA — traité directement par Fapshi.</li>
       </ul>
 
       <h2>3. Sous-traitants (prestataires tiers)</h2>
@@ -48,7 +61,7 @@ export default function ConfidentialitePage() {
         <li><strong>Supabase</strong> — hébergement de la base de données et de l&apos;authentification.</li>
         <li><strong>Vercel</strong> — hébergement de l&apos;application.</li>
         <li><strong>Zernio</strong> — messagerie WhatsApp et publication sur les réseaux sociaux connectés.</li>
-        <li><strong>NotchPay</strong> — traitement des paiements d&apos;abonnement.</li>
+        <li><strong>Fapshi</strong> — traitement des paiements d&apos;abonnement.</li>
         <li><strong>Resend</strong> — envoi des emails transactionnels (invitations d&apos;équipe).</li>
         <li><strong>OpenProvider</strong> — recherche et enregistrement de noms de domaine, si utilisé.</li>
       </ul>
@@ -63,15 +76,16 @@ export default function ConfidentialitePage() {
 
       <h2>5. Durée de conservation</h2>
       <p>
-        Les données sont conservées tant que le compte est actif, puis pendant [À COMPLÉTER — durée] après
-        résiliation pour permettre un export, avant suppression définitive — sauf obligation légale de conservation
+        Les données sont conservées tant que le compte est actif, puis pendant{" "}
+        {legalField(entity.postClosureRetention, "durée de conservation après fermeture du compte")} après la
+        fermeture du compte pour permettre un export, avant suppression définitive — sauf obligation légale de conservation
         plus longue (ex. données comptables).
       </p>
 
       <h2>6. Droits du Client et de ses utilisateurs</h2>
       <p>
         Toute personne concernée peut demander l&apos;accès, la rectification ou la suppression de ses données
-        personnelles en écrivant à [À COMPLÉTER — email de contact dédié à la confidentialité]. Pour les données
+        personnelles en écrivant à {privacyEmail}. Pour les données
         des clients FINAUX du Client (contacts WhatsApp, leads), la demande doit être adressée directement au
         Client concerné, responsable de traitement de ces données.
       </p>
@@ -90,7 +104,7 @@ export default function ConfidentialitePage() {
       </p>
 
       <h2>9. Contact</h2>
-      <p>Pour toute question relative à cette politique : [À COMPLÉTER — email de contact].</p>
+      <p>Pour toute question relative à cette politique : {privacyEmail}.</p>
     </LegalPageLayout>
   );
 }

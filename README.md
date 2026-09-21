@@ -17,8 +17,8 @@ de ressaisie manuelle à plusieurs endroits.
 
 ## Stack
 
-- **Frontend/Backend** : Next.js 14 (App Router) + TypeScript strict
-- **UI** : Tailwind CSS
+- **Frontend/Backend** : Next.js 16 (App Router, Turbopack, `proxy.ts`) + React 19 + TypeScript strict (Node.js ≥ 20.9)
+- **UI** : Tailwind CSS 4 (configuration JS historique conservée via `@config`)
 - **Base de données** : Supabase (PostgreSQL + Auth + RLS)
 - **Hébergement** : Vercel
 - **Messaging & Social** : Zernio (WhatsApp + publication multi-réseaux)

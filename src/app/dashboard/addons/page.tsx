@@ -18,7 +18,7 @@ async function purchaseAddonAction(formData: FormData) {
   let paymentUrl: string;
   try {
     const result = await purchaseAddon(organizationId, addonKey, quantity, membership.userId, email as string);
-    if (!result.paymentUrl) throw new Error("URL de paiement manquante dans la réponse NotchPay.");
+    if (!result.paymentUrl) throw new Error("URL de paiement manquante dans la réponse du prestataire de paiement.");
     paymentUrl = result.paymentUrl;
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de l'achat de l'add-on.";

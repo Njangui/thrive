@@ -1,6 +1,9 @@
 "use server";
 
 import { trackEvent } from "@/application/services/analytics-service";
+import { resolveRequestTenant } from "@/infrastructure/tenant/resolve-request-tenant";
+import { headers } from "next/headers";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Server Action appelée depuis un clic CTA sur la vitrine publique
@@ -17,6 +20,15 @@ import { trackEvent } from "@/application/services/analytics-service";
  * reste donc toujours silencieuse du point de vue du visiteur, qu'elle
  * réussisse ou non.
  */
-export async function trackClickAction(organizationId: string, ctaId: string): Promise<void> {
-  await trackEvent(organizationId, "cta_click", "cta", undefined, { ctaId });
+export async function trackClickAction(_organizationId: string, ctaId: string): Promise<void> {
+  const tenant = await resolveRequestTenant();
+  if (!tenant) return;
+  const headerList = await headers();
+  const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip") || "unknown";
+  if ((await checkRateLimit("public_analytics", ip)) !== null) return;
+  const safeCtaId = String(ctaId ?? "").slice(0, 80);
+  if (!safeCtaId) return;
+  // Never trust the organizationId supplied by the browser: the tenant is
+  // resolved from the request hostname on the server.
+  await trackEvent(tenant.organizationId, "cta_click", "cta", undefined, { ctaId: safeCtaId });
 }

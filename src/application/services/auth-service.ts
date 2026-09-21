@@ -71,9 +71,10 @@ export async function requireMembership(
 /**
  * Email de session de l'acteur courant — utilisé par les flows de
  * paiement (Lot G : initiatePayment / purchaseAddon) qui doivent
- * transmettre un identifiant de contact à NotchPay. Toujours disponible
- * via Supabase Auth (contrairement à un numéro de téléphone), donc pas
- * de valeur de repli à gérer côté appelant.
+ * transmettre un identifiant de contact au provider de paiement actif
+ * (Fapshi). Toujours disponible via Supabase Auth (contrairement à un
+ * numéro de téléphone), donc pas de valeur de repli à gérer côté
+ * appelant.
  */
 export async function getCurrentUserEmail(): Promise<string | null> {
   const supabase = await getSupabaseServerSessionClient();

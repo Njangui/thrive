@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 describe("getPlansOverviewForAdmin", () => {
-  it("une clé d'entitlement jamais configurée est traitée comme illimitée (-1), jamais comme 0/bloquante", async () => {
+  it("une clé d'entitlement jamais configurée est traitée comme fail-closed (0), jamais comme illimitée par accident (passage freemium)", async () => {
     configureSupabase({
       plans: { data: [{ key: "starter", name: "Starter", price_fcfa: 5000, description: null }], error: null },
       plan_entitlements: { data: [], error: null },
@@ -51,7 +51,7 @@ describe("getPlansOverviewForAdmin", () => {
     const overview = await getPlansOverviewForAdmin();
     const aiCredits = overview.entitlements.find((e) => e.key === "ai_credits");
 
-    expect(aiCredits?.limitsByPlan).toEqual({ free: -1, starter: -1, pro: -1 });
+    expect(aiCredits?.limitsByPlan).toEqual({ free: 0, starter: 0, pro: 0 });
   });
 
   it("un bonus 'numéro dédié' jamais configuré vaut 0, jamais -1/illimité", async () => {

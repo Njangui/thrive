@@ -7,7 +7,7 @@ export const ContactSchema = z.object({
   phoneE164: z.string().nullable(),
   email: z.string().email().nullable(),
   sourceChannel: z.string().nullable(),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

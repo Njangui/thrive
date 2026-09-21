@@ -40,7 +40,7 @@ export const LandingSectionSchema = z.object({
   type: LandingSectionTypeSchema,
   enabled: z.boolean(),
   order: z.number().int().min(0),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 export type LandingSection = z.infer<typeof LandingSectionSchema>;
 

@@ -4,8 +4,14 @@
  * `resolveProviderCredential` (ci-dessous) : clé plateforme mono-tenant,
  * une par provider, lue depuis les variables d'environnement du serveur.
  * Reste la source de vérité pour les providers qui n'ont, par nature,
- * qu'un seul compte plateforme (paiement d'abonnement NotchPay, stockage
- * Supabase) — jamais un compte par tenant.
+ * qu'un seul compte plateforme ET un seul secret (stockage Supabase,
+ * Zernio...) — jamais un compte par tenant. Le paiement d'abonnement
+ * (Fapshi) n'y figure PLUS depuis la migration NotchPay -> Fapshi :
+ * Fapshi authentifie avec DEUX valeurs (apiuser + apikey), que cette
+ * fonction ne sait pas retourner (un seul `string`) — résolu directement
+ * dans `registry.ts::getPaymentProvider()` à partir de
+ * `env.FAPSHI_API_USER`/`env.FAPSHI_API_KEY`, même pattern déjà établi
+ * pour OpenProvider (OPENPROVIDER_USERNAME/PASSWORD) juste en dessous.
  *
  * `resolveCredential` (Lot N, Partie 3) : résolution PAR TENANT pour les
  * providers où un commerçant peut avoir son propre compte dédié (Zernio,
@@ -25,7 +31,6 @@ const ENV_KEY_BY_PROVIDER: Record<string, string> = {
   claude: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   cinetpay: "CINETPAY_API_KEY",
-  notchpay: "NOTCHPAY_API_KEY",
 };
 
 export function resolveProviderCredential(providerName: string): string {

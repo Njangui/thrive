@@ -13,7 +13,7 @@ import { reconcileStalePayments } from "@/application/services/subscription-paym
  *
  * Fréquence recommandée : toutes les 15-30 minutes (voir
  * docs/DEPLOYMENT.md) — assez souvent pour rattraper un webhook jamais
- * livré sans attendre trop longtemps, sans spammer l'API NotchPay pour
+ * livré sans attendre trop longtemps, sans spammer l'API du provider pour
  * des paiements encore légitimement en cours.
  */
 async function handle(request: Request) {

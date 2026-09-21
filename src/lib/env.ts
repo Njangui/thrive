@@ -27,13 +27,26 @@ const EnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
 
-  // Lot G : NotchPay est le seul adapter réellement implémenté — "cinetpay"
-  // ferait échouer getPaymentProvider() volontairement (voir registry.ts).
-  PAYMENT_PROVIDER_DEFAULT: z.enum(["cinetpay", "notchpay"]).default("notchpay"),
+  // Migré NotchPay -> Fapshi le 2026-09-20 : Fapshi est le seul adapter
+  // réellement implémenté — "cinetpay" ferait échouer getPaymentProvider()
+  // volontairement (voir registry.ts), scaffolding orphelin conservé tel
+  // quel. Si votre .env contient encore PAYMENT_PROVIDER_DEFAULT=notchpay,
+  // ce schéma le refusera au démarrage (fail fast) — mettez-le à jour vers
+  // "fapshi" et renseignez les variables FAPSHI_* ci-dessous.
+  PAYMENT_PROVIDER_DEFAULT: z.enum(["cinetpay", "fapshi"]).default("fapshi"),
   CINETPAY_API_KEY: z.string().optional(),
   CINETPAY_SITE_ID: z.string().optional(),
-  NOTCHPAY_API_KEY: z.string().optional(),
-  NOTCHPAY_WEBHOOK_SECRET: z.string().optional(),
+  // Fapshi authentifie avec DEUX valeurs (contrairement à NotchPay qui
+  // n'en exigeait qu'une) — voir payment/fapshi/client.ts.
+  FAPSHI_API_USER: z.string().optional(),
+  FAPSHI_API_KEY: z.string().optional(),
+  // Secret webhook Fapshi — un simple secret partagé (PAS une clé HMAC
+  // comme NotchPay), configuré une seule fois côté dashboard Fapshi et
+  // jamais relisible ensuite. Voir payment/fapshi/webhook-handler.ts.
+  FAPSHI_WEBHOOK_SECRET: z.string().optional(),
+  // sandbox.fapshi.com pour les tests, live.fapshi.com par défaut — voir
+  // docs.fapshi.com (section "The Environment").
+  FAPSHI_BASE_URL: z.string().url().default("https://live.fapshi.com"),
 
   // Lot N, Partie 2 — OpenProvider (registrar de domaines, voir
   // RAPPORT_LOT_G.md pour l'évaluation initiale et RAPPORT_LOT_N.md pour
