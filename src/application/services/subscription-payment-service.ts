@@ -3,7 +3,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { getPaymentProvider } from "@/infrastructure/providers/registry";
 import { listPlans, resolvePlanPriceForCountry, type PlanKey } from "./plans-repository";
-import { DEFAULT_COUNTRY_CODE } from "./country-service";
+import { getOrganizationCountryCode } from "./country-service";
 import { validateMoney } from "./currency-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
@@ -130,32 +130,6 @@ export async function listAllPaymentsForAdmin(limit = 200): Promise<AdminPayment
     status: r.status,
     createdAt: r.created_at,
   }));
-}
-
-/**
- * Lit le pays de l'organisation pour résoudre son prix/sa devise
- * (Country Engine, section 12/17). Ne lève JAMAIS — une organisation
- * pré-Country-Engine ou une erreur de lecture retombe sur
- * DEFAULT_COUNTRY_CODE ('CM'), le seul marché existant avant ce
- * lot — comportement identique à avant l'introduction du Country
- * Engine (section 57).
- */
-async function getOrganizationCountryCode(organizationId: string): Promise<string> {
-  const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("organizations")
-    .select("country_code")
-    .eq("id", organizationId)
-    .maybeSingle();
-
-  if (error) {
-    console.error(
-      `getOrganizationCountryCode(${organizationId}) erreur de lecture, repli sur ${DEFAULT_COUNTRY_CODE}:`,
-      error.message,
-    );
-    return DEFAULT_COUNTRY_CODE;
-  }
-  return data?.country_code ?? DEFAULT_COUNTRY_CODE;
 }
 
 /**

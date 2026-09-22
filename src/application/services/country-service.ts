@@ -16,6 +16,36 @@ import { getCountries, getCountry as getCountryRecord, type CountryRecord } from
 export const DEFAULT_COUNTRY_CODE = "CM";
 export const DEFAULT_CURRENCY_CODE = "XAF";
 
+/**
+ * Lit le pays d'une organisation (colonne `organizations.country_code`,
+ * NOT NULL depuis 0041_organizations_country_code.sql). Déplacé ici
+ * depuis subscription-payment-service.ts (CORRECTIF 2026-09-21, suite
+ * signalement utilisateur : prix affiché au dashboard ≠ prix facturé au
+ * checkout) pour que TOUT code ayant besoin du prix résolu d'un plan
+ * pour une organisation (affichage ET facturation) passe par la MÊME
+ * lecture — jamais une copie locale qui pourrait diverger de l'autre.
+ * Ne lève JAMAIS : un souci de lecture ou une organisation sans pays
+ * connu retombe sur DEFAULT_COUNTRY_CODE ('CM'), seul marché existant
+ * avant le Country Engine.
+ */
+export async function getOrganizationCountryCode(organizationId: string): Promise<string> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("country_code")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      `getOrganizationCountryCode(${organizationId}) erreur de lecture, repli sur ${DEFAULT_COUNTRY_CODE}:`,
+      error.message,
+    );
+    return DEFAULT_COUNTRY_CODE;
+  }
+  return data?.country_code ?? DEFAULT_COUNTRY_CODE;
+}
+
 export interface PublicCountry {
   isoCode: string;
   name: string;

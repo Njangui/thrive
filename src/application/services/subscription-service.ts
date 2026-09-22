@@ -1,5 +1,6 @@
 import { canUseFeature, type EntitlementCheckResult } from "./entitlements-service";
-import { getOrganizationSubscription, listPlans, type OrganizationSubscriptionStatus, type PlanKey } from "./plans-repository";
+import { getOrganizationSubscription, listPlanPricesForCountry, type OrganizationSubscriptionStatus, type PlanKey } from "./plans-repository";
+import { getOrganizationCountryCode } from "./country-service";
 
 /**
  * Lot B (section 78) — agrège tout ce dont la page /dashboard/subscription
@@ -89,10 +90,23 @@ export const FEATURE_FLAGS: { key: string; label: string }[] = [
 ];
 
 export async function getSubscriptionOverview(organizationId: string): Promise<SubscriptionOverview> {
-  const [subscription, plans] = await Promise.all([
+  // CORRECTIF (2026-09-21, signalement utilisateur : prix affiché au
+  // dashboard 30 000 FCFA alors que le checkout facturait 39 900 FCFA)
+  // — auparavant `listPlans()` lisait le prix PAR DÉFAUT de `plans`,
+  // alors qu'`initiatePayment()` (subscription-payment-service.ts)
+  // facture le prix RÉSOLU POUR LE PAYS de l'organisation via
+  // `resolvePlanPriceForCountry()` (Country Engine, `plan_prices`).
+  // Une ligne `plan_prices` active mais désynchronisée de
+  // `plans.price_fcfa` faisait donc diverger silencieusement "ce qui
+  // est montré" de "ce qui est facturé". `listPlanPricesForCountry()`
+  // applique exactement la même résolution (et le même repli) que le
+  // paiement : ce que voit le commerçant est GARANTI identique à ce
+  // qu'il paiera, quel que soit son pays.
+  const [subscription, countryCode] = await Promise.all([
     getOrganizationSubscription(organizationId),
-    listPlans(),
+    getOrganizationCountryCode(organizationId),
   ]);
+  const plans = await listPlanPricesForCountry(countryCode);
 
   const [usageResults, featureResults] = await Promise.all([
     Promise.all(USAGE_GAUGES.map((g) => canUseFeature(organizationId, g.key, 1))),
@@ -123,6 +137,17 @@ export async function getSubscriptionOverview(organizationId: string): Promise<S
     status: subscription.status,
     usage,
     features,
-    plans: plans.map((p) => ({ ...p, isCurrent: p.key === subscription.planKey })),
+    // `p.amount` (prix RÉSOLU pour le pays de cette organisation), jamais
+    // `p.priceFcfa` (prix par défaut brut, toujours présent sur `p` mais
+    // qui a causé le bug d'origine : c'est lui qui divergeait du montant
+    // réellement facturé). Voir le commentaire au-dessus de l'appel à
+    // `listPlanPricesForCountry()` plus haut dans cette fonction.
+    plans: plans.map((p) => ({
+      key: p.key,
+      name: p.name,
+      priceFcfa: p.amount,
+      description: p.description,
+      isCurrent: p.key === subscription.planKey,
+    })),
   };
 }
