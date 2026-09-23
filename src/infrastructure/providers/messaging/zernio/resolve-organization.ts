@@ -15,6 +15,22 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 export async function resolveOrganizationIdByZernioAccount(accountId: string): Promise<string | null> {
   const supabase = getSupabaseServiceClient();
 
+  // Multi-numéros (migration 0063) : chaque numéro de MESSAGERIE est une ligne de `whatsapp_accounts`.
+  // `provider_connections` ne reflète que le PREMIER numéro (voir persistZernioOAuthConnection) : sans
+  // cette lecture, tout message reçu sur un 2ᵉ ou 3ᵉ numéro était ignoré (« aucun tenant résolu »).
+  const { data: numberRow, error: numberError } = await supabase
+    .from("whatsapp_accounts")
+    .select("organization_id")
+    .eq("account_id", accountId)
+    .eq("status", "connected")
+    .limit(1)
+    .maybeSingle();
+  if (numberError) {
+    console.error(`resolveOrganizationIdByZernioAccount(${accountId}) whatsapp_accounts error:`, numberError.message);
+  } else if (numberRow?.organization_id) {
+    return numberRow.organization_id;
+  }
+
   const { data, error } = await supabase
     .from("provider_connections")
     .select("organization_id")
@@ -157,6 +173,35 @@ export async function resolveOrganizationIdByProviderPostId(providerPostId: stri
 
   if (error) {
     console.error(`resolveOrganizationIdByProviderPostId(${providerPostId}) error:`, error.message);
+    return null;
+  }
+
+  return data?.organization_id ?? null;
+}
+
+/**
+ * Numéro DÉDIÉ aux groupes WhatsApp : ligne `provider_connections` de type `whatsapp_groups` (Cloud API,
+ * profil Zernio à part — voir zernio-channel-service.ts::ensureZernioGroupsProfile). C'est un compte
+ * Zernio DIFFÉRENT de la messagerie : `resolveOrganizationIdByZernioAccount` (type `messaging`) ne le
+ * reconnaît volontairement pas. Sans ce résolveur, les événements de ce numéro étaient rejetés
+ * (« aucun tenant résolu ») et l'activation d'un groupe — déclenchée par le premier message reçu — n'avait
+ * jamais lieu : aucune diffusion vers un groupe ne pouvait partir.
+ */
+export async function resolveOrganizationIdByWhatsAppGroupsAccount(accountId: string): Promise<string | null> {
+  const supabase = getSupabaseServiceClient();
+
+  const { data, error } = await supabase
+    .from("provider_connections")
+    .select("organization_id")
+    .eq("provider_type", "whatsapp_groups")
+    .eq("provider_name", "zernio")
+    .eq("status", "connected")
+    .eq("metadata->>accountId", accountId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`resolveOrganizationIdByWhatsAppGroupsAccount(${accountId}) error:`, error.message);
     return null;
   }
 

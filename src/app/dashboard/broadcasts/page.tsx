@@ -86,7 +86,7 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: P
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Diffusions</h1>
+        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Diffusions aux contacts</h1>
         <p className="mt-1 text-sm text-slate-500">
           Envoyez une même annonce à vos contacts, sur le canal où ils vous écrivent. Jusqu&apos;à {limit === -1 ? "500" : cap} contacts par campagne, {MAX_BROADCASTS_PER_DAY} campagnes par jour.
         </p>

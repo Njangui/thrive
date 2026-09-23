@@ -21,6 +21,7 @@ export interface CreateExpenseInput {
   supplier?: string;
   date?: string;
   actorUserId?: string;
+  expenseClass?: "cost_of_revenue" | "operating" | "tax";
 }
 
 export interface FinanceEntry {
@@ -101,6 +102,7 @@ export async function createExpense(input: CreateExpenseInput): Promise<{ expens
       amount: input.amount,
       category_id: categoryId,
       expense_date: input.date ?? new Date().toISOString().slice(0, 10),
+      expense_class: input.expenseClass ?? "operating",
       description: input.description ?? null,
       supplier: input.supplier ?? null,
       created_by: input.actorUserId,

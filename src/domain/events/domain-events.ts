@@ -47,6 +47,10 @@ export interface MessageReceivedEvent extends DomainEventBase {
     channel: string;
     /** Compte provider précis ayant reçu le message (ex. compte WhatsApp Zernio). */
     providerAccountId?: string;
+    /** Extension groupe (Telegram) : nom de l'expéditeur INDIVIDUEL dans un fil PARTAGÉ à plusieurs participants — distinct de `contactFullName`, qui nomme l'entité "contact" (ex. le groupe lui-même), pas qui a écrit CE message précis. */
+    authorName?: string;
+    /** Extension groupe (Telegram) : pour un fil multi-participants, indique si CE message s'adressait explicitement au bot (commande, mention, réponse à un message du bot). `undefined` = non pertinent (fil 1-à-1 classique) → toujours traité comme adressé. */
+    directedAtBot?: boolean;
     attachment?: {
       url: string;
       type: "image" | "video" | "audio" | "file";
@@ -200,3 +204,17 @@ export type DomainEvent =
   | ProviderAccountStatusUpdatedEvent
   | CommentReceivedEvent
   | ExternalPostTrackedEvent;
+
+/**
+ * Lot P — texte de remplacement d'un message client qui ne contient QU'UNE
+ * pièce jointe (vocal, photo, document). Les mappers (Zernio, Telegram)
+ * l'utilisent comme `content` quand le client n'a écrit aucun texte ; le
+ * pipeline de réponse automatique le reconnaît pour ne JAMAIS le traiter
+ * comme une vraie question (FAQ, catalogue ou IA) — voir
+ * `inbound-auto-reply-service.ts`.
+ */
+export const INBOUND_ATTACHMENT_PLACEHOLDER_PREFIX = "Le client a envoyé une pièce jointe";
+
+export function isInboundAttachmentPlaceholder(content: string): boolean {
+  return content.trim().startsWith(INBOUND_ATTACHMENT_PLACEHOLDER_PREFIX);
+}

@@ -1,5 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { notifyOrgAdmins } from "./notification-service";
+import { isOwnComment } from "./comment-auto-reply-service";
+import { getSocialAccountByAccountId } from "./social-account-registry-service";
 import type { CommentReceivedEvent, ExternalPostTrackedEvent } from "@/domain/events/domain-events";
 
 /**
@@ -217,6 +219,14 @@ export async function handleIncomingComment(event: CommentReceivedEvent): Promis
     return null;
   }
 
+  // Le commentaire vient-il du compte du commerçant lui-même ? Se produit chaque fois qu'il répond à un
+  // commentaire — soit directement sur la plateforme, soit via `replyToComment` (social-comment-service.ts) :
+  // Zernio relivre alors CETTE réponse comme un nouveau `comment.received`. Vérifié ICI (pas seulement dans
+  // `processCommentAutoReply`, qui ne l'évalue même pas si la réponse automatique est désactivée) car
+  // `notifyOrgAdmins` ci-dessous notifierait sinon le commerçant de son PROPRE message, à chaque réponse.
+  const account = await getSocialAccountByAccountId(event.payload.providerAccountId);
+  const isOwn = Boolean(account) && isOwnComment(event.payload, account!);
+
   const { data: inserted, error: upsertError } = await supabase
     .from("social_comments")
     .upsert(
@@ -229,6 +239,7 @@ export async function handleIncomingComment(event: CommentReceivedEvent): Promis
         author_name: event.payload.authorName,
         author_external_id: event.payload.authorExternalId ?? null,
         content: event.payload.content,
+        is_own: isOwn,
       },
       { onConflict: "social_post_id,provider_account_id,external_comment_id", ignoreDuplicates: true },
     )
@@ -244,6 +255,11 @@ export async function handleIncomingComment(event: CommentReceivedEvent): Promis
   // déjà connu (re-livraison webhook, ou déjà récupéré par un sync
   // manuel entre-temps) — jamais de notification en double dans ce cas.
   if (!inserted) return null;
+
+  // Stocké pour l'historique du fil (répondre à ce fil doit rester cohérent) mais jamais notifié : voir
+  // le calcul de `isOwn` ci-dessus. `processCommentAutoReply` (appelée juste après par le webhook) fera de
+  // toute façon le même constat et n'y répondra pas automatiquement.
+  if (isOwn) return { commentId: inserted.id as string };
 
   await notifyOrgAdmins({
     organizationId: event.organizationId,

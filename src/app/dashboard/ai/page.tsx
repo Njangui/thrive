@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireCurrentOrganization, requireMembership } from "@/application/services/auth-service";
 import { getAiConfig, updateAiConfig } from "@/application/services/ai-config-service";
+import { getHumanPauseMinutes, setHumanPauseMinutes, normalizeHumanPauseMinutes, HUMAN_PAUSE_OPTIONS } from "@/application/services/messaging-settings-service";
 import { AppError } from "@/lib/errors";
 import { SubmitButton } from "@/app/_components/submit-button";
 
@@ -31,6 +32,16 @@ async function updateAiConfigAction(formData: FormData) {
 // (voir RAPPORT_FUSION_14.md, addendum). Le succès est donc appelé APRÈS le try/catch.
   try {
     await updateAiConfig(organizationId, { enabled: formData.get("enabled") === "on", provider: selected.provider, fallbackProvider: selected.fallback, tone: String(formData.get("tone") ?? "professionnel et chaleureux"), language: String(formData.get("language") ?? "fr"), objectives, maxTokens: lengthMap[length] ?? 640, temperature: tempMap[creativity] ?? 0.35 }, membership.userId);
+    // Lot P : pause de l'IA après une réponse manuelle — indépendant du
+    // réglage ci-dessus (celui-ci ne pilote QUE l'IA générative ; FAQ,
+    // catalogue et infos entreprise répondent toujours, voir le texte
+    // d'aide dans le formulaire). Best-effort : une erreur ici ne doit pas
+    // faire échouer l'enregistrement du reste de l'assistant.
+    try {
+      await setHumanPauseMinutes(organizationId, normalizeHumanPauseMinutes(formData.get("humanPauseMinutes")));
+    } catch (pauseError) {
+      console.error("[dashboard/ai] setHumanPauseMinutes a échoué :", pauseError);
+    }
   } catch (error) {
     // Cause réelle dans les logs serveur : le message affiché reste volontairement générique.
     if (!(error instanceof AppError)) console.error("[dashboard/ai] updateAiConfig a échoué :", error);
@@ -43,6 +54,7 @@ export default async function AiConfigPage({ searchParams }: { searchParams: Pro
   const { success, error } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
   const config = await getAiConfig(organizationId);
+  const humanPauseMinutes = await getHumanPauseMinutes(organizationId);
   const mode = modeFromProvider(config.provider);
   const currentLength = config.maxTokens <= 400 ? "short" : config.maxTokens >= 1000 ? "detailed" : "standard";
   const currentCreativity = config.temperature <= 0.2 ? "precise" : config.temperature >= 0.55 ? "creative" : "natural";
@@ -55,6 +67,26 @@ export default async function AiConfigPage({ searchParams }: { searchParams: Pro
         <section className="adm-card space-y-5">
           <div><h2 className="adm-heading-2 text-lg">Comportement</h2><p className="mt-1 text-sm text-slate-500">CRESYVA utilise automatiquement une solution de secours si nécessaire.</p></div>
           <label className="flex items-center gap-3 rounded-2xl bg-violet-50 p-4 text-sm font-semibold"><input type="checkbox" name="enabled" defaultChecked={config.enabled} className="h-4 w-4"/> Activer les réponses automatiques</label>
+          {/* Lot P : ce réglage ne pilote QUE l'IA générative — le dernier recours
+              quand rien d'autre ne correspond. La FAQ, le catalogue et les infos
+              de l'entreprise (horaires, adresse, contact) répondent TOUJOURS,
+              même désactivé (voir « Question fréquente », « Produits/Services »,
+              « Entreprise » dans le menu). Précision ajoutée après un signalement :
+              le libellé seul laissait penser que tout s'arrêtait ici. */}
+          <p className="-mt-2 text-xs leading-5 text-slate-500">
+            Cette option contrôle uniquement l&apos;IA générative, utilisée en dernier recours. Vos réponses automatiques (FAQ, catalogue, horaires, adresse, contact) restent actives même désactivée.
+          </p>
+          <label className="block text-sm font-semibold">
+            Après avoir répondu vous-même à un client
+            <select name="humanPauseMinutes" defaultValue={String(humanPauseMinutes)} className="mt-2 w-full rounded-xl border border-navy-900/10 px-3 py-3 text-sm font-normal">
+              {HUMAN_PAUSE_OPTIONS.map((option) => (
+                <option key={option.minutes} value={option.minutes}>{option.label}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">
+              L&apos;assistant reprend automatiquement la main après ce délai — plus besoin de cliquer sur « Rendre à l&apos;IA » dans chaque conversation.
+            </span>
+          </label>
           <div className="grid gap-3 sm:grid-cols-3">{Object.entries(MODES).map(([key, value]) => <label key={key} className={`cursor-pointer rounded-2xl border p-4 transition ${mode === key ? "border-violet-400 bg-violet-50 ring-2 ring-violet-100" : "border-navy-900/10 bg-white hover:border-violet-200"}`}><input type="radio" name="mode" value={key} defaultChecked={mode === key} className="sr-only"/><p className="text-sm font-bold">{value.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{value.description}</p></label>)}</div>
           <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">Longueur<select name="length" defaultValue={currentLength} className="mt-2 w-full rounded-xl border border-navy-900/10 px-3 py-3 text-sm font-normal"><option value="short">Courte</option><option value="standard">Standard</option><option value="detailed">Détaillée</option></select></label><label className="text-sm font-semibold">Style<select name="creativity" defaultValue={currentCreativity} className="mt-2 w-full rounded-xl border border-navy-900/10 px-3 py-3 text-sm font-normal"><option value="precise">Très précis</option><option value="natural">Naturel</option><option value="creative">Plus créatif</option></select></label></div>
           <label className="block text-sm font-semibold">Ton<select name="tone" defaultValue={config.tone ?? "professionnel et chaleureux"} className="mt-2 w-full rounded-xl border border-navy-900/10 px-3 py-3 text-sm font-normal"><option>professionnel et chaleureux</option><option>direct et efficace</option><option>détendu et amical</option></select></label>

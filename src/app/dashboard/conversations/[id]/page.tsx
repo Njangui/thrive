@@ -4,6 +4,7 @@ import {
   getConversationThread,
   sendHumanReply,
   returnConversationToAI,
+  takeOverConversation,
   closeConversation,
   type HumanReplyAttachment,
 } from "@/application/services/conversation-admin-service";
@@ -73,14 +74,34 @@ export default async function ConversationDetailPage({
   async function returnToAiAction() {
     "use server";
     await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
-    await returnConversationToAI(organizationId, conversationId);
+    try {
+      await returnConversationToAI(organizationId, conversationId);
+    } catch (err) {
+      redirect(`/dashboard/conversations/${conversationId}?error=${encodeURIComponent(err instanceof AppError ? err.message : "Impossible de rendre la main à l'IA.")}`);
+    }
+    redirect(`/dashboard/conversations/${conversationId}`);
+  }
+
+  /** Lot P — bouton « Prendre la main » : met l'IA en pause sans avoir à écrire un message tout de suite. */
+  async function takeOverAction() {
+    "use server";
+    const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+    try {
+      await takeOverConversation(organizationId, conversationId, membership.userId);
+    } catch (err) {
+      redirect(`/dashboard/conversations/${conversationId}?error=${encodeURIComponent(err instanceof AppError ? err.message : "Impossible de prendre la main sur la conversation.")}`);
+    }
     redirect(`/dashboard/conversations/${conversationId}`);
   }
 
   async function closeAction() {
     "use server";
     await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
-    await closeConversation(organizationId, conversationId);
+    try {
+      await closeConversation(organizationId, conversationId);
+    } catch (err) {
+      redirect(`/dashboard/conversations/${conversationId}?error=${encodeURIComponent(err instanceof AppError ? err.message : "Impossible de clôturer la conversation.")}`);
+    }
     redirect("/dashboard/conversations");
   }
 
@@ -99,8 +120,12 @@ export default async function ConversationDetailPage({
         messages={thread.messages}
         replyAction={replyAction}
         returnToAiAction={returnToAiAction}
+        takeOverAction={takeOverAction}
         closeAction={closeAction}
         disabled={thread.handoffStatus === "resolved"}
+        handoffStatus={thread.handoffStatus}
+        handoffReasonLabel={thread.handoffReasonLabel}
+        aiResumeAt={thread.aiResumeAt}
       />
     </div>
   );

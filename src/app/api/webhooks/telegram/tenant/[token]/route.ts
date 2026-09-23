@@ -35,7 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     console.warn(`Telegram tenant webhook: jeton d'URL inconnu (${token}), ignoré.`);
     return NextResponse.json({ ok: true });
   }
-  const { organizationId, webhookSecret, botId } = resolved;
+  const { organizationId, webhookSecret, botId, botTelegramId, botUsername } = resolved;
 
   const headerValue = request.headers.get("x-telegram-bot-api-secret-token");
   if (!verifyTelegramTenantSecretToken(headerValue, webhookSecret)) {
@@ -79,8 +79,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       return NextResponse.json({ ok: true });
     }
 
-    const attachment = await downloadTelegramAttachmentIfPresent(organizationId, botId, update);
-    const domainEvent = mapTelegramUpdateToDomainEvent(update, organizationId, attachment ?? undefined, botId);
+    // CORRECTIF Lot P : un téléchargement de pièce jointe qui échoue (fichier
+    // > 20 Mo, type non pris en charge, erreur réseau côté Telegram) faisait
+    // jusqu'ici planter tout le traitement de l'update — le client ne
+    // recevait AUCUNE réaction, pas même un accusé de réception, et rien
+    // n'était enregistré. On dégrade au lieu d'abandonner : le message est
+    // conservé sans pièce jointe (mapTelegramUpdateToDomainEvent prévoit un
+    // texte de repli), et l'admin est prévenu séparément.
+    let attachment: Awaited<ReturnType<typeof downloadTelegramAttachmentIfPresent>> = null;
+    try {
+      attachment = await downloadTelegramAttachmentIfPresent(organizationId, botId, update);
+    } catch (downloadError) {
+      console.error(`Telegram tenant webhook: téléchargement de pièce jointe impossible (org ${organizationId}):`, downloadError);
+    }
+    const domainEvent = mapTelegramUpdateToDomainEvent(update, organizationId, attachment ?? undefined, botId, {
+      telegramId: botTelegramId,
+      username: botUsername,
+    });
     if (!domainEvent) {
       await markWebhookEvent(externalEventId, "ignored_duplicate");
       return NextResponse.json({ ok: true });
@@ -101,6 +116,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
         hasAttachment: Boolean(domainEvent.payload.attachment),
         handoffStatus: result.handoffStatus,
         handoffReason: result.handoffReason,
+        // Groupe non adressé au bot (conversation normale entre clients) : le
+        // message reste enregistré (contexte visible par un humain) mais ne
+        // déclenche ni FAQ, ni catalogue, ni IA — seulement une notification
+        // "message sans réponse" (voir inbound-auto-reply-service.ts). En
+        // chat privé, `directedAtBot` est undefined → toujours autorisé.
+        autoReplyAllowed: domainEvent.payload.directedAtBot !== false,
         send: async (reply) => {
           // Réponse par le bot qui a reçu le message (plusieurs bots par organisation).
           const messaging = await getMessagingProvider(organizationId, "telegram", botId);

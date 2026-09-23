@@ -1,6 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import type { MessageReceivedEvent } from "@/domain/events/domain-events";
 import { findOrCreateOpenLead, computeRuleBasedScore } from "./lead-service";
+import { applyAutoResume } from "./handoff-service";
 
 export interface HandleInboundMessageResult {
   contactId: string;
@@ -11,6 +12,8 @@ export interface HandleInboundMessageResult {
   handoffStatus: string;
   /** Motif de l'escalade en cours (ex. `ai_unavailable`) — voir handoff-service.ts::getAutoReplyMode. */
   handoffReason: string | null;
+  /** Lot P : `true` quand cette conversation vient de rendre la main à l'IA (clôturée rouverte, ou pause humaine écoulée). Pas de comportement particulier attendu de l'appelant — informatif / observabilité. */
+  handoffResumed: boolean;
 }
 
 /**
@@ -93,6 +96,17 @@ export async function handleInboundMessage(
     throw new Error(`Impossible d'upsert la conversation: ${conversationError?.message}`);
   }
 
+  // 2bis. Lot P — l'IA est active PAR DÉFAUT dans toute conversation : une
+  // conversation clôturée (`resolved`) se rouvre automatiquement dès que le
+  // client réécrit, et une prise en main humaine (`human`) rend la main à
+  // l'IA d'elle-même après le délai réglé sur /dashboard/ai (par défaut
+  // 15 min ; 0 = jamais de pause). Avant ce correctif, seul le clic sur
+  // « Rendre à l'IA » (conversation par conversation) le permettait — voir
+  // handoff-service.ts::applyAutoResume. Fait AVANT d'enregistrer le
+  // message pour que handoffStatus, renvoyé ci-dessous à l'appelant
+  // (webhook route -> inbound-auto-reply-service.ts), soit déjà à jour.
+  const effectiveHandoff = await applyAutoResume(organizationId, conversation.id, conversation.handoff_status, conversation.handoff_reason ?? null);
+
   // 3. Message (l'idempotence globale du webhook est déjà garantie en amont
   // par webhook_events — voir app/api/webhooks/zernio/route.ts)
   const { data: message, error: messageError } = await supabase
@@ -104,7 +118,10 @@ export async function handleInboundMessage(
       sender: "contact",
       content: payload.content,
       external_message_id: payload.externalMessageId,
-      metadata: payload.attachment ? { attachment: payload.attachment } : {},
+      metadata: {
+        ...(payload.attachment ? { attachment: payload.attachment } : {}),
+        ...(payload.authorName ? { authorName: payload.authorName } : {}),
+      },
     })
     .select("id")
     .single();
@@ -126,7 +143,8 @@ export async function handleInboundMessage(
     conversationId: conversation.id,
     leadId: lead.id,
     messageId: message.id,
-    handoffStatus: conversation.handoff_status,
-    handoffReason: conversation.handoff_reason ?? null,
+    handoffStatus: effectiveHandoff.handoffStatus,
+    handoffReason: effectiveHandoff.handoffReason,
+    handoffResumed: effectiveHandoff.resumed,
   };
 }

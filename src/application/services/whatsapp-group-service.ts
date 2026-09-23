@@ -239,6 +239,43 @@ export async function listAvailableGroupsFromZernio(organizationId: string): Pro
  * `.catch()` implicite via le try/catch interne — même esprit que
  * `notifyOrgAdmins`/`trackEvent`).
  */
+/**
+ * Lot P — un message REÇU depuis un groupe WhatsApp connecté (voir
+ * `connectGroups` / la table `whatsapp_groups` ci-dessus, qui sert à la
+ * DIFFUSION du commerçant vers ses groupes, pas à une conversation
+ * client 1:1) ne doit jamais déclencher de réponse automatique : ni FAQ,
+ * ni catalogue, ni IA — un groupe compte des dizaines de membres, et une
+ * réponse automatique y serait vue par tous, hors contexte, potentiellement
+ * pour n'importe quel message de n'importe quel membre (« bonjour tout le
+ * monde », une simple discussion entre participants...). Avant ce
+ * correctif, `app/api/webhooks/zernio/route.ts` traitait CE MÊME message
+ * comme un message client normal : `activateGroupFromInboundConversation`
+ * s'exécutait, MAIS `handleInboundMessage`/`processInboundAutoReply`
+ * s'exécutaient quand même juste après, sans aucune distinction.
+ *
+ * Limite honnête : ceci ne détecte QUE les groupes explicitement connectés
+ * par le commerçant (`/dashboard/groups`) — Zernio n'expose, à notre
+ * connaissance confirmée (voir types.ts), aucun champ `isGroup` sur
+ * `message.received` permettant de repérer un groupe WhatsApp inconnu de
+ * CRESYVA. Toujours `false` en cas d'erreur (best-effort : une panne de
+ * lecture ne doit jamais bloquer un vrai message client).
+ */
+export async function isKnownWhatsAppGroupConversation(organizationId: string, conversationId: string): Promise<boolean> {
+  if (!organizationId || !conversationId) return false;
+  try {
+    const { data } = await getSupabaseServiceClient()
+      .from("whatsapp_groups")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("external_id", conversationId)
+      .maybeSingle();
+    return Boolean(data);
+  } catch (error) {
+    console.warn(`isKnownWhatsAppGroupConversation(${organizationId}, ${conversationId}): lecture impossible, traité comme non-groupe.`, error);
+    return false;
+  }
+}
+
 export async function activateGroupFromInboundConversation(
   organizationId: string,
   conversationId: string,

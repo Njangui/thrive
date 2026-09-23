@@ -378,6 +378,15 @@ export async function updateMemberRole(
   if (target.role === "owner" && newRole !== "owner" && (await countOwners(organizationId)) <= 1) {
     throw new ValidationError("Impossible : il doit rester au moins un Propriétaire dans l'organisation.");
   }
+  // CORRECTIF SÉCURITÉ (audit) : même garde-fou que inviteMember() ci-dessus
+  // ("un Owner ne se crée jamais par invitation"), qui manquait ici. Sans
+  // ce contrôle, un Admin pouvait s'auto-élever (ou élever n'importe quel
+  // membre) au rôle Propriétaire via cette action — les gardes ci-dessus
+  // ne protègent qu'un Owner déjà existant, jamais la CRÉATION d'un
+  // nouveau Owner. Seul un Owner peut désigner un nouveau Owner.
+  if (newRole === "owner" && target.role !== "owner" && actor.role !== "owner") {
+    throw new AuthorizationError("Seul un Propriétaire peut désigner un nouveau Propriétaire.");
+  }
 
   const supabase = getSupabaseServiceClient();
   const { error } = await supabase

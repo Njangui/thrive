@@ -59,7 +59,10 @@ export const ADMIN_NAV_GROUPS: { label: string | null; items: { href: string; la
   },
   {
     label: "Finance",
-    items: [{ href: "/admin/payments", label: "Paiements", icon: IconCard }],
+    items: [
+      { href: "/admin/finance", label: "Finance plateforme", icon: IconCard },
+      { href: "/admin/payments", label: "Paiements", icon: IconCard },
+    ],
   },
   {
     label: "Croissance",

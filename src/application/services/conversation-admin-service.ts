@@ -1,6 +1,9 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { getMessagingProvider } from "@/infrastructure/providers/registry";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { describeHandoffReason } from "@/domain/entities/handoff-reasons";
+import { getAiResumeAt, getHumanPauseStart, markHumanTakeover } from "./handoff-service";
+import { getHumanPauseMinutes } from "./messaging-settings-service";
 
 export interface ConversationListItem {
   id: string;
@@ -8,6 +11,8 @@ export interface ConversationListItem {
   contactPhone: string | null;
   handoffStatus: string;
   handoffReason: string | null;
+  /** Lot P : libellé français du motif (ex. « Question hors FAQ, infos et catalogue »), pour l'affichage — jamais le code brut. */
+  handoffReasonLabel: string | null;
   lastMessageAt: string | null;
 }
 
@@ -30,6 +35,7 @@ export async function listConversationsForOrg(organizationId: string): Promise<C
     contactPhone: (c as unknown as { contacts?: { phone_e164?: string } }).contacts?.phone_e164 ?? null,
     handoffStatus: c.handoff_status,
     handoffReason: c.handoff_reason,
+    handoffReasonLabel: describeHandoffReason(c.handoff_reason),
     lastMessageAt: c.last_message_at,
   }));
 
@@ -48,6 +54,8 @@ export interface ConversationThreadMessage {
   content: string;
   createdAt: string;
   attachment?: { url: string; type: string; fileName?: string | null; mimeType?: string | null };
+  /** Extension groupe (Telegram) : qui a écrit CE message précis dans un fil partagé (ex. groupe) — absent pour une conversation 1-à-1 classique. */
+  authorName?: string | null;
 }
 
 export interface ConversationThread {
@@ -55,6 +63,9 @@ export interface ConversationThread {
   externalThreadId: string | null;
   handoffStatus: string;
   handoffReason: string | null;
+  handoffReasonLabel: string | null;
+  /** Lot P : quand l'IA doit reprendre la main d'elle-même (`handoffStatus === "human"` seulement) ; `null` si pas de pause en cours (ex. pause réglée sur 0 minute). Affiché dans le bandeau d'état du fil. */
+  aiResumeAt: string | null;
   contactName: string | null;
   contactPhone: string | null;
   messages: ConversationThreadMessage[];
@@ -100,11 +111,29 @@ export async function getConversationThread(
 
   const messages = (recentMessagesDesc ?? []).slice().reverse();
 
+  // Lot P : pause IA en cours, uniquement pertinent en prise en charge
+  // humaine (`ai` répond déjà, `pending_human`/`resolved` n'ont pas de
+  // "reprise programmée" à afficher). Best-effort, jamais bloquant.
+  let aiResumeAt: string | null = null;
+  if (conversation.handoff_status === "human") {
+    try {
+      const [pauseMinutes, pauseStartedAt] = await Promise.all([
+        getHumanPauseMinutes(organizationId),
+        getHumanPauseStart(organizationId, conversationId),
+      ]);
+      aiResumeAt = getAiResumeAt(pauseStartedAt, pauseMinutes)?.toISOString() ?? null;
+    } catch {
+      aiResumeAt = null;
+    }
+  }
+
   return {
     id: conversation.id,
     externalThreadId: conversation.external_thread_id,
     handoffStatus: conversation.handoff_status,
     handoffReason: conversation.handoff_reason,
+    handoffReasonLabel: describeHandoffReason(conversation.handoff_reason),
+    aiResumeAt,
     contactName: (conversation as unknown as { contacts?: { full_name?: string } }).contacts?.full_name ?? null,
     contactPhone: (conversation as unknown as { contacts?: { phone_e164?: string } }).contacts?.phone_e164 ?? null,
     messages: messages.map((m) => ({
@@ -114,15 +143,17 @@ export async function getConversationThread(
       content: m.content,
       createdAt: m.created_at,
       attachment: ((m.metadata as { attachment?: { url?: string; type?: string; fileName?: string | null; mimeType?: string | null } } | null)?.attachment?.url ? { url: String((m.metadata as { attachment: { url: string } }).attachment.url), type: String((m.metadata as { attachment?: { type?: string } }).attachment?.type ?? "file"), fileName: (m.metadata as { attachment?: { fileName?: string | null } }).attachment?.fileName ?? null, mimeType: (m.metadata as { attachment?: { mimeType?: string | null } }).attachment?.mimeType ?? null } : undefined),
+      authorName: (m.metadata as { authorName?: string | null } | null)?.authorName ?? null,
     })),
   };
 }
 
 /**
  * Section 22 : pendant HUMAN_ACTIVE, l'IA ne doit plus répondre
- * automatiquement — déjà garanti par le fait que le webhook ne déclenche
- * l'orchestrateur que sur un nouveau message entrant, et que le statut
- * passe explicitement à 'human' ici.
+ * automatiquement — le statut passe explicitement à 'human' ci-dessous, et
+ * c'est handoff-service.ts::getAutoReplyMode (appelé par
+ * inbound-auto-reply-service.ts à CHAQUE message entrant) qui bloque
+ * effectivement toute réponse automatique tant que ce statut tient.
  */
 export interface HumanReplyAttachment {
   url: string;
@@ -215,6 +246,10 @@ export async function sendHumanReply(
     .from("conversations")
     .update({ handoff_status: "human", assigned_user_id: actorUserId, last_message_at: nowIso })
     .eq("id", conversationId);
+  // Lot P : (re)démarre le décompte de pause de l'IA à CHAQUE réponse
+  // humaine — pas seulement la première — pour qu'elle ne reprenne jamais
+  // la main quelques secondes après que le commerçant vient d'écrire.
+  await markHumanTakeover(organizationId, conversationId, new Date(nowIso));
 
   const { data: contact } = await supabase
     .from("conversations")
@@ -226,20 +261,65 @@ export async function sendHumanReply(
   }
 }
 
+/**
+ * Reprise IMMÉDIATE et MANUELLE (bouton « Rendre à l'IA »). Depuis le lot
+ * P, ce n'est plus le SEUL moyen de rendre la main à l'IA — elle reprend
+ * aussi seule après la pause réglée sur /dashboard/ai — mais ce bouton
+ * reste utile pour ne pas attendre.
+ *
+ * CORRECTIF Lot P (audit) : l'erreur Supabase était jusqu'ici ignorée —
+ * l'admin voyait "IA réactivée" même si l'écriture avait échoué.
+ */
 export async function returnConversationToAI(organizationId: string, conversationId: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
-  await supabase
+  const { error } = await supabase
     .from("conversations")
     .update({ handoff_status: "ai", handoff_reason: null })
     .eq("organization_id", organizationId)
     .eq("id", conversationId);
+  if (error) throw new Error(`Impossible de rendre la main à l'IA: ${error.message}`);
+  // Best-effort : sans cela, un futur takeOverConversation() sans message
+  // calculerait la pause depuis un ancien human_takeover_at. Ne bloque
+  // jamais la réactivation de l'IA si la migration 0068 n'est pas posée.
+  try {
+    await supabase.from("conversations").update({ human_takeover_at: null }).eq("organization_id", organizationId).eq("id", conversationId);
+  } catch {
+    /* colonne absente : sans effet, la pause s'appuiera sur le dernier message humain */
+  }
 }
 
+/**
+ * Lot P — prise en main EXPLICITE, sans envoyer de message tout de suite
+ * (bouton « Prendre la main » dans le fil). Diffère de `sendHumanReply` :
+ * celle-ci exige un texte ou une pièce jointe, alors qu'un commerçant peut
+ * vouloir d'abord mettre l'IA en pause pour réfléchir à sa réponse.
+ */
+export async function takeOverConversation(organizationId: string, conversationId: string, actorUserId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("conversations")
+    .update({ handoff_status: "human", handoff_reason: null, assigned_user_id: actorUserId })
+    .eq("organization_id", organizationId)
+    .eq("id", conversationId);
+  if (error) throw new Error(`Impossible de prendre la main sur la conversation: ${error.message}`);
+  await markHumanTakeover(organizationId, conversationId);
+}
+
+/**
+ * Clôture manuelle. Depuis le lot P, "clôturée" ne veut plus dire "muette
+ * pour toujours" : la conversation se rouvre et l'IA répond de nouveau
+ * automatiquement dès que le client réécrit (handoff-service.ts::applyAutoResume) —
+ * ce bouton sert donc à ranger le fil hors de la file active, pas à couper
+ * la relation client.
+ *
+ * CORRECTIF Lot P (audit) : l'erreur Supabase était jusqu'ici ignorée.
+ */
 export async function closeConversation(organizationId: string, conversationId: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
-  await supabase
+  const { error } = await supabase
     .from("conversations")
     .update({ handoff_status: "resolved" })
     .eq("organization_id", organizationId)
     .eq("id", conversationId);
+  if (error) throw new Error(`Impossible de clôturer la conversation: ${error.message}`);
 }

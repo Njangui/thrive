@@ -4,6 +4,7 @@ import { NotFoundError, QuotaExceededError, ValidationError } from "@/lib/errors
 import { assertGatedFeature } from "./feature-gate-service";
 import { isFeatureEnabled } from "./entitlements-service";
 import { notifyOrgAdmins } from "./notification-service";
+import { isWhatsAppGroupThread, listWhatsAppGroupThreadIds } from "./whatsapp-group-threads";
 
 /**
  * Lot O — diffusion d'une annonce vers des CONTACTS (Starter 50, Pro 100
@@ -104,7 +105,7 @@ async function loadCandidates(organizationId: string, audience: BroadcastAudienc
   const since = new Date(Date.now() - audience.recentDays * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("conversations")
-    .select("id, channel, contact_id, last_message_at, contacts!inner(id, broadcast_opt_out)")
+    .select("id, channel, contact_id, external_thread_id, last_message_at, contacts!inner(id, broadcast_opt_out)")
     .eq("organization_id", organizationId)
     .in("channel", audience.channels)
     .gte("last_message_at", since)
@@ -112,7 +113,12 @@ async function loadCandidates(organizationId: string, audience: BroadcastAudienc
     .order("last_message_at", { ascending: false })
     .limit(2000);
   if (error) throw new Error(`Lecture des contacts impossible: ${error.message}`);
-  return (data ?? []).map((row) => ({
+  // Une diffusion vers des CONTACTS ne doit jamais atteindre un groupe WhatsApp (produit distinct : « Groupes
+  // WhatsApp »). Filtre de sécurité pour les fils de groupe éventuellement déjà présents dans `conversations`.
+  const groupThreads = audience.channels.includes("whatsapp") ? await listWhatsAppGroupThreadIds(organizationId) : new Set<string>();
+  return (data ?? [])
+    .filter((row) => !(row.channel === "whatsapp" && groupThreads.has(row.external_thread_id as string)))
+    .map((row) => ({
     contactId: row.contact_id as string,
     conversationId: row.id as string,
     channel: row.channel as BroadcastChannel,
@@ -277,6 +283,10 @@ async function sendToRecipient(organizationId: string, content: string, broadcas
   const contact = first(recipient.contacts);
   if (!conversation || !recipient.conversation_id) return { status: "skipped", error: "Conversation introuvable." };
   if (contact?.broadcast_opt_out) return { status: "skipped", error: "Contact désinscrit des diffusions." };
+  // Les destinataires sont figés à la création de la campagne : on revérifie à l'envoi.
+  if (recipient.channel === "whatsapp" && (await isWhatsAppGroupThread(organizationId, conversation.external_thread_id))) {
+    return { status: "skipped", error: "Fil de groupe WhatsApp : utilisez « Groupes WhatsApp » pour diffuser dans un groupe." };
+  }
 
   if (CHANNELS_WITH_WINDOW.has(recipient.channel)) {
     const { data: lastInbound } = await supabase

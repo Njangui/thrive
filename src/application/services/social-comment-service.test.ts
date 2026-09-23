@@ -25,11 +25,46 @@ import {
   hideComment,
   unhideComment,
   draftCommentReplySuggestion,
+  listComments,
 } from "./social-comment-service";
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockReleaseCredit.mockResolvedValue(undefined);
+});
+
+describe("listComments — la boîte de réception du commerçant", () => {
+  it("exclut les commentaires du commerçant lui-même (is_own) : ils ne demandent aucune action et ne doivent jamais y apparaître", async () => {
+    const eqCalls: Array<[string, unknown]> = [];
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: (column: string, value: unknown) => {
+          eqCalls.push([column, value]);
+          return {
+            eq: (column2: string, value2: unknown) => {
+              eqCalls.push([column2, value2]);
+              return { order: () => Promise.resolve({ data: [], error: null }) };
+            },
+          };
+        },
+      }),
+    });
+
+    await listComments("org-1");
+
+    expect(eqCalls).toEqual([
+      ["organization_id", "org-1"],
+      ["is_own", false],
+    ]);
+  });
+
+  it("propage une erreur de lecture explicite (jamais une liste vide silencieuse)", async () => {
+    mockFrom.mockReturnValue({
+      select: () => ({ eq: () => ({ eq: () => ({ order: () => Promise.resolve({ data: null, error: { message: "db down" } }) }) }) }),
+    });
+
+    await expect(listComments("org-1")).rejects.toThrow(/db down/);
+  });
 });
 
 describe("syncCommentsForPost", () => {

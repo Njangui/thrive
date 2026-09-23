@@ -7,7 +7,51 @@ import type {
   CommentReceivedEvent,
   ExternalPostTrackedEvent,
 } from "@/domain/events/domain-events";
+import { INBOUND_ATTACHMENT_PLACEHOLDER_PREFIX } from "@/domain/events/domain-events";
 import type { ZernioInboxWebhookEvent, ZernioPostWebhookEvent, ZernioExternalPostWebhookEvent } from "./types";
+
+/** Type que MessageReceivedEvent.payload.attachment reconnaît (voir domain-events.ts). */
+type InboundAttachment = NonNullable<MessageReceivedEvent["payload"]["attachment"]>;
+const ATTACHMENT_TYPES = new Set(["image", "video", "audio", "file"]);
+
+/**
+ * CORRECTIF Lot P — `ZernioInboxWebhookMessage.attachments` est typé
+ * `unknown[]` (forme NON confirmée par la doc Zernio au niveau champ, voir
+ * types.ts). Avant ce correctif, un message SANS texte — vocal, photo,
+ * document — était purement et simplement ignoré par ce mapper : jamais
+ * enregistré, jamais notifié au commerçant, le client n'avait AUCUNE
+ * réaction (constaté en test réel par le commerçant, capture d'écran
+ * WhatsApp à l'appui). Lecture défensive, jamais un champ exigé : seule une
+ * `url` de type `string` est retenue comme pièce jointe structurée (le
+ * reste de la chaîne — miniature dans le fil admin — en a besoin) ; un
+ * premier élément de `attachments[]` qui n'expose pas d'URL exploitable
+ * compte quand même comme "une pièce jointe a été envoyée" (placeholder
+ * textuel), jamais comme un message vide silencieusement perdu.
+ */
+function extractZernioAttachment(attachments: unknown[] | undefined): InboundAttachment | null {
+  const first = attachments?.[0];
+  if (!first || typeof first !== "object") return null;
+  const raw = first as Record<string, unknown>;
+  const url = typeof raw.url === "string" ? raw.url : typeof raw.link === "string" ? raw.link : null;
+  if (!url) return null;
+  const rawType = typeof raw.type === "string" ? raw.type : undefined;
+  return {
+    url,
+    type: rawType && ATTACHMENT_TYPES.has(rawType) ? (rawType as InboundAttachment["type"]) : "file",
+    fileName: typeof raw.fileName === "string" ? raw.fileName : typeof raw.filename === "string" ? raw.filename : undefined,
+    mimeType: typeof raw.mimeType === "string" ? raw.mimeType : typeof raw.mimetype === "string" ? raw.mimetype : undefined,
+    fileId: typeof raw.id === "string" ? raw.id : undefined,
+  };
+}
+
+const ATTACHMENT_LABELS: Record<string, string> = { image: "une photo", video: "une vidéo", audio: "un message vocal", file: "un document" };
+
+/** Texte affiché côté commerçant/IA quand le client n'a envoyé qu'une pièce jointe, sans légende. */
+function buildAttachmentPlaceholder(attachment: InboundAttachment | null, hasUnrecognizedAttachment: boolean): string {
+  if (attachment) return `${INBOUND_ATTACHMENT_PLACEHOLDER_PREFIX} (${ATTACHMENT_LABELS[attachment.type] ?? "un fichier"}).`;
+  if (hasUnrecognizedAttachment) return `${INBOUND_ATTACHMENT_PLACEHOLDER_PREFIX}.`;
+  return "";
+}
 
 /**
  * Traduit un événement webhook Zernio (format confirmé, voir types.ts) en
@@ -20,10 +64,23 @@ export function mapZernioEventToDomainEvent(
 ): DomainEvent | null {
   switch (raw.event) {
     case "message.received": {
-      if (!raw.message?.text || !raw.conversation?.id) {
-        // Message sans texte (pièce jointe pure, par ex.) ou sans
-        // conversation identifiable — pas encore géré en V1, on ignore
-        // plutôt que de planter.
+      if (!raw.conversation?.id) {
+        // Sans conversation identifiable, impossible de répondre ni même
+        // de savoir à quel fil rattacher le message — on ignore.
+        return null;
+      }
+
+      const text = raw.message?.text?.trim();
+      // CORRECTIF Lot P : un message SANS texte (vocal, photo, document)
+      // n'est plus perdu — voir extractZernioAttachment ci-dessus. `content`
+      // reçoit un texte de remplacement reconnu par le pipeline de réponse
+      // automatique (domain-events.ts::isInboundAttachmentPlaceholder), qui
+      // ne le traite JAMAIS comme une vraie question.
+      const hasAnyAttachment = Boolean(raw.message?.attachments?.length);
+      const attachment = extractZernioAttachment(raw.message?.attachments);
+      const content = text || buildAttachmentPlaceholder(attachment, hasAnyAttachment);
+      if (!content) {
+        // Ni texte, ni pièce jointe détectable : rien d'exploitable.
         return null;
       }
 
@@ -38,10 +95,11 @@ export function mapZernioEventToDomainEvent(
           externalThreadId: raw.conversation.id,
           phoneE164: raw.conversation.contactPhone,
           contactFullName: raw.conversation.contactName,
-          content: raw.message.text,
-          externalMessageId: raw.message.id ?? raw.id,
+          content,
+          externalMessageId: raw.message?.id ?? raw.id,
           channel: raw.conversation.platform ?? raw.account.platform ?? "whatsapp",
           providerAccountId: raw.account.id,
+          ...(attachment ? { attachment } : {}),
         },
       };
       return event;

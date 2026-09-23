@@ -39,6 +39,22 @@ export type MediaType =
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 Mo — large mais borné (section 54 : échouer fort plutôt que silencieusement)
 
 /**
+ * CORRECTIF SÉCURITÉ (audit) : liste explicite plutôt que
+ * `type.startsWith("image/")`. Ce préfixe laissait passer
+ * `image/svg+xml` — un SVG peut embarquer du JavaScript (`<script>`,
+ * gestionnaires `onload`), qui peut s'exécuter si le fichier est ouvert
+ * directement (navigation vers l'URL du bucket plutôt qu'affichage via
+ * `<img>`). Même limite que `message-attachment-service.ts::IMAGE_TYPES`,
+ * qui appliquait déjà la bonne pratique ici.
+ * Rappel : ce contrôle porte sur le `Content-Type` déclaré par le
+ * navigateur, pas sur le contenu réel du fichier (pas de vérification de
+ * signature binaire) — suffisant pour exclure les types clairement
+ * dangereux, pas une garantie absolue que le fichier est bien l'image
+ * qu'il prétend être.
+ */
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+/**
  * Politique de nommage (cahier Lot E, Partie 1) :
  * `{organization_id}/{type}/{uuid}-{filename}`. L'organizationId N'EST PAS
  * inclus ici — c'est `StorageProvider.upload`/`getUrl`/`delete` qui le
@@ -90,7 +106,7 @@ export async function resolveImageFromFormData(
     if (fileEntry.size > MAX_UPLOAD_BYTES) {
       throw new ValidationError("Le fichier est trop volumineux (5 Mo maximum).");
     }
-    if (!fileEntry.type.startsWith("image/")) {
+    if (!ALLOWED_IMAGE_TYPES.has(fileEntry.type)) {
       throw new ValidationError("Seules les images sont acceptées pour ce champ.");
     }
 
@@ -151,7 +167,7 @@ export async function resolveImagesFromFormData(formData: FormData, opts: Resolv
     if (entry.size > MAX_UPLOAD_BYTES) {
       throw new ValidationError(`"${entry.name}" dépasse 5 Mo — retirez-la ou compressez-la avant de réessayer.`);
     }
-    if (!entry.type.startsWith("image/")) {
+    if (!ALLOWED_IMAGE_TYPES.has(entry.type)) {
       throw new ValidationError(`"${entry.name}" n'est pas une image.`);
     }
 

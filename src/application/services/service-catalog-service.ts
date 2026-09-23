@@ -85,6 +85,26 @@ export async function searchServicesByName(organizationId: string, query: string
 }
 
 /**
+ * Lot P — prestations ACTIVES pour un PRODUCT_DISCOVERY (« présentez-moi
+ * vos prestations », voir conversation-orchestrator.ts::presentCatalog).
+ * Même discipline que catalog-service.ts::getActiveProducts : jamais un
+ * statut autre que 'active'.
+ */
+export async function listActiveServices(organizationId: string, limit = 5): Promise<ServiceSummary[]> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, name, slug, description, price, duration_minutes, status, categories(name)")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Erreur lecture prestations: ${error.message}`);
+  return (data ?? []).map((r) => mapServiceRow(r as unknown as Parameters<typeof mapServiceRow>[0]));
+}
+
+/**
  * Réponse structurée pour le router IA (même forme que
  * catalog-service.ts::formatProductDiscoveryMessage) — jamais l'IA pour
  * une information déjà connue de façon fiable (section 26/29 du master
@@ -104,4 +124,24 @@ export function formatServiceDiscoveryMessage(services: ServiceSummary[]): strin
       return `• ${parts.join(" — ")}`;
     })
     .join("\n");
+}
+
+/**
+ * Lot P — présentation complète du catalogue de prestations (même rôle que
+ * catalog-service.ts::formatProductDiscoveryMessage), avec en-tête et lien
+ * vers la page /services — utilisée pour un PRODUCT_DISCOVERY, jamais pour
+ * une recherche par nom (formatServiceDiscoveryMessage reste inchangée
+ * pour ce cas, réponses plus courtes).
+ */
+export function formatServiceListMessage(services: ServiceSummary[], servicesUrl: string): string {
+  if (services.length === 0) {
+    return "Nous mettons actuellement nos prestations à jour — revenez très vite, ou dites-nous ce que vous cherchez !";
+  }
+  return [
+    "👋 Bien sûr ! Voici quelques-unes de nos prestations :",
+    "",
+    formatServiceDiscoveryMessage(services),
+    "",
+    `Voir toutes nos prestations : ${servicesUrl}`,
+  ].join("\n");
 }

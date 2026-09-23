@@ -40,12 +40,50 @@ describe("mapZernioEventToDomainEvent", () => {
     }
   });
 
-  it("ignore un message sans texte plutôt que de planter (ex: pièce jointe pure)", () => {
+  it("ignore un message sans texte ET sans aucune pièce jointe détectable (rien d'exploitable)", () => {
     const event = mapZernioEventToDomainEvent(
       buildEvent({ message: { id: "msg_1" } }),
       ORG_ID,
     );
     expect(event).toBeNull();
+  });
+
+  // CORRECTIF Lot P — un message sans texte (vocal, photo, document) était
+  // jusqu'ici purement et simplement perdu (voir le test ci-dessus, qui
+  // couvrait déjà le cas SANS attachments — inchangé). Avec un
+  // `attachments[]` non vide, le message doit maintenant être conservé.
+  it("un message sans texte MAIS avec une pièce jointe dont l'URL est exploitable -> MESSAGE_RECEIVED avec attachment structuré", () => {
+    const event = mapZernioEventToDomainEvent(
+      buildEvent({ message: { id: "msg_1", attachments: [{ url: "https://cdn.zernio.com/f/abc.jpg", type: "image", mimeType: "image/jpeg" }] } }),
+      ORG_ID,
+    );
+    expect(event).not.toBeNull();
+    if (event?.type === "MESSAGE_RECEIVED") {
+      expect(event.payload.content).toContain("pièce jointe");
+      expect(event.payload.attachment).toEqual({
+        url: "https://cdn.zernio.com/f/abc.jpg",
+        type: "image",
+        fileName: undefined,
+        mimeType: "image/jpeg",
+        fileId: undefined,
+      });
+    } else {
+      throw new Error("event attendu");
+    }
+  });
+
+  it("un message sans texte, avec une pièce jointe SANS url exploitable -> quand même conservé, sans attachment structuré", () => {
+    const event = mapZernioEventToDomainEvent(
+      buildEvent({ message: { id: "msg_1", attachments: [{ mediaId: "unconfirmed-field" }] } }),
+      ORG_ID,
+    );
+    expect(event).not.toBeNull();
+    if (event?.type === "MESSAGE_RECEIVED") {
+      expect(event.payload.content).toContain("pièce jointe");
+      expect(event.payload.attachment).toBeUndefined();
+    } else {
+      throw new Error("event attendu");
+    }
   });
 
   it("ignore un événement sans conversation identifiable", () => {

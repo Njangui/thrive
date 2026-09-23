@@ -38,6 +38,17 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
   // Lot O : commandes verrouillées par l'offre (Starter+) — garde serveur, pas seulement UI.
   await assertGatedFeature(input.organizationId, "orders");
   const supabase = getSupabaseServiceClient();
+  const productIds = [...new Set(input.items.map((item) => item.productId))];
+  const { data: products, error: productsError } = await supabase
+    .from("products")
+    .select("id, cost_price")
+    .eq("organization_id", input.organizationId)
+    .in("id", productIds);
+  if (productsError) throw new Error(`Impossible de lire les coûts des produits: ${productsError.message}`);
+  const productCostById = new Map((products ?? []).map((product) => [product.id as string, Number(product.cost_price ?? 0)]));
+  if (productCostById.size !== productIds.length) {
+    throw new NotFoundError("Un ou plusieurs produits de la commande sont introuvables dans cette entreprise.");
+  }
   const total = input.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
   const { data: order, error: orderError } = await supabase
@@ -64,6 +75,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
       product_id: item.productId,
       label: item.label,
       unit_price: item.unitPrice,
+      unit_cost: productCostById.get(item.productId) ?? 0,
       quantity: item.quantity,
     })),
   );

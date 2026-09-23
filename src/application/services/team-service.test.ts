@@ -323,6 +323,28 @@ describe("updateMemberRole — un Admin ne peut jamais toucher un Owner", () => 
     expect(update).toBeDefined();
     expect(update!.patch).toEqual({ role: "manager" });
   });
+
+  // Régression (audit sécurité) : un Admin pouvait auparavant élever
+  // n'importe quel membre non-owner (y compris lui-même, targetUserId
+  // n'étant pas vérifié contre actor.userId) au rôle Propriétaire — les
+  // deux tests ci-dessus ne protègent qu'un Owner déjà existant, jamais
+  // la CRÉATION d'un nouveau Owner.
+  it("refuse qu'un Admin élève un membre non-owner au rôle Propriétaire", async () => {
+    pushResult("memberships", { data: { role: "employee" }, error: null });
+
+    await expect(updateMemberRole("org-1", "target-1", "owner", adminActor)).rejects.toThrow(/Propriétaire/);
+    expect(updateCalls.find((c) => c.table === "memberships")).toBeUndefined();
+  });
+
+  it("autorise un Owner à désigner un nouveau Propriétaire", async () => {
+    pushResult("memberships", { data: { role: "admin" }, error: null });
+
+    await updateMemberRole("org-1", "target-1", "owner", ownerActor);
+
+    const update = updateCalls.find((c) => c.table === "memberships");
+    expect(update).toBeDefined();
+    expect(update!.patch).toEqual({ role: "owner" });
+  });
 });
 
 describe("removeMember — même protection que updateMemberRole", () => {

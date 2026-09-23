@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { SocialPublishingProvider, CreateSocialPostRequest, SocialAnalyticsEntry, SocialAnalyticsQuery, SocialComment, SocialDailyMetric, SocialPostResult, SocialPostStatus, SocialAccountSummary } from "@/domain/ports/social-publishing-provider";
 import { YouTubeClient, type YouTubeOAuthTokens } from "./client";
-import { isZernioMediaHost } from "@/lib/remote-media";
+import { downloadRemoteMedia, isZernioMediaHost } from "@/lib/remote-media";
+import { MAX_VIDEO_BYTES } from "@/application/services/catalog-video-service";
 
 export class YouTubeSocialAdapter implements SocialPublishingProvider {
   readonly providerName = "youtube";
@@ -19,9 +20,21 @@ export class YouTubeSocialAdapter implements SocialPublishingProvider {
   private async upload(request: CreateSocialPostRequest, privacyStatus: "private" | "public", publishAt?: string) {
     const videoUrl = request.mediaUrls?.find((url) => /\.(mp4|mov|webm|m4v)(\?.*)?$/i.test(url));
     if (!videoUrl) throw new Error("YouTube nécessite une vidéo (MP4, MOV, WebM ou M4V) dans la publication.");
-    const response = await fetch(videoUrl);
-    if (!response.ok) throw new Error(isZernioMediaHost(videoUrl) ? "La vidéo n'est plus disponible chez Zernio (Zernio ne conserve les fichiers que 7 jours). Téléversez-la à nouveau." : "La vidéo n'a pas pu être récupérée pour YouTube.");
-    const media = await response.arrayBuffer();
+    // CORRECTIF SÉCURITÉ (audit) : `videoUrl` vient de `mediaUrls`, un champ
+    // saisi librement par le marchand (composeur de publication) — un
+    // `fetch(videoUrl)` direct ici ferait faire au serveur une requête vers
+    // N'IMPORTE QUELLE adresse fournie par un utilisateur authentifié (SSRF),
+    // exactement le risque que `downloadRemoteMedia()` a été écrit pour
+    // éliminer (voir lib/remote-media.ts, déjà utilisé par l'adaptateur
+    // Telegram pour ce même besoin). Liste blanche d'hôtes + revalidation
+    // après redirection + plafond de taille, au lieu d'un fetch nu.
+    let media: ArrayBuffer;
+    try {
+      const downloaded = await downloadRemoteMedia(videoUrl, MAX_VIDEO_BYTES);
+      media = downloaded.data.buffer as ArrayBuffer;
+    } catch {
+      throw new Error(isZernioMediaHost(videoUrl) ? "La vidéo n'est plus disponible chez Zernio (Zernio ne conserve les fichiers que 7 jours). Téléversez-la à nouveau." : "La vidéo n'a pas pu être récupérée pour YouTube.");
+    }
     const normalizedPublishAt = publishAt ? (publishAt.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(publishAt) ? new Date(publishAt).toISOString() : new Date(`${publishAt}+01:00`).toISOString()) : undefined;
     const uploaded = await this.client.uploadVideo(media, { title: request.content.split("\n")[0] || "Publication CRESYVA", description: request.content, privacyStatus, publishAt: normalizedPublishAt });
     return { providerPostId: uploaded.id!, status: uploaded.status?.uploadStatus === "uploaded" ? "published" : "processing" };

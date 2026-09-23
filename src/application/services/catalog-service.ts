@@ -458,6 +458,19 @@ export async function getProductsByIds(
   }));
 }
 
+export interface FormatProductDiscoveryOptions {
+  /**
+   * Lot P — nom du catalogue dans le vocabulaire du secteur du tenant
+   * (« biens », « plats », « prestations »…) au lieu de « produits » codé
+   * en dur, qui sonnait faux pour un commerçant hors boutique générique
+   * (ex. immobilier : « voici quelques-uns de nos produits disponibles »
+   * pour des biens à louer). Défaut : "produits" (comportement historique).
+   */
+  itemLabelPlural?: string;
+  /** Message affiché quand `products` est vide, propre au secteur — voir messaging-context-service.ts. */
+  emptyMessage?: string;
+}
+
 /**
  * Construit le message WhatsApp de présentation catalogue — reprend le
  * format donné en exemple section 15 du doc 2. Le lien pointe vers la
@@ -468,12 +481,14 @@ export function formatProductDiscoveryMessage(
   products: CatalogProductSummary[],
   publicBaseUrl: string,
   catalogUrl: string,
+  options?: FormatProductDiscoveryOptions,
 ): string {
   if (products.length === 0) {
-    return "Nous mettons actuellement notre catalogue à jour — revenez très vite, ou dites-nous ce que vous cherchez !";
+    return options?.emptyMessage ?? "Nous mettons actuellement notre catalogue à jour — revenez très vite, ou dites-nous ce que vous cherchez !";
   }
 
-  const lines = ["👋 Bien sûr ! Voici quelques-uns de nos produits disponibles :", ""];
+  const itemLabelPlural = options?.itemLabelPlural ?? "produits";
+  const lines = [`👋 Bien sûr ! Voici quelques-uns de nos ${itemLabelPlural} disponibles :`, ""];
 
   for (const p of products) {
     lines.push(p.name);

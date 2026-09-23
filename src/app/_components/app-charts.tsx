@@ -140,3 +140,47 @@ export function AppDonutChart({
     </div>
   );
 }
+
+export function AppBarChart({
+  items,
+}: {
+  items: { label: string; value: number }[];
+}) {
+  const width = 600;
+  const height = 220;
+  const padding = { top: 18, right: 12, bottom: 42, left: 12 };
+  const chartHeight = height - padding.top - padding.bottom;
+  const chartWidth = width - padding.left - padding.right;
+  const max = Math.max(...items.map((item) => item.value), 1);
+  const slot = items.length ? chartWidth / items.length : chartWidth;
+  const barWidth = Math.min(72, slot * 0.56);
+
+  if (!items.length) {
+    return <div className="grid min-h-[220px] place-items-center text-sm adm-muted">Pas encore de données.</div>;
+  }
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" role="img" aria-label="Répartition des abonnés par plan">
+      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const y = padding.top + chartHeight - chartHeight * ratio;
+        return <line key={ratio} x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="#0F172A" strokeOpacity={0.05} />;
+      })}
+      {items.map((item, index) => {
+        const barHeight = (item.value / max) * chartHeight;
+        const x = padding.left + index * slot + (slot - barWidth) / 2;
+        const y = padding.top + chartHeight - barHeight;
+        return (
+          <g key={item.label}>
+            <rect x={x} y={y} width={barWidth} height={Math.max(barHeight, 2)} rx={8} fill="#00D1A0" opacity={0.9} />
+            <text x={x + barWidth / 2} y={Math.max(y - 7, 12)} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0F172A">
+              {item.value}
+            </text>
+            <text x={x + barWidth / 2} y={height - 14} textAnchor="middle" fontSize={10.5} fill="#64748B">
+              {item.label.length > 13 ? `${item.label.slice(0, 12)}…` : item.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}

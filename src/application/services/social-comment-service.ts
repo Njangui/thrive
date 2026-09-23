@@ -80,6 +80,10 @@ export async function listComments(organizationId: string): Promise<SocialCommen
       "id, social_post_id, platform, author_name, content, status, reply_content, replied_at, created_at, social_posts(content)",
     )
     .eq("organization_id", organizationId)
+    // Un commentaire du commerçant lui-même (sa propre réponse relivrée par la plateforme, voir
+    // social-post-tracking-service.ts) n'a rien à faire dans SA boîte de réception : il resterait « Nouveau »
+    // indéfiniment, personne ne va jamais y « répondre ».
+    .eq("is_own", false)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`Erreur lors de la lecture des commentaires: ${error.message}`);

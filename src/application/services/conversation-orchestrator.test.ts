@@ -29,10 +29,17 @@ vi.mock("./conversation-memory-service", () => ({
 vi.mock("./service-catalog-service", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-catalog-service")>();
   return {
-    ...actual, // garde formatServiceDiscoveryMessage (pur) réel
+    ...actual, // garde formatServiceDiscoveryMessage/formatServiceListMessage (purs) réels
     searchServicesByName: vi.fn(),
+    listActiveServices: vi.fn(),
   };
 });
+// Lot P : messaging-context-service.ts touche Supabase (organizations) —
+// jamais de vrai réseau dans ce test unitaire, même si la plupart des cas
+// ci-dessous ne le déclenchent pas (seul un PRODUCT_DISCOVERY le fait).
+vi.mock("./messaging-context-service", () => ({
+  getMessagingOrgContext: vi.fn(),
+}));
 
 vi.mock("@/infrastructure/tenant/resolve-request-tenant", () => ({
   getTenantPublicOrigin: vi.fn(),
@@ -43,11 +50,22 @@ import { generateAIReply } from "./ai-response-service";
 import { getActiveProducts, searchProductsByName } from "./catalog-service";
 import { resolveBusinessInfo } from "./business-info-resolver";
 import { rememberMentionedProducts, getRecentlyMentionedProducts } from "./conversation-memory-service";
-import { searchServicesByName } from "./service-catalog-service";
+import { searchServicesByName, listActiveServices } from "./service-catalog-service";
 import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { getMessagingOrgContext } from "./messaging-context-service";
 
 const ORG_ID = "org_1";
 const CONVERSATION_ID = "conv_1";
+
+const NEUTRAL_CONTEXT = {
+  name: null,
+  sector: "",
+  itemLabelPlural: "produits",
+  emptyCatalogMessage: "Nous mettons actuellement notre catalogue à jour — revenez très vite, ou dites-nous ce que vous cherchez !",
+  hasHours: false,
+  hasAddress: false,
+  hasContact: false,
+};
 
 beforeEach(() => {
   vi.mocked(matchFaq).mockReset().mockResolvedValue(null);
@@ -55,10 +73,12 @@ beforeEach(() => {
   vi.mocked(getActiveProducts).mockReset().mockResolvedValue([]);
   vi.mocked(searchProductsByName).mockReset().mockResolvedValue([]);
   vi.mocked(searchServicesByName).mockReset().mockResolvedValue([]);
+  vi.mocked(listActiveServices).mockReset().mockResolvedValue([]);
   vi.mocked(resolveBusinessInfo).mockReset().mockResolvedValue(null);
   vi.mocked(rememberMentionedProducts).mockReset().mockResolvedValue(undefined);
   vi.mocked(getRecentlyMentionedProducts).mockReset().mockResolvedValue([]);
   vi.mocked(getTenantPublicOrigin).mockReset().mockResolvedValue("https://monsalon.cresyva.app");
+  vi.mocked(getMessagingOrgContext).mockReset().mockResolvedValue(NEUTRAL_CONTEXT);
 });
 
 describe("routeMessage — ordre de résolution (section 45 : règles avant IA)", () => {
@@ -262,5 +282,92 @@ describe("routeMessage — mode déterministe (allowAI: false)", () => {
     expect(result.handoffReason).toBeNull();
     expect(result.aiInvoked).toBe(false);
     expect(generateAIReply).not.toHaveBeenCalled();
+  });
+});
+
+describe("routeMessage — politesses (Lot P)", () => {
+  it("répond à un simple bonjour sans jamais appeler l'IA ni chercher dans le catalogue", async () => {
+    vi.mocked(getMessagingOrgContext).mockResolvedValue({ ...NEUTRAL_CONTEXT, name: "Ma Boutique", hasHours: true });
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "Bonjour");
+
+    expect(result.intent).toBe("small_talk");
+    expect(result.replyText).toContain("Ma Boutique");
+    expect(result.replyText).toContain("produits"); // itemLabelPlural neutre
+    expect(generateAIReply).not.toHaveBeenCalled();
+    expect(getActiveProducts).not.toHaveBeenCalled();
+  });
+
+  it("répond à un simple merci sans appeler l'IA", async () => {
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "Merci beaucoup !");
+    expect(result.intent).toBe("small_talk");
+    expect(result.aiInvoked).toBe(false);
+    expect(generateAIReply).not.toHaveBeenCalled();
+  });
+
+  it("« bonjour, vous avez des maisons ? » N'est PAS une simple politesse (contient une vraie demande)", async () => {
+    vi.mocked(getMessagingOrgContext).mockResolvedValue({ ...NEUTRAL_CONTEXT, sector: "real_estate", itemLabelPlural: "biens" });
+    vi.mocked(getActiveProducts).mockResolvedValue([
+      { id: "p1", name: "Villa Bonapriso", slug: "villa-bonapriso", unitPrice: 250000, description: null, categoryName: null, imageUrl: null },
+    ]);
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "bonjour, vous avez des maisons ?");
+
+    expect(result.intent).not.toBe("small_talk");
+  });
+});
+
+describe("routeMessage — vocabulaire sectoriel du catalogue (Lot P)", () => {
+  it("un tenant immobilier reconnaît « présentez-moi vos propriétés » comme une demande de catalogue", async () => {
+    vi.mocked(getMessagingOrgContext).mockResolvedValue({ ...NEUTRAL_CONTEXT, sector: "real_estate", itemLabelPlural: "biens" });
+    vi.mocked(getActiveProducts).mockResolvedValue([
+      { id: "p1", name: "Villa Bonapriso", slug: "villa-bonapriso", unitPrice: 250000, description: null, categoryName: null, imageUrl: null },
+    ]);
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "Bonjour svp présenté moi vos propriétés");
+
+    expect(result.intent).toBe("product_discovery");
+    expect(result.replyText).toContain("Villa Bonapriso");
+    expect(result.replyText).toContain("biens");
+    expect(generateAIReply).not.toHaveBeenCalled();
+  });
+
+  it("« vos biens » (secteur immobilier) déclenche aussi le catalogue", async () => {
+    vi.mocked(getMessagingOrgContext).mockResolvedValue({ ...NEUTRAL_CONTEXT, sector: "real_estate", itemLabelPlural: "biens" });
+    vi.mocked(getActiveProducts).mockResolvedValue([
+      { id: "p1", name: "Studio Akwa", slug: "studio-akwa", unitPrice: 45000, description: null, categoryName: null, imageUrl: null },
+    ]);
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "Quels sont vos biens disponibles ?");
+
+    expect(result.intent).toBe("product_discovery");
+  });
+
+  it("catalogue vide : message d'attente propre au secteur, jamais le texte générique codé en dur", async () => {
+    vi.mocked(getMessagingOrgContext).mockResolvedValue({
+      ...NEUTRAL_CONTEXT,
+      sector: "real_estate",
+      itemLabelPlural: "biens",
+      emptyCatalogMessage: "Nos biens sont en cours de mise à jour, revenez vite !",
+    });
+    vi.mocked(getActiveProducts).mockResolvedValue([]);
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "présentez-moi vos biens");
+
+    expect(result.replyText).toBe("Nos biens sont en cours de mise à jour, revenez vite !");
+  });
+});
+
+describe("routeMessage — résilience (Lot P)", () => {
+  it("une FAQ qui plante n'empêche pas de continuer vers le catalogue", async () => {
+    vi.mocked(matchFaq).mockRejectedValue(new Error("DB down"));
+    vi.mocked(getActiveProducts).mockResolvedValue([
+      { id: "p1", name: "Sneakers Air Max", slug: "sneakers-air-max", unitPrice: 35000, description: null, categoryName: null, imageUrl: null },
+    ]);
+
+    const result = await routeMessage(ORG_ID, CONVERSATION_ID, "montrez-moi vos produits");
+
+    expect(result.intent).toBe("product_discovery");
+    expect(result.replyText).toContain("Sneakers Air Max");
   });
 });

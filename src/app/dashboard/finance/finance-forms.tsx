@@ -30,8 +30,9 @@ export function FinanceForms({
         <input type="hidden" name="organizationId" value={organizationId} />
         <p className="text-sm font-medium text-success-600">+ Revenu</p>
         <input name="amount" type="number" min="0" required placeholder="Montant" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
-        <input name="category" placeholder="Catégorie (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
-        <input name="note" placeholder="Note (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <input name="category" placeholder="Catégorie (ex. vente, prestation)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <input name="source" placeholder="Source (commande, espèces, autre...)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <div className="grid grid-cols-2 gap-2"><input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" /><input name="note" placeholder="Note (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" /></div>
         <SubmitButton
           pendingLabel="Enregistrement..."
           className="w-fit rounded-xl bg-success-600 px-4 py-2 text-sm font-medium text-white hover:bg-success-700 disabled:opacity-60"
@@ -45,6 +46,11 @@ export function FinanceForms({
         <p className="text-sm font-medium text-danger-600">+ Dépense</p>
         <input name="amount" type="number" min="0" required placeholder="Montant" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
         <input name="category" placeholder="Ex : transport, loyer..." className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
+        <select name="expenseClass" defaultValue="operating" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm">
+          <option value="cost_of_revenue">Coût direct / achat revendu</option>
+          <option value="operating">Charge d'exploitation</option>
+          <option value="tax">Impôt / taxe</option>
+        </select>
         <input name="description" placeholder="Description (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
         <SubmitButton
           pendingLabel="Enregistrement..."

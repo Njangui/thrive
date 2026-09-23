@@ -299,3 +299,26 @@ ci-dessus et `activateGroupFromInboundConversation`. Ce n'était pas un bug
 avant Lot M : c'était la limite réelle et documentée de l'API Zernio pour
 ce cas d'usage précis ; le Lot M construit la solution côté application
 que cette limite appelait, plutôt que de la contourner par une simulation.
+
+## Messagerie WhatsApp ≠ Groupes WhatsApp (à lire avant de toucher au webhook)
+
+Trois choses différentes portent le nom « WhatsApp » dans CRESYVA. Ne jamais les confondre :
+
+| | **Messagerie WhatsApp** | **Groupes WhatsApp** | **Bouton WhatsApp de la vitrine** |
+|---|---|---|---|
+| À quoi ça sert | Répondre à des clients en tête-à-tête (boîte de réception, réponses automatiques, CRM) | Diffuser des sélections de produits dans des groupes | Un lien `wa.me` (clic pour discuter) vers le numéro du commerçant |
+| Numéro | Numéros de messagerie (Coexistence ou dédiés), plusieurs possibles | **Un numéro DÉDIÉ, différent de la messagerie** (Cloud API, jamais Coexistence) | Le numéro affiché sur la vitrine |
+| Compte Zernio | `whatsapp_accounts` (+ `provider_connections` type `messaging` pour le premier numéro) | `provider_connections` type **`whatsapp_groups`**, profil Zernio à part | Aucun (pas d'API) |
+| Tables | `conversations`, `contacts`, `messages` | `whatsapp_groups`, `group_broadcasts` | — |
+| Quota d'offre | `whatsapp` (nombre de numéros) | `whatsapp_groups` (nombre de groupes) | — |
+| Envoi | `getMessagingProvider(org, "zernio", accountId)` | `getWhatsAppGroupsProvider(org)` + `zernioConversationId` du groupe | — |
+| Diffusion | « Diffusions aux contacts » (`contact-broadcast-service.ts`, fenêtre 24 h Meta, STOP) | « Groupes WhatsApp » (`whatsapp-group-service.ts`, jamais de bouton) | — |
+
+**Webhook `message.received`** (`app/api/webhooks/zernio/route.ts`) — c'est ici que les deux se rencontrent, car le canal s'appelle « whatsapp » dans les deux cas :
+
+1. Le compte qui a reçu l'événement est résolu **avant tout**. `resolveOrganizationIdByZernioAccount` couvre les numéros de messagerie (tous ceux de `whatsapp_accounts`, pas seulement le premier) ; `resolveOrganizationIdByWhatsAppGroupsAccount` couvre le numéro dédié aux groupes.
+2. **Numéro de groupes** → le groupe est activé (`activateGroupFromInboundConversation` : la conversation d'un groupe a pour identifiant celui du groupe), puis **l'événement s'arrête là** : ni contact, ni conversation, ni réponse automatique (l'IA répondrait à tout le groupe), ni alerte « message sans réponse ».
+3. **Numéro de messagerie** → pipeline client normal. Défense en profondeur : si l'identifiant du fil est celui d'un groupe connu (`whatsapp-group-threads.ts`), il est ignoré.
+4. Les **diffusions vers des contacts** excluent les fils de groupe, à la création de la campagne **et** à l'envoi.
+
+Vérifier après un déploiement : `supabase/CHECK_WHATSAPP_GROUPS_VS_MESSAGING.sql`.
