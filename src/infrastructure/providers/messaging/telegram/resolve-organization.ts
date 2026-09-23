@@ -18,13 +18,13 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
  */
 export async function resolveOrganizationIdByTelegramWebhookToken(
   webhookPathToken: string,
-): Promise<{ organizationId: string; webhookSecret: string; botId: string } | null> {
+): Promise<{ organizationId: string; webhookSecret: string; botId: string; botTelegramId: number | null; botUsername: string } | null> {
   const supabase = getSupabaseServiceClient();
 
   // Lot O : un bot par ligne de `telegram_bots` (plusieurs bots par organisation).
   const { data, error } = await supabase
     .from("telegram_bots")
-    .select("id, organization_id, webhook_secret")
+    .select("id, organization_id, webhook_secret, bot_id, bot_username")
     .eq("status", "connected")
     .eq("webhook_path_token", webhookPathToken)
     .maybeSingle();
@@ -35,5 +35,18 @@ export async function resolveOrganizationIdByTelegramWebhookToken(
   }
   if (!data || !data.webhook_secret) return null;
 
-  return { organizationId: data.organization_id as string, webhookSecret: data.webhook_secret as string, botId: data.id as string };
+  return {
+    organizationId: data.organization_id as string,
+    webhookSecret: data.webhook_secret as string,
+    botId: data.id as string,
+    // Extension groupe : identité Telegram du bot lui-même (pas notre id
+    // interne `botId` ci-dessus), pour détecter mention/réponse dans un
+    // groupe — voir mapper.ts::isDirectedAtBot. `bot_id` (colonne
+    // `telegram_bots.bot_id`, bigint) est nullable en base : un bot
+    // connecté avant l'introduction de ce champ peut ne pas l'avoir —
+    // dans ce cas `directedAtBot` retombe uniquement sur la détection par
+    // commande/mention (jamais sur la réponse-au-bot), jamais une erreur.
+    botTelegramId: (data.bot_id as number | null) ?? null,
+    botUsername: data.bot_username as string,
+  };
 }
