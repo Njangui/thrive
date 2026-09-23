@@ -1,8 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { mapTelegramUpdateToDomainEvent } from "./mapper";
 import type { TelegramUpdate } from "./types";
+import type { MessageReceivedEvent } from "@/domain/events/domain-events";
 
 const BOT_INFO = { telegramId: 987654321, username: "ma_boutique_bot" };
+
+/**
+ * `mapTelegramUpdateToDomainEvent` renvoie `DomainEvent | null` — un type
+ * union bien plus large qu'un seul MESSAGE_RECEIVED (voir
+ * domain-events.ts). Sans cette assertion, TypeScript refuse `.payload.X`
+ * pour tout champ absent des AUTRES membres de l'union (ex.
+ * `contactFullName` n'existe pas sur le payload d'un événement de
+ * paiement) — ce n'est pas un `any` déguisé : ce test attend précisément
+ * un MESSAGE_RECEIVED, donc on le vérifie puis on laisse TypeScript
+ * l'exploiter.
+ */
+function expectMessageReceived(event: ReturnType<typeof mapTelegramUpdateToDomainEvent>): asserts event is MessageReceivedEvent {
+  expect(event).not.toBeNull();
+  expect(event?.type).toBe("MESSAGE_RECEIVED");
+}
 
 function baseUpdate(overrides: Partial<TelegramUpdate["message"]> = {}): TelegramUpdate {
   return {
@@ -21,12 +37,12 @@ function baseUpdate(overrides: Partial<TelegramUpdate["message"]> = {}): Telegra
 describe("mapTelegramUpdateToDomainEvent — chat privé (comportement existant, inchangé)", () => {
   it("crée un événement avec le nom de l'expéditeur comme contact, sans authorName ni directedAtBot", () => {
     const event = mapTelegramUpdateToDomainEvent(baseUpdate(), "org-1", undefined, "bot-row-id", BOT_INFO);
-    expect(event).not.toBeNull();
-    expect(event?.payload.contactFullName).toBe("Awa Ndzana");
-    expect(event?.payload.externalContactId).toBe("555");
-    expect(event?.payload.externalThreadId).toBe("555");
-    expect((event?.payload as { authorName?: string }).authorName).toBeUndefined();
-    expect((event?.payload as { directedAtBot?: boolean }).directedAtBot).toBeUndefined();
+    expectMessageReceived(event);
+    expect(event.payload.contactFullName).toBe("Awa Ndzana");
+    expect(event.payload.externalContactId).toBe("555");
+    expect(event.payload.externalThreadId).toBe("555");
+    expect((event.payload as { authorName?: string }).authorName).toBeUndefined();
+    expect((event.payload as { directedAtBot?: boolean }).directedAtBot).toBeUndefined();
   });
 });
 
@@ -52,12 +68,12 @@ describe("mapTelegramUpdateToDomainEvent — groupe (nouvelle conversation parta
       "bot-row-id",
       BOT_INFO,
     );
-    expect(event).not.toBeNull();
-    expect(event?.payload.externalContactId).toBe("999");
-    expect(event?.payload.externalThreadId).toBe("999");
-    expect(event?.payload.contactFullName).toBe("Clients Boutique X");
-    expect((event?.payload as { authorName?: string }).authorName).toBe("Awa Ndzana");
-    expect((event?.payload as { directedAtBot?: boolean }).directedAtBot).toBe(false);
+    expectMessageReceived(event);
+    expect(event.payload.externalContactId).toBe("999");
+    expect(event.payload.externalThreadId).toBe("999");
+    expect(event.payload.contactFullName).toBe("Clients Boutique X");
+    expect((event.payload as { authorName?: string }).authorName).toBe("Awa Ndzana");
+    expect((event.payload as { directedAtBot?: boolean }).directedAtBot).toBe(false);
   });
 
   it("directedAtBot = true sur une commande (/start)", () => {
