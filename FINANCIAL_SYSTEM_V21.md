@@ -1,6 +1,6 @@
-# CRESYVA — Système financier V21
+# tokoo  — Système financier V21
 
-## 1. Plateforme CRESYVA
+## 1. Plateforme tokoo 
 
 Le cockpit `/admin/finance` sépare désormais :
 
@@ -91,5 +91,5 @@ Cette distinction évite de confondre rentabilité et trésorerie.
 ## 6. Limites volontairement conservées
 
 - Les tarifs externes ne sont pas inventés et doivent être saisis/configurés lorsqu'ils ne sont pas automatiquement calculables.
-- Les données historiques dont CRESYVA ne possède pas le coût unitaire réel sont traitées avec le coût disponible en base ; les nouvelles commandes disposent d'un snapshot de coût.
+- Les données historiques dont tokoo  ne possède pas le coût unitaire réel sont traitées avec le coût disponible en base ; les nouvelles commandes disposent d'un snapshot de coût.
 - Le build Next complet doit être exécuté dans un environnement disposant des dépendances (`node_modules`) et des variables Supabase réelles.

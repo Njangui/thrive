@@ -1,14 +1,14 @@
 # Guides techniques visibles côté marchand
 
-CRESYVA masque volontairement les fournisseurs et détails d'infrastructure. L'utilisateur doit voir **quoi faire**, pas « quel API/SDK tourne derrière ».
+tokoo  masque volontairement les fournisseurs et détails d'infrastructure. L'utilisateur doit voir **quoi faire**, pas « quel API/SDK tourne derrière ».
 
 ## Connexion Telegram marchand
 1. Ouvrir `Canaux → Telegram`.
 2. Dans Telegram, ouvrir `@BotFather` et lancer `/newbot`.
 3. Choisir le nom et le username du bot.
 4. Copier le token fourni par Telegram.
-5. Le coller dans CRESYVA puis cliquer `Connecter mon bot`.
-6. CRESYVA vérifie le token et configure le webhook automatiquement.
+5. Le coller dans tokoo  puis cliquer `Connecter mon bot`.
+6. tokoo  vérifie le token et configure le webhook automatiquement.
 
 Le token n'est jamais affiché après connexion et est conservé dans Supabase Vault.
 
@@ -17,7 +17,7 @@ Le token n'est jamais affiché après connexion et est conservé dans Supabase V
 2. Cliquer `Connecter YouTube`.
 3. Choisir le compte Google propriétaire de la chaîne.
 4. Autoriser les permissions demandées.
-5. Revenir automatiquement dans CRESYVA.
+5. Revenir automatiquement dans tokoo .
 
 YouTube est un connecteur natif séparé des autres réseaux. Les futures évolutions ne nécessitent pas de modifier le CRM ou le moteur marketing.
 

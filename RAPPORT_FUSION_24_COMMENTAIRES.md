@@ -8,8 +8,8 @@ Fait suite à `RAPPORT_FUSION_23_WHATSAPP.md`. Date : 21 septembre 2026.
 
 Le mécanisme demandé est bien construit, avec une réserve honnête déjà documentée :
 
-- **Automatique et en temps réel**, pour les posts publiés via CRESYVA **et** ceux publiés directement sur la plateforme (Facebook/Instagram) — pas seulement au clic sur un bouton. Le webhook Zernio `comment.received` déclenche `handleIncomingComment` (`social-post-tracking-service.ts`) dès qu'un commentaire arrive sur un post « tracké ».
-- **Réserve déjà documentée dans le code** : un post publié directement sur la plateforme (hors CRESYVA) peut mettre jusqu'à ~1 h avant d'être « tracké » par la synchronisation d'arrière-plan de Zernio ; ses commentaires ne deviennent temps réel qu'après ce premier passage. Le bouton manuel « Vérifier une publication » reste affiché exprès pour ce cas, jamais retiré.
+- **Automatique et en temps réel**, pour les posts publiés via tokoo  **et** ceux publiés directement sur la plateforme (Facebook/Instagram) — pas seulement au clic sur un bouton. Le webhook Zernio `comment.received` déclenche `handleIncomingComment` (`social-post-tracking-service.ts`) dès qu'un commentaire arrive sur un post « tracké ».
+- **Réserve déjà documentée dans le code** : un post publié directement sur la plateforme (hors tokoo ) peut mettre jusqu'à ~1 h avant d'être « tracké » par la synchronisation d'arrière-plan de Zernio ; ses commentaires ne deviennent temps réel qu'après ce premier passage. Le bouton manuel « Vérifier une publication » reste affiché exprès pour ce cas, jamais retiré.
 - **Les deux canaux de notification partent bien ensemble**, à chaque nouveau commentaire (`notifyOrgAdmins`, appelée sans préciser de priorité → défaut **« important »**, donc un push en urgence « high », pas un push muet) :
   - **in-app** : une ligne insérée dans `notifications` pour chaque owner/admin ;
   - **push** : un vrai envoi Web Push (`web-push`, clés VAPID), best-effort — jamais d'exception si un tenant n'a pas configuré les clés ou si aucun appareil n'est abonné.
@@ -17,7 +17,7 @@ Le mécanisme demandé est bien construit, avec une réserve honnête déjà doc
 
 ## 2. Défaut trouvé — corrigé
 
-**Le commerçant était notifié de ses propres commentaires**, sans que rien ne le filtre. Chaque fois qu'il répond à un commentaire — directement sur Instagram/Facebook, ou via le bouton « Répondre » de CRESYVA lui-même (`replyToComment`, qui poste réellement sur la plateforme via l'API) — Zernio relivre cette réponse comme un `comment.received` ordinaire. Une détection « c'est mon propre commentaire » (`isOwnComment`) existe déjà dans le projet, mais **seulement pour la réponse automatique par IA**, avec deux angles morts :
+**Le commerçant était notifié de ses propres commentaires**, sans que rien ne le filtre. Chaque fois qu'il répond à un commentaire — directement sur Instagram/Facebook, ou via le bouton « Répondre » de tokoo  lui-même (`replyToComment`, qui poste réellement sur la plateforme via l'API) — Zernio relivre cette réponse comme un `comment.received` ordinaire. Une détection « c'est mon propre commentaire » (`isOwnComment`) existe déjà dans le projet, mais **seulement pour la réponse automatique par IA**, avec deux angles morts :
 
 1. `isOwnComment` n'était jamais appelée si la réponse automatique était désactivée pour ce compte (le test s'arrêtait avant, sur `account.autoReplyComments`).
 2. Même quand elle s'exécutait, c'était **après** que `handleIncomingComment` ait déjà notifié — le mal était fait.
@@ -52,7 +52,7 @@ Build : copie jetable, polices stubées, identifiants Supabase factices — mêm
 
 - **Aucun vrai payload Zernio.** La détection « propre commentaire » repose sur `authorExternalId` (identifiant exact) ou, à défaut, le nom d'auteur comparé au nom du compte connecté — ce second repli peut se tromper si un client porte exactement le même nom que la boutique (cas rare, déjà la même limite pour la réponse automatique).
 - **Réglage des clés VAPID et abonnement effectif d'un appareil** : le canal push est vérifié unitairement (`push-service.test.ts`, déjà existant) mais pas de bout en bout sur un vrai navigateur.
-- **Le délai ~1 h pour un post jamais publié via CRESYVA** est une limite de Zernio, pas du code : rien à corriger ici, seulement à garder en tête.
+- **Le délai ~1 h pour un post jamais publié via tokoo ** est une limite de Zernio, pas du code : rien à corriger ici, seulement à garder en tête.
 - Les points ouverts des rapports précédents restent valables (Fapshi en sandbox, licence des images, revue visuelle, groupes WhatsApp jamais activés avant d'y envoyer un premier message).
 
 Livré en zip du projet complet (`node_modules`, `.next` et `tsconfig.tsbuildinfo` exclus). Reproduire : `npm ci && npm run typecheck && npm run lint && npm test && npm run build`.

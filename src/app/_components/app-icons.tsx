@@ -1,5 +1,5 @@
 /**
- * Icônes SVG minimalistes — chrome de l'app authentifiée CRESYVA (Super
+ * Icônes SVG minimalistes — chrome de l'app authentifiée tokoo  (Super
  * Admin `/admin/*` ET dashboard marchand `/dashboard/*`).
  *
  * Déplacé de `admin/_components/icons.tsx` vers ici (sept. 2026, chantier

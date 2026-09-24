@@ -7,10 +7,10 @@ Fait suite à `RAPPORT_FUSION_17.md`. Date : 20 septembre 2026.
 | Archive | Contenu | Relation |
 |---|---|---|
 | `thrive-main__13_.zip` (**T**) | Projet complet, 581 fichiers, migrations jusqu'à `0065`, `RAPPORT_FUSION_17` (B + C) | **Base** : la branche la plus avancée côté messagerie / Telegram / Zernio |
-| `cresyva-fusionne_2_.zip` (**F**) | Projet complet, 578 fichiers, migrations jusqu'à `0065`, un *autre* `RAPPORT_FUSION_17` | Version parallèle et plus ancienne (12:30 contre 13:35) de la même fusion #17. **Aucun fichier absent de T** ; T en a 3 de plus. Sur 22 fichiers qui diffèrent, T est la version aboutie (décision « pas de bouton vers les groupes WhatsApp » de #17 §4.2, migration `0065` idempotente, boutons Telegram sur le chemin téléversement, tests de verrouillage). **Seuls 3 fichiers de tests** ne sont corrigés que dans F |
-| `Cresyva-CRESYVA-dependency-security-upgrade-v16.zip` (**U**) | Projet complet, 615 fichiers, migrations jusqu'à `0063` | Branche « A » de #17 (multi-numéros v7 — déduit des dates, ancêtre non fourni) + polish V9→V15 (templates sectoriels, Site Builder) + migration de dépendances + 3 correctifs de sécurité. **N'a rien de** : Lot 5, `0064`, `0065`, `RAPPORT_FUSION_14b/17` |
+| `tokoo -fusionne_2_.zip` (**F**) | Projet complet, 578 fichiers, migrations jusqu'à `0065`, un *autre* `RAPPORT_FUSION_17` | Version parallèle et plus ancienne (12:30 contre 13:35) de la même fusion #17. **Aucun fichier absent de T** ; T en a 3 de plus. Sur 22 fichiers qui diffèrent, T est la version aboutie (décision « pas de bouton vers les groupes WhatsApp » de #17 §4.2, migration `0065` idempotente, boutons Telegram sur le chemin téléversement, tests de verrouillage). **Seuls 3 fichiers de tests** ne sont corrigés que dans F |
+| `tokoo -tokoo -dependency-security-upgrade-v16.zip` (**U**) | Projet complet, 615 fichiers, migrations jusqu'à `0063` | Branche « A » de #17 (multi-numéros v7 — déduit des dates, ancêtre non fourni) + polish V9→V15 (templates sectoriels, Site Builder) + migration de dépendances + 3 correctifs de sécurité. **N'a rien de** : Lot 5, `0064`, `0065`, `RAPPORT_FUSION_14b/17` |
 | `files__21_.zip` → `seo-patch.diff` + `seo-patch.zip` (**S**) | Diff de 30 fichiers + image OG | Écrit contre T (mêmes dates 13:35). `patch -p1` s'applique **sans aucun rejet**, et le résultat est identique, fichier par fichier, au contenu de `seo-patch.zip` |
-| `CRESYVA_SECURITY_DEPENDENCY_AUDIT_2026-09-20.docx` | Rapport d'audit | Identique (`cmp`) à celui déjà présent dans U : conservé **tel quel** (voir §5.8) |
+| `tokoo _SECURITY_DEPENDENCY_AUDIT_2026-09-20.docx` | Rapport d'audit | Identique (`cmp`) à celui déjà présent dans U : conservé **tel quel** (voir §5.8) |
 
 ## 2. Méthode
 
@@ -34,7 +34,7 @@ Fusion #17 complète : Lot 5 (commentaires temps réel), multi-numéros WhatsApp
 **Non repris de U** : `DEPENDENCY_INSTALL_REQUIRED.md` (obsolète : le `package-lock.json` est maintenant fourni) et son `.env.example` (T garde `scholarmach.com`, voir §5.6).
 
 ### 3.3 De S
-Les 30 fichiers du patch et `public/images/og-cresyva.png`. Seule retouche : `docs/SEO.md` et les commentaires de `robots.ts` / `resolve-request-tenant.ts` parlent désormais de `src/proxy.ts`.
+Les 30 fichiers du patch et `public/images/og-tokoo .png`. Seule retouche : `docs/SEO.md` et les commentaires de `robots.ts` / `resolve-request-tenant.ts` parlent désormais de `src/proxy.ts`.
 
 ### 3.4 De F
 - Les 3 fichiers de tests corrigés : `admin-plans-service.test.ts`, `team-service.test.ts`, `marketing-service.test.ts` — exactement les fichiers des « 7 tests rouges » de #17 §5.
@@ -91,7 +91,7 @@ La migration de U est volontairement progressive (`@config` conservé). Ajouté 
 - **`admin-plans`, `team-service`, `marketing-service` (7 tests)** : les tests de F reflètent le comportement *actuel et délibéré* du code (clé d'entitlement jamais configurée = fail-closed à `0` ; quota par plateforme ; garde-fou du quota à la connexion du compte) — argumentaire complet dans `RAPPORT_FUSION_17b_…md`. #17 avait préféré ne pas les toucher (« trancher des questions produit ») ; ils sont adoptés ici parce que F les avait déjà tranchés **de la même manière que le code**. Si le produit veut l'autre sémantique, on change code **et** tests ensemble. Le point de vigilance de #17 §5 reste ouvert : l'aperçu admin (0 pour une clé absente) et `getEntitlementLimit` (-1 = illimité) n'ont pas la même sémantique.
 
 ### 5.6 `scholarmach.com` conservé (héritage de #17 §4.5)
-`.env.example` et `VAPID_SUBJECT` gardent `scholarmach.com` (celui de U disait `cresyva.app`). **Toujours à valider** : deux lignes à remettre si ce n'est pas le bon domaine.
+`.env.example` et `VAPID_SUBJECT` gardent `scholarmach.com` (celui de U disait `tokoo .app`). **Toujours à valider** : deux lignes à remettre si ce n'est pas le bon domaine.
 
 ### 5.7 Rate limiting toujours hors du proxy
 Sous Next 16, `proxy.ts` s'exécute en Node.js : la contrainte technique d'Upstash en Edge a disparu. La raison de fond reste (une défaillance dans le proxy bloquerait toutes les requêtes) ; le limiteur reste dans les route handlers et Server Actions.
@@ -150,7 +150,7 @@ Le build a été fait dans une **copie jetable avec `next/font/google` stubbé**
 
 Base : `thrive-main` (581 fichiers) → **638 fichiers**. **58 modifiés**, **27 ajoutés** (dont ce rapport et `RAPPORT_FUSION_17b`) + 33 images SVG, **3 supprimés** (`src/middleware.ts` → `src/proxy.ts`, `tailwind.config.ts` → `tailwind.config.js`, `.eslintrc.json` → `eslint.config.mjs`), `package-lock.json` régénéré. Aucun fichier de U, T ou F perdu hors de ces remplacements et de `DEPENDENCY_INSTALL_REQUIRED.md` (§3.2). Liste complète en annexe.
 
-Livré en zip du projet complet (`node_modules`, `.next` et `tsconfig.tsbuildinfo` exclus), fichiers à la racine de l'archive comme `cresyva-fusionne_2_.zip`. Pour reproduire : `npm ci && npm run typecheck && npm run lint && npm test && npm run build`.
+Livré en zip du projet complet (`node_modules`, `.next` et `tsconfig.tsbuildinfo` exclus), fichiers à la racine de l'archive comme `tokoo -fusionne_2_.zip`. Pour reproduire : `npm ci && npm run typecheck && npm run lint && npm test && npm run build`.
 
 ## Annexe — liste des fichiers
 
@@ -219,7 +219,7 @@ Livré en zip du projet complet (`node_modules`, `.next` et `tsconfig.tsbuildinf
 
 - `BEAUTY_TEMPLATE_V10.md`
 - `BOUTIQUE_TEMPLATE_V9.md`
-- `CRESYVA_SECURITY_DEPENDENCY_AUDIT_2026-09-20.docx`
+- `tokoo _SECURITY_DEPENDENCY_AUDIT_2026-09-20.docx`
 - `LANDING_AUDIT_V13.md`
 - `LANDING_REFERENCE_REWORK_V14.md`
 - `PROFESSIONAL_SERVICES_TEMPLATE_V11.md`
@@ -230,7 +230,7 @@ Livré en zip du projet complet (`node_modules`, `.next` et `tsconfig.tsbuildinf
 - `V15_SECTOR_POLISH.md`
 - `docs/SEO.md`
 - `eslint.config.mjs`
-- `public/images/og-cresyva.png`
+- `public/images/og-tokoo .png`
 - `src/app/_components/json-ld.tsx`
 - `src/app/_components/public-tenant-actions.test.ts`
 - `src/app/_components/sector-home.tsx`

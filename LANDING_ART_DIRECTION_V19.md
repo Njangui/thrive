@@ -1,4 +1,4 @@
-# CRESYVA — Landing Art Direction V19
+# tokoo  — Landing Art Direction V19
 
 ## Objectif
 Dernier passage de finition sur les vitrines sectorielles, avec priorité à la perception premium, à la cohérence de marque et à l'honnêteté des états sans données.
@@ -6,7 +6,7 @@ Dernier passage de finition sur les vitrines sectorielles, avec priorité à la 
 ## Changements
 
 ### Immobilier
-- Suppression de toute référence fixe à CRESYVA dans le contenu du site client.
+- Suppression de toute référence fixe à tokoo  dans le contenu du site client.
 - Localisation de la signature verticale à partir de l'adresse réelle du tenant.
 - Accent éditorial renforcé sur le hero et les cartes de biens.
 - Rendu des statistiques corrigé : les données d'exemple sont explicitement présentées comme exemples.
@@ -47,6 +47,6 @@ Dernier passage de finition sur les vitrines sectorielles, avec priorité à la 
 ## Validation
 - `sector-home.tsx`: accolades 598/598, parenthèses 261/261.
 - `globals.css`: accolades 1522/1522, parenthèses 781/781.
-- Recherche des anciennes chaînes hardcodées `SÉLECTION CRESYVA` et `YAOUNDÉ · CAMEROUN`: aucune occurrence.
+- Recherche des anciennes chaînes hardcodées `SÉLECTION tokoo ` et `YAOUNDÉ · CAMEROUN`: aucune occurrence.
 - `unzip -t` effectué sur l'archive finale.
 - Le TypeScript complet n'est pas exécutable dans cet environnement sans `node_modules`; les erreurs globales observées sont principalement des modules/types manquants. Aucun problème de parsing TSX/CSS n'a été détecté sur les fichiers modifiés par les validations statiques.

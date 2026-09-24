@@ -45,7 +45,7 @@ async function connectSocialAction(formData: FormData) {
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
   let url: string;
   try {
-    url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA", platform as never, reconnectAccountId ? { reconnectAccountId } : undefined);
+    url = await getZernioConnectUrl(organizationId, organization?.name ?? "Entreprise tokoo ", platform as never, reconnectAccountId ? { reconnectAccountId } : undefined);
   } catch (error) {
     flash("error", error instanceof AppError ? error.message : error instanceof Error ? error.message : "Impossible de démarrer la connexion.");
   }
@@ -64,7 +64,7 @@ async function connectWhatsAppAction(formData: FormData) {
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
   let url: string;
   try {
-    url = await getZernioWhatsAppConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA");
+    url = await getZernioWhatsAppConnectUrl(organizationId, organization?.name ?? "Entreprise tokoo ");
   } catch (error) {
     flash("error", error instanceof Error ? error.message : "Impossible de démarrer WhatsApp.");
   }
@@ -84,14 +84,14 @@ async function connectWhatsAppGroupsAction(formData: FormData) {
   const { data: organization } = await supabase.from("organizations").select("name").eq("id", membership.organizationId).single();
   let url: string;
   try {
-    url = await getZernioWhatsAppGroupsConnectUrl(organizationId, organization?.name ?? "Entreprise CRESYVA");
+    url = await getZernioWhatsAppGroupsConnectUrl(organizationId, organization?.name ?? "Entreprise tokoo ");
   } catch (error) {
     flash("error", error instanceof Error ? error.message : "Connexion du numéro dédié impossible.");
   }
   redirect(url);
 }
 
-/** Chemin payant — le commerçant demande à CRESYVA de lui fournir un numéro dédié (traité ensuite depuis /admin/numbers). */
+/** Chemin payant — le commerçant demande à tokoo  de lui fournir un numéro dédié (traité ensuite depuis /admin/numbers). */
 async function requestDedicatedNumberAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
@@ -101,7 +101,7 @@ async function requestDedicatedNumberAction(formData: FormData) {
   } catch (error) {
     flash("error", error instanceof AppError ? error.message : "Impossible d'envoyer la demande.");
   }
-  flash("success", "Demande envoyée — l'équipe CRESYVA va vous assigner un numéro sous peu.");
+  flash("success", "Demande envoyée — l'équipe tokoo  va vous assigner un numéro sous peu.");
 }
 
 /** Paiement (premier mois ou renouvellement) du loyer du numéro dédié. */
@@ -271,7 +271,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
       <header className="relative overflow-hidden rounded-3xl bg-navy-900 p-6 text-white shadow-[0_20px_60px_-35px_rgba(14,17,48,.75)] sm:p-8">
         <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-violet-500/25 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div><p className="adm-eyebrow text-violet-300">Canaux</p><h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Tout connecter, sans complexité.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">Connectez vos canaux depuis CRESYVA. Les détails techniques restent derrière l&apos;interface.</p></div>
+          <div><p className="adm-eyebrow text-violet-300">Canaux</p><h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Tout connecter, sans complexité.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">Connectez vos canaux depuis tokoo . Les détails techniques restent derrière l&apos;interface.</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">{totalConnected} canal{totalConnected > 1 ? "s" : ""} connecté{totalConnected > 1 ? "s" : ""}</div>
         </div>
       </header>
@@ -282,13 +282,13 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
       <section className="adm-card border-violet-100 bg-violet-50/60">
         <p className="adm-eyebrow">Comment ça marche ?</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {[["01", "Choisissez", "Le canal à connecter."], ["02", "Autorisez", "Le service affiche son propre parcours sécurisé."], ["03", "Travaillez", "Ensuite depuis CRESYVA, sans configuration technique." ]].map(([n,t,d]) => <div key={n} className="rounded-2xl bg-white p-4 shadow-xs"><span className="text-xs font-extrabold text-violet-600">{n}</span><p className="mt-2 text-sm font-bold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}
+          {[["01", "Choisissez", "Le canal à connecter."], ["02", "Autorisez", "Le service affiche son propre parcours sécurisé."], ["03", "Travaillez", "Ensuite depuis tokoo , sans configuration technique." ]].map(([n,t,d]) => <div key={n} className="rounded-2xl bg-white p-4 shadow-xs"><span className="text-xs font-extrabold text-violet-600">{n}</span><p className="mt-2 text-sm font-bold">{t}</p><p className="mt-1 text-xs leading-5 text-slate-500">{d}</p></div>)}
         </div>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
         <div className="adm-card overflow-hidden p-0">
-          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={whatsappAccounts.length ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappAccounts.length ? `${whatsappAccounts.length} numéro${whatsappAccounts.length > 1 ? "s" : ""}` : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Chaque numéro de messagerie WhatsApp utilise son propre profil Cloud API/Zernio. Pour un numéro déjà utilisé dans WhatsApp Business, CRESYVA utilise la <strong>coexistence</strong> : vous gardez l&apos;application sur le téléphone et les conversations remontent aussi dans CRESYVA.</p></div>
+          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={whatsappAccounts.length ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappAccounts.length ? `${whatsappAccounts.length} numéro${whatsappAccounts.length > 1 ? "s" : ""}` : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Chaque numéro de messagerie WhatsApp utilise son propre profil Cloud API/Zernio. Pour un numéro déjà utilisé dans WhatsApp Business, tokoo  utilise la <strong>coexistence</strong> : vous gardez l&apos;application sur le téléphone et les conversations remontent aussi dans tokoo .</p></div>
           <div className="space-y-3 p-5 sm:p-6">{whatsappAccounts.length ? whatsappAccounts.map((account, index) => <div key={account.accountId} className="flex items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4"><div className="min-w-0"><p className="text-sm font-semibold">{account.phoneNumber || account.username || `Numéro WhatsApp ${index + 1}`}</p><p className="mt-1 text-xs text-slate-500">{account.isPrimary ? "Numéro principal" : `Numéro ${index + 1}`} · {account.status === "connected" ? "Connecté" : "Connexion à vérifier"}</p></div><span className={account.status === "connected" ? "adm-badge-success" : "adm-badge-neutral"}>{account.status === "connected" ? "Actif" : "À vérifier"}</span></div>) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Aucun numéro WhatsApp de messagerie n&apos;est encore connecté.</div>}</div>
           <div className="border-t border-navy-900/[0.06] p-5 sm:p-6"><form action={connectWhatsAppAction}><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" disabled={!whatsappEntitlement.allowed} className="adm-btn-primary w-full sm:w-auto">{whatsappAccounts.length ? "Ajouter un numéro WhatsApp" : "Connecter mon WhatsApp"}</SubmitButton></form><p className="mt-2 text-xs text-slate-500">{whatsappEntitlement.limit === -1 ? "Numéros selon les capacités de votre offre." : `${whatsappAccounts.length}/${whatsappEntitlement.limit} numéro${whatsappEntitlement.limit > 1 ? "s" : ""} utilisé${whatsappEntitlement.limit > 1 ? "s" : ""}.`}</p></div>
         </div>
@@ -316,7 +316,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
               <form action={connectWhatsAppGroupsAction} className="mt-4"><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" className="adm-btn-primary w-full sm:w-auto">Connecter mon numéro dédié</SubmitButton></form>
             </div>
             <div className="border-t border-navy-900/[0.06] p-5 sm:p-6">
-              <p className="text-sm font-semibold">Je veux que CRESYVA m&apos;en fournisse un</p>
+              <p className="text-sm font-semibold">Je veux que tokoo  m&apos;en fournisse un</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Abonnement mensuel{dedicatedNumberPriceFcfa ? ` de ${dedicatedNumberPriceFcfa.toLocaleString("fr-FR")} FCFA` : ""}, séparé de votre forfait. Le numéro est repris si l&apos;abonnement n&apos;est pas renouvelé.</p>
               {dedicatedNumber.assignedNumber ? (
                 <div className="mt-4 rounded-2xl bg-[#F7F6FD] p-4">
@@ -326,9 +326,9 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                   <p className="mt-3 text-xs text-slate-500">Une fois payé, connectez ce numéro avec le bouton &laquo;&nbsp;Connecter mon numéro dédié&nbsp;&raquo; ci-contre.</p>
                 </div>
               ) : dedicatedNumber.pendingRequestId ? (
-                <p className="mt-4 text-sm text-violet-700">Demande envoyée — en attente de traitement par l&apos;équipe CRESYVA.</p>
+                <p className="mt-4 text-sm text-violet-700">Demande envoyée — en attente de traitement par l&apos;équipe tokoo .</p>
               ) : (
-                <form action={requestDedicatedNumberAction} className="mt-4"><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Envoi…" className="w-full rounded-xl border border-navy-900/10 bg-white px-4 py-2 text-sm font-semibold text-navy-900 hover:border-violet-300 hover:bg-violet-50 sm:w-auto">Demander un numéro à CRESYVA</SubmitButton></form>
+                <form action={requestDedicatedNumberAction} className="mt-4"><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Envoi…" className="w-full rounded-xl border border-navy-900/10 bg-white px-4 py-2 text-sm font-semibold text-navy-900 hover:border-violet-300 hover:bg-violet-50 sm:w-auto">Demander un numéro à tokoo </SubmitButton></form>
               )}
             </div>
           </div>

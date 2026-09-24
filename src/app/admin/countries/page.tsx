@@ -53,7 +53,7 @@ export default async function AdminCountriesPage({
       <div>
         <h1 className="font-jakarta text-2xl font-bold tracking-tight">Pays</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Contrôle de la disponibilité commerciale de CRESYVA par pays. NotchPay indique ce qui est techniquement
+          Contrôle de la disponibilité commerciale de tokoo  par pays. NotchPay indique ce qui est techniquement
           possible ; ce tableau décide ce qui est réellement vendu — les deux ne sont jamais automatiquement liés.
         </p>
       </div>
@@ -69,7 +69,7 @@ export default async function AdminCountriesPage({
           <p className="mt-1 font-jakarta text-2xl font-bold">{overview.kpis.notchpaySupportedCount}</p>
         </div>
         <div className="rounded-xl border border-navy-900/10 bg-white p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Actifs CRESYVA</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Actifs tokoo </p>
           <p className="mt-1 font-jakarta text-2xl font-bold text-success-700">{overview.kpis.activeCount}</p>
         </div>
         <div className="rounded-xl border border-navy-900/10 bg-white p-4">
@@ -89,7 +89,7 @@ export default async function AdminCountriesPage({
               <th className="px-4 py-2">Pays</th>
               <th className="px-4 py-2">Devise</th>
               <th className="px-4 py-2">NotchPay</th>
-              <th className="px-4 py-2">CRESYVA</th>
+              <th className="px-4 py-2">tokoo </th>
               <th className="px-4 py-2">Canaux</th>
               <th className="px-4 py-2">Pricing</th>
               <th className="px-4 py-2" />

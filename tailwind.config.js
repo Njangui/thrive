@@ -10,7 +10,7 @@
  *    réel : reçu/étiquette de marché — d'où l'accent "leaf" fonctionnel
  *    (CTA WhatsApp) plutôt que décoratif.
  *  - `violet/magenta/navy/success/warning/danger` : palette FIXE de la
- *    landing marketing CRESYVA et de la console Super Admin (`/admin/*`)
+ *    landing marketing tokoo  et de la console Super Admin (`/admin/*`)
  *    UNIQUEMENT — jamais utilisée sur la vitrine tenant. Réplique pixel
  *    par pixel d'une référence visuelle fournie par le porteur du projet
  *    (capture d'écran, sept. 2026) : violet indigo `#5B21E5` en primaire,

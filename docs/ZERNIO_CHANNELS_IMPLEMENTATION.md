@@ -1,6 +1,6 @@
-# Canaux sociaux — architecture CRESYVA
+# Canaux sociaux — architecture tokoo 
 
-CRESYVA ne présente jamais le nom d'un fournisseur d'infrastructure dans le dashboard marchand.
+tokoo  ne présente jamais le nom d'un fournisseur d'infrastructure dans le dashboard marchand.
 
 ## Périmètre
 
@@ -19,7 +19,7 @@ Ainsi :
 Dashboard / CRM / Marketing
           |
           v
-   Ports métier CRESYVA
+   Ports métier tokoo 
           |
     Provider Registry
       /      |      \

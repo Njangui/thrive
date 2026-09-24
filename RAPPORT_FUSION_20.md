@@ -4,7 +4,7 @@ Fait suite à `RAPPORT_FUSION_19.md`. Date : 21 septembre 2026.
 
 ## 1. Source reçue et sa base
 
-`Cresyva-CRESYVA-landing-art-direction-v19.zip` est un **projet complet** (664 fichiers, à la racine de l'archive) construit **sur la fusion #19** : il contient déjà `RAPPORT_FUSION_18.md`, `RAPPORT_FUSION_19.md` et `RAPPORT_MIGRATION_FAPSHI.md`. Comparaison fichier par fichier avec l'arbre #19 :
+`tokoo -tokoo -landing-art-direction-v19.zip` est un **projet complet** (664 fichiers, à la racine de l'archive) construit **sur la fusion #19** : il contient déjà `RAPPORT_FUSION_18.md`, `RAPPORT_FUSION_19.md` et `RAPPORT_MIGRATION_FAPSHI.md`. Comparaison fichier par fichier avec l'arbre #19 :
 
 | Écart | Nombre |
 |---|---|
@@ -17,7 +17,7 @@ Les 640 autres fichiers sont identiques : **aucun conflit possible**, pas de fus
 
 ## 2. Ce qui est repris
 
-- **`sector-home.tsx`** (68 lignes changées) et **`globals.css`** (480 lignes changées ; CSS produit 244 643 → 263 504 octets) : direction artistique des 5 secteurs + générique — hero éditorial, signature localisée d'après l'adresse réelle du tenant, suppression du faux « 5/5 » sans note réelle et des libellés fixes « SÉLECTION CRESYVA » / « YAOUNDÉ · CAMEROUN », `:focus-visible`, `prefers-reduced-motion`, garde-fous mobile.
+- **`sector-home.tsx`** (68 lignes changées) et **`globals.css`** (480 lignes changées ; CSS produit 244 643 → 263 504 octets) : direction artistique des 5 secteurs + générique — hero éditorial, signature localisée d'après l'adresse réelle du tenant, suppression du faux « 5/5 » sans note réelle et des libellés fixes « SÉLECTION tokoo  » / « YAOUNDÉ · CAMEROUN », `:focus-visible`, `prefers-reduced-motion`, garde-fous mobile.
 - **`public/images/showcase/`** (≈ 1,2 Mo) : 6 SVG de secours pour les heroes (`{realestate,restaurant,retail,beauty,professional,default}-hero.svg`) et 12 photos JPG de démonstration (`demo/realestate-*`, `demo/restaurant-*`).
 - **Notes** `LANDING_FINISH_PASS_V17.md`, `LANDING_ART_DIRECTION_V18.md`, `LANDING_ART_DIRECTION_V19.md`. Les marqueurs de citation parasites `citeturn…` de la note V18 sont retirés (comme pour l'audit en #18).
 

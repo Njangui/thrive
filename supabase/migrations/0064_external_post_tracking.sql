@@ -5,17 +5,17 @@
 -- "synchroniser les commentaires quel qu'en soit où je l'ai publié, et
 -- automatiquement"). Jusqu'ici, `social_comments.social_post_id`
 -- (0026_social_comments.sql) référence `social_posts(id)` en NOT NULL —
--- un post publié directement sur la plateforme (hors composer CRESYVA)
+-- un post publié directement sur la plateforme (hors composer tokoo )
 -- n'a AUCUNE ligne `social_posts` et ses commentaires étaient donc
 -- impossibles à stocker, structurellement. Cette migration ne relâche
 -- pas cette contrainte : elle permet à une ligne `social_posts` d'exister
--- pour un post que CRESYVA n'a pas publié lui-même, détecté par la
+-- pour un post que tokoo  n'a pas publié lui-même, détecté par la
 -- synchronisation arrière-plan de Zernio (webhook `post.external.*`,
 -- CONFIRMÉ ~horaire, pas temps réel — voir docs/ZERNIO_INTEGRATION.md et
 -- ZernioExternalPostWebhookPost dans zernio/types.ts).
 -- ============================================================
 
--- Distingue un post publié depuis CRESYVA ('app', comportement
+-- Distingue un post publié depuis tokoo  ('app', comportement
 -- historique — valeur par défaut pour ne rien changer aux lignes
 -- existantes) d'un post détecté nativement sur la plateforme ('external').
 -- `content`/`media_urls` restent donc "not null"/'{}' par défaut pour un
@@ -27,7 +27,7 @@ alter table social_posts add column source text not null default 'app'
   check (source in ('app', 'external'));
 
 comment on column social_posts.source is
-  'Lot 5 : ''app'' = publié via le composer CRESYVA (comportement '
+  'Lot 5 : ''app'' = publié via le composer tokoo  (comportement '
   'historique). ''external'' = détecté nativement sur la plateforme par '
   'la synchronisation arrière-plan Zernio (post.external.created), '
   'contenu volontairement non rapatrié (voir zernio/types.ts).';

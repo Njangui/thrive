@@ -124,7 +124,7 @@ export async function listSyncablePosts(organizationId: string): Promise<Syncabl
  * post publié et les upsert dans social_comments (déduplication par
  * (post, compte, id externe)). `ignoreDuplicates` : ne réécrit jamais une
  * ligne déjà connue — un commentaire déjà marqué "replied"/"hidden" côté
- * CRESYVA ne doit jamais être remis à "new" par un simple re-sync.
+ * tokoo  ne doit jamais être remis à "new" par un simple re-sync.
  *
  * Contrairement à `notifyOrgAdmins`/`trackEvent` (best-effort), une
  * erreur ici REMONTE à l'appelant : un commerçant qui clique "vérifier

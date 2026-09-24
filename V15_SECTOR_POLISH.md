@@ -1,4 +1,4 @@
-# CRESYVA — V15 Sector Polish
+# tokoo  — V15 Sector Polish
 
 ## Scope
 Polish pass over all five dedicated tenant home templates plus the generic fallback:

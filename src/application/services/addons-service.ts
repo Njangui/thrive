@@ -165,7 +165,7 @@ export async function purchaseAddon(
     amount: amountFcfa,
     currency: "XAF",
     customerEmail: payerEmail,
-    description: `Add-on CRESYVA : ${addon.name} × ${quantity}`,
+    description: `Add-on tokoo  : ${addon.name} × ${quantity}`,
   });
 
   // Créée APRÈS l'appel provider, avec sa vraie référence : certains

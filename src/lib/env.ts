@@ -86,7 +86,7 @@ const EnvSchema = z.object({
   // l'adresse resend.dev fonctionne, et UNIQUEMENT vers l'email du
   // titulaire du compte — pas vers un vrai destinataire d'invitation.
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM_ADDRESS: z.string().default("CRESYVA <onboarding@resend.dev>"),
+  EMAIL_FROM_ADDRESS: z.string().default("tokoo  <onboarding@resend.dev>"),
 
   // --- Programme d'affiliation (0044_affiliate_system.sql) — secret de
   // signature HMAC des jetons de cookie d'attribution

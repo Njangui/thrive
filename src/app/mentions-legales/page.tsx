@@ -6,8 +6,8 @@ import { LEGAL_ENTITY, isLegalEntityComplete, legalField } from "@/application/c
 export async function generateMetadata(): Promise<Metadata> {
   return buildMarketingMetadata({
     path: "/mentions-legales",
-    title: "Mentions légales — CRESYVA",
-    description: "Éditeur, hébergeur et informations légales du service CRESYVA.",
+    title: "Mentions légales — tokoo ",
+    description: "Éditeur, hébergeur et informations légales du service tokoo .",
     // Une page légale à trous n'a pas à être indexée (voir legal-entity.ts).
     noIndex: !isLegalEntityComplete(),
   });
@@ -21,7 +21,7 @@ export default function MentionsLegalesPage() {
     <LegalPageLayout title="Mentions légales">
       <h2>Éditeur du site</h2>
       <p>
-        Le service CRESYVA est édité par <strong>{companyName}</strong>, {legalField(entity.legalForm, "forme juridique")}
+        Le service tokoo  est édité par <strong>{companyName}</strong>, {legalField(entity.legalForm, "forme juridique")}
         {entity.shareCapital.trim() ? `, au capital de ${entity.shareCapital.trim()} FCFA` : ""}, immatriculée au
         Registre du Commerce et du Crédit Mobilier (RCCM) sous le numéro {legalField(entity.rccm, "numéro RCCM")}, dont
         le siège social est situé {legalField(entity.address, "adresse")}, {legalField(entity.city, "ville")},{" "}
@@ -47,7 +47,7 @@ export default function MentionsLegalesPage() {
 
       <h2>Propriété intellectuelle</h2>
       <p>
-        La marque CRESYVA, son logo, et l&apos;ensemble des éléments graphiques et logiciels de la plateforme sont la
+        La marque tokoo , son logo, et l&apos;ensemble des éléments graphiques et logiciels de la plateforme sont la
         propriété de {companyName}. Toute reproduction non autorisée est interdite.
       </p>
 

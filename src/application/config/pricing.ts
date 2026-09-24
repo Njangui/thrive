@@ -19,7 +19,7 @@ export type PricingFeature = {
 export const PRICING_FEATURES: PricingFeature[] = [
   { key: "site", label: "Site public professionnel", group: "Vitrine & catalogue", values: { free: true, starter: "Personnalisable", pro: "Personnalisable" } },
   { key: "custom_domain", label: "Domaine personnalisé", group: "Vitrine & catalogue", values: { free: "Sous-domaine inclus", starter: true, pro: true } },
-  { key: "remove_branding", label: "Retirer « Site propulsé par CRESYVA »", group: "Vitrine & catalogue", values: { free: false, starter: false, pro: true } },
+  { key: "remove_branding", label: "Retirer « Site propulsé par tokoo  »", group: "Vitrine & catalogue", values: { free: false, starter: false, pro: true } },
   { key: "catalog", label: "Catalogue", group: "Vitrine & catalogue", values: { free: "100 produits max", starter: "1 000 produits max", pro: "2 000 produits max" } },
   { key: "telegram_bots", label: "Bots Telegram", group: "Canaux", values: { free: "1", starter: "3", pro: "10" } },
   { key: "telegram_channels", label: "Canaux Telegram", group: "Canaux", values: { free: "1", starter: "3", pro: "12" } },

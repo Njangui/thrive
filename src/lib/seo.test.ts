@@ -574,17 +574,17 @@ describe("buildWebSiteJsonLd / buildPlatformOrganizationJsonLd", () => {
   });
 
   it("Organization plateforme : omet logo/description absents", () => {
-    const minimal = buildPlatformOrganizationJsonLd({ name: "CRESYVA", url: "https://cresyva.com" });
+    const minimal = buildPlatformOrganizationJsonLd({ name: "tokoo ", url: "https://tokoo .com" });
     expect(minimal.logo).toBeUndefined();
     expect(minimal.description).toBeUndefined();
 
     const full = buildPlatformOrganizationJsonLd({
-      name: "CRESYVA",
-      url: "https://cresyva.com",
-      logoUrl: "https://cresyva.com/images/cresyva-mark-512.png",
+      name: "tokoo ",
+      url: "https://tokoo .com",
+      logoUrl: "https://tokoo .com/images/tokoo -mark-512.png",
       description: "Gérez votre entreprise depuis un seul endroit.",
     });
-    expect(full.logo).toBe("https://cresyva.com/images/cresyva-mark-512.png");
+    expect(full.logo).toBe("https://tokoo .com/images/tokoo -mark-512.png");
     expect(full.description).toBe("Gérez votre entreprise depuis un seul endroit.");
   });
 });

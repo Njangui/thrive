@@ -1,11 +1,11 @@
-# CRESYVA — modèle Telegram opérationnel
+# tokoo  — modèle Telegram opérationnel
 
 ## 1. Les deux bots ne jouent pas le même rôle
 
 ### Bot plateforme / opérateur
 Variables : `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`, `TELEGRAM_BOT_WEBHOOK_SECRET`.
 
-Il appartient à CRESYVA et sert à :
+Il appartient à tokoo  et sert à :
 - notifier l'opérateur des événements majeurs de la plateforme ;
 - conserver le parcours Telegram historique des affiliés (`/start`, `/mystats`, `/help`).
 
@@ -14,7 +14,7 @@ Il ne sert pas à discuter avec les clients d'un commerçant.
 ### Bot commerçant / tenant
 Chaque entreprise crée son propre bot avec BotFather et colle son token dans `Dashboard → Canaux → Telegram`.
 
-CRESYVA :
+tokoo  :
 1. vérifie le token avec `getMe` ;
 2. stocke le token dans le coffre Supabase ;
 3. crée un webhook unique pour ce bot ;
@@ -31,7 +31,7 @@ Telegram est donc indépendant de Zernio.
 - Pour un groupe, le bot doit être ajouté au groupe et avoir les droits nécessaires.
 - Pour un canal, le bot doit être administrateur avec le droit de publier.
 - Le bot ne peut pas récupérer arbitrairement le profil ou le numéro de téléphone d'un utilisateur.
-- CRESYVA gère actuellement les messages entrants texte dans le pipeline conversationnel ; les pièces jointes entrantes nécessitent encore un traitement média dédié. Les pièces jointes sortantes publiques (image/vidéo/audio/fichier) sont supportées par l'adapter Telegram.
+- tokoo  gère actuellement les messages entrants texte dans le pipeline conversationnel ; les pièces jointes entrantes nécessitent encore un traitement média dédié. Les pièces jointes sortantes publiques (image/vidéo/audio/fichier) sont supportées par l'adapter Telegram.
 
 ## 3. Publications Telegram
 
@@ -65,22 +65,22 @@ Le script configure le webhook vers `/api/webhooks/telegram` avec le secret Tele
 
 | Événement | Message envoyé |
 |---|---|
-| Nouvelle entreprise | 🆕 CRESYVA · Nouvelle entreprise + nom/pays/secteur |
-| Entreprise suspendue | ⛔ CRESYVA · Entreprise suspendue |
-| Entreprise réactivée | ✅ CRESYVA · Entreprise réactivée |
-| Changement de forfait | 💳 CRESYVA · Forfait modifié |
-| Paiement confirmé | 💰 CRESYVA · Paiement confirmé |
-| Paiement échoué | ⚠️ CRESYVA · Paiement échoué |
-| Abonnement expiré | ⏰ CRESYVA · Abonnement expiré |
-| Connexion Telegram | 📲 CRESYVA · Bot Telegram connecté |
-| Déconnexion Telegram | 🔌 CRESYVA · Bot Telegram déconnecté |
-| Connexion fournisseur perdue | 🔴 CRESYVA · Connexion fournisseur perdue |
-| Candidature affilié | 🤝 CRESYVA · Nouvelle candidature affilié |
-| Fraude détectée | 🚨 CRESYVA · Alerte anti-fraude |
-| Demande de paiement affilié | 💸 CRESYVA · Demande de paiement affilié |
-| Paiement affilié effectué | 🏦 CRESYVA · Paiement affilié effectué |
-| Paiement affilié rejeté | ↩️ CRESYVA · Paiement affilié rejeté |
-| Domaine traité | 🌐 CRESYVA · Domaine traité |
+| Nouvelle entreprise | 🆕 tokoo  · Nouvelle entreprise + nom/pays/secteur |
+| Entreprise suspendue | ⛔ tokoo  · Entreprise suspendue |
+| Entreprise réactivée | ✅ tokoo  · Entreprise réactivée |
+| Changement de forfait | 💳 tokoo  · Forfait modifié |
+| Paiement confirmé | 💰 tokoo  · Paiement confirmé |
+| Paiement échoué | ⚠️ tokoo  · Paiement échoué |
+| Abonnement expiré | ⏰ tokoo  · Abonnement expiré |
+| Connexion Telegram | 📲 tokoo  · Bot Telegram connecté |
+| Déconnexion Telegram | 🔌 tokoo  · Bot Telegram déconnecté |
+| Connexion fournisseur perdue | 🔴 tokoo  · Connexion fournisseur perdue |
+| Candidature affilié | 🤝 tokoo  · Nouvelle candidature affilié |
+| Fraude détectée | 🚨 tokoo  · Alerte anti-fraude |
+| Demande de paiement affilié | 💸 tokoo  · Demande de paiement affilié |
+| Paiement affilié effectué | 🏦 tokoo  · Paiement affilié effectué |
+| Paiement affilié rejeté | ↩️ tokoo  · Paiement affilié rejeté |
+| Domaine traité | 🌐 tokoo  · Domaine traité |
 
 Aucun secret, token ou donnée de paiement sensible n'est envoyé dans Telegram.
 

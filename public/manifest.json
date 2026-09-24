@@ -1,6 +1,6 @@
 {
-  "name": "CRESYVA",
-  "short_name": "CRESYVA",
+  "name": "tokoo ",
+  "short_name": "tokoo ",
   "description": "Gérez votre catalogue, vos conversations et vos ventes depuis votre téléphone.",
   "start_url": "/dashboard",
   "scope": "/",

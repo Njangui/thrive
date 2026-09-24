@@ -66,8 +66,8 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeature> = {
   },
   remove_branding: {
     entitlementKey: "remove_branding",
-    label: "Site sans badge CRESYVA",
-    description: "Retire la mention « Site propulsé par CRESYVA » du bas de votre site.",
+    label: "Site sans badge tokoo ",
+    description: "Retire la mention « Site propulsé par tokoo  » du bas de votre site.",
     minPlan: "pro",
   },
   automatic_messaging: {

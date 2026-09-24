@@ -1,5 +1,5 @@
 /**
- * Graphiques SVG faits main — chrome de l'app authentifiée CRESYVA
+ * Graphiques SVG faits main — chrome de l'app authentifiée tokoo 
  * (Super Admin `/admin/*` ET dashboard marchand `/dashboard/*`).
  *
  * Déplacé de `admin/_components/charts.tsx` vers ici (sept. 2026, chantier

@@ -1,15 +1,15 @@
-# RAPPORT_FUSION_26.md — Fusion CRESYVA-FUSION-V22-BUILD-OK × THRIVE-FUSION-25
+# RAPPORT_FUSION_26.md — Fusion tokoo -FUSION-V22-BUILD-OK × THRIVE-FUSION-25
 
 **Date : 23/09/2026**
 **Fait par : session Claude (chat), à partir de deux fusions déjà produites par deux sessions antérieures distinctes.**
 
 ## 0. Ce que sont réellement les deux sources
 
-Les deux fichiers fournis ne sont **pas** deux copies du même livrable : ce sont deux fusions **parallèles et divergentes** du même projet CRESYVA, faites par deux sessions différentes à partir de bases qui se recoupent partiellement.
+Les deux fichiers fournis ne sont **pas** deux copies du même livrable : ce sont deux fusions **parallèles et divergentes** du même projet tokoo , faites par deux sessions différentes à partir de bases qui se recoupent partiellement.
 
-| | `CRESYVA-FUSION-V22-BUILD-OK.zip` (« V22 ») | `thrive-fusion-25.zip` (« F25 », dans `files__2_.zip`) |
+| | `tokoo -FUSION-V22-BUILD-OK.zip` (« V22 ») | `thrive-fusion-25.zip` (« F25 », dans `files__2_.zip`) |
 |---|---|---|
-| Sources | `cresyva-fusionne-24` + système financier **v21** + Lot P + Lot 4 (prix par pays) + Lot 24 (commentaires) | `cresyva-fusionne-24` + audit sécurité (`thrive-main-corrige`) + système financier **v22-polished** + Lot P + groupes Telegram (travail propre à cette session) |
+| Sources | `tokoo -fusionne-24` + système financier **v21** + Lot P + Lot 4 (prix par pays) + Lot 24 (commentaires) | `tokoo -fusionne-24` + audit sécurité (`thrive-main-corrige`) + système financier **v22-polished** + Lot P + groupes Telegram (travail propre à cette session) |
 | Vérifié comment | **Réellement buildé** : `npm ci` / `tsc` / `eslint` / `vitest` (1003/1003) / `next build` (86/86 pages). 6 bugs réels trouvés et corrigés (voir `RAPPORT_VERIFICATION_BUILD_V22.md`) | Vérifié **seulement par relecture syntaxique** — RAPPORT_FUSION_25.md le dit lui-même : jamais de `npm install`/`tsc`/`next build` réel |
 | Apporte | Les 6 correctifs de build, un système financier v21→v22 « maison », Lot 4 (dérive de prix par pays) | 3 correctifs de sécurité réels (élévation de privilège, XSS SVG, SSRF YouTube), la fonctionnalité **groupes Telegram** (conversation partagée), un système financier v22-polished plus avancé sur certains points |
 

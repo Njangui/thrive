@@ -6,7 +6,7 @@ import type { PaymentMethodKey } from "@/domain/entities/landing";
  * Jeu d'icônes de la VITRINE PUBLIQUE — distinct de `app-icons.tsx`, qui
  * sert le chrome de l'application authentifiée (dashboard/admin). Les
  * deux jeux ne partagent volontairement rien : ce sont deux marques
- * différentes (celle du commerçant vs celle de CRESYVA), et fusionner les
+ * différentes (celle du commerçant vs celle de tokoo ), et fusionner les
  * deux fichiers rendrait impossible de faire évoluer l'un sans risquer
  * l'autre.
  *

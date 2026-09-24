@@ -15,9 +15,9 @@ import { useEffect } from "react";
  * d'unification design (sept. 2026) : cette page capte les erreurs de
  * TOUS les contextes (dashboard, admin, mais aussi la vitrine publique
  * d'un tenant) sans moyen fiable de savoir dans lequel on se trouvait au
- * moment du crash. La passer en violet CRESYVA afficherait la marque de
+ * moment du crash. La passer en violet tokoo  afficherait la marque de
  * la plateforme sur l'écran d'erreur d'un client en train d'acheter chez
- * un commerçant — contraire à la séparation vitrine tenant/CRESYVA
+ * un commerçant — contraire à la séparation vitrine tenant/tokoo 
  * demandée pour ce chantier. Reste donc sur le thème neutre existant.
  */
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {

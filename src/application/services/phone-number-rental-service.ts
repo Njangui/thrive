@@ -240,7 +240,7 @@ export async function initiateDedicatedNumberPayment(
     amount,
     currency: currencyCode,
     customerEmail: payerEmail,
-    description: `CRESYVA — Numéro WhatsApp dédié aux groupes (${number.phone_e164})`,
+    description: `tokoo  — Numéro WhatsApp dédié aux groupes (${number.phone_e164})`,
   });
 
   // Créée APRÈS l'appel provider, avec sa vraie référence : certains

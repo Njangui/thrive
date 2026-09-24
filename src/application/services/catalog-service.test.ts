@@ -298,7 +298,7 @@ describe("isPromotionCurrentlyOn — règle unique partagée (catalogue V2 + vit
 });
 
 describe("buildProductButtons", () => {
-  const ORIGIN = "https://monsalon.cresyva.app";
+  const ORIGIN = "https://monsalon.tokoo .app";
 
   it("un seul produit -> un seul bouton \"Voir plus\" vers son lien", () => {
     const buttons = buildProductButtons([PRODUCTS[0]!], ORIGIN);

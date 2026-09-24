@@ -1,4 +1,4 @@
-# CRESYVA — Tenant Landing Reference Rework V14
+# tokoo  — Tenant Landing Reference Rework V14
 
 ## Problem corrected
 The previous work improved sector templates, but an empty/default tenant could still render a sparse generic composition. That did not reproduce the architecture of the supplied tenant references.

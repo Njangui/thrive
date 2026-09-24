@@ -63,7 +63,7 @@
  * warning/danger` + `font-jakarta`/`font-inter` ajoutés à tailwind.config.js.
  *
  * Unification design (sept. 2026) : `adm-*` sert désormais TOUT le
- * périmètre "app authentifiée/transactionnelle" de CRESYVA — Super Admin
+ * périmètre "app authentifiée/transactionnelle" de tokoo  — Super Admin
  * (`/admin/*`) ET dashboard marchand (`/dashboard/*`), + login/onboarding/
  * invite/pages légales — pas seulement la console Super Admin comme son
  * nom historique le suggère encore. Choix volontaire de ne PAS renommer
@@ -73,12 +73,12 @@
  * détail d'implémentation historique. La vitrine publique tenant
  * (`ink/paper/leaf/...` ci-dessus + `landing-sections/`) reste
  * volontairement SUR SON PROPRE THÈME — c'est la marque du commerçant qui
- * s'affiche à SES clients, pas celle de CRESYVA (décision explicite,
+ * s'affiche à SES clients, pas celle de tokoo  (décision explicite,
  * demandée par le porteur du projet, pas un oubli de ce chantier).
  */
 
 @layer components {
-  /* --- Landing marketing CRESYVA --- */
+  /* --- Landing marketing tokoo  --- */
   .mkt-shell {
     @apply bg-white font-inter text-navy-900;
   }
@@ -230,7 +230,7 @@
 
 @layer components {
   /* -----------------------------------------------------------------------
-     CRESYVA 2026 visual system — shared polish
+     tokoo  2026 visual system — shared polish
      ----------------------------------------------------------------------- */
   .adm-eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.16em] text-violet-600; }
   .adm-card, .adm-card-alert { @apply transition-shadow duration-200; }
@@ -434,7 +434,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 @layer components {
-  /* CRESYVA authenticated UI: consistent depth and mobile behavior across every dashboard page. */
+  /* tokoo  authenticated UI: consistent depth and mobile behavior across every dashboard page. */
   .adm-shell main { min-width: 0; }
   .adm-shell main h1 { text-wrap: balance; }
   .adm-shell main .rounded-brand { border-radius: 1rem; }
@@ -479,7 +479,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
  *     la variable reste indéfinie et le repli prend le relais — jamais un
  *     fond transparent ni un texte invisible.
  *
- *  3. Le namespace `sf-` ne croise ni `mkt-`/`adm-` (CRESYVA lui-même) ni
+ *  3. Le namespace `sf-` ne croise ni `mkt-`/`adm-` (tokoo  lui-même) ni
  *     `receipt-row`/`ink`/`paper` : les trois systèmes cohabitent dans le
  *     même bundle sans jamais se toucher.
  */
@@ -573,36 +573,36 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* ========================================================================
-   CRESYVA — FINAL BRAND SYSTEM
+   tokoo  — FINAL BRAND SYSTEM
    Source of truth for the authenticated SaaS chrome. The legacy class names
    (`adm-*`, `mkt-*`) remain intentionally stable so the visual refactor does
    not touch business logic or route architecture.
    ======================================================================== */
 :root {
-  --cresyva-primary: #00D1A0;
-  --cresyva-primary-hover: #00B98C;
-  --cresyva-primary-dark: #007A63;
-  --cresyva-navy: #0F172A;
-  --cresyva-surface: #FFFFFF;
-  --cresyva-background: #F8FAFC;
-  --cresyva-border: #E2E8F0;
-  --cresyva-muted: #64748B;
-  --cresyva-radius-sm: 0.625rem;
-  --cresyva-radius-md: 0.875rem;
-  --cresyva-radius-lg: 1.125rem;
-  --cresyva-radius-xl: 1.5rem;
-  --cresyva-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04);
-  --cresyva-shadow-md: 0 14px 34px -28px rgb(15 23 42 / 0.42);
+  --tokoo -primary: #00D1A0;
+  --tokoo -primary-hover: #00B98C;
+  --tokoo -primary-dark: #007A63;
+  --tokoo -navy: #0F172A;
+  --tokoo -surface: #FFFFFF;
+  --tokoo -background: #F8FAFC;
+  --tokoo -border: #E2E8F0;
+  --tokoo -muted: #64748B;
+  --tokoo -radius-sm: 0.625rem;
+  --tokoo -radius-md: 0.875rem;
+  --tokoo -radius-lg: 1.125rem;
+  --tokoo -radius-xl: 1.5rem;
+  --tokoo -shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04);
+  --tokoo -shadow-md: 0 14px 34px -28px rgb(15 23 42 / 0.42);
 }
 
 @layer components {
-  .cresyva-page { color: var(--cresyva-navy); }
-  .cresyva-page-hero {
+  .tokoo -page { color: var(--tokoo -navy); }
+  .tokoo -page-hero {
     @apply relative overflow-hidden rounded-[24px] p-6 text-white sm:p-8;
-    background: var(--cresyva-navy);
+    background: var(--tokoo -navy);
     box-shadow: 0 24px 55px -38px rgb(15 23 42 / .75);
   }
-  .cresyva-page-hero::after {
+  .tokoo -page-hero::after {
     content: "";
     position: absolute;
     width: 22rem;
@@ -614,40 +614,40 @@ html, body { max-width: 100%; overflow-x: hidden; }
     filter: blur(28px);
     pointer-events: none;
   }
-  .cresyva-eyebrow {
+  .tokoo -eyebrow {
     @apply text-[10px] font-bold uppercase tracking-[.17em] text-primary;
   }
-  .cresyva-btn-primary {
+  .tokoo -btn-primary {
     @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:bg-primary-600 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2;
   }
-  .cresyva-btn-ghost-dark {
+  .tokoo -btn-ghost-dark {
     @apply inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary;
   }
-  .cresyva-kpi {
+  .tokoo -kpi {
     @apply min-w-0 rounded-2xl border border-slate-200 bg-white p-4;
-    box-shadow: var(--cresyva-shadow-sm);
+    box-shadow: var(--tokoo -shadow-sm);
   }
-  .cresyva-kpi-warning { @apply border-warning-600/20 bg-warning-50/60; }
-  .cresyva-info-panel {
+  .tokoo -kpi-warning { @apply border-warning-600/20 bg-warning-50/60; }
+  .tokoo -info-panel {
     @apply flex flex-col gap-3 rounded-2xl border border-primary/15 bg-primary-50 p-4 sm:flex-row sm:items-center sm:justify-between;
   }
-  .cresyva-status {
+  .tokoo -status {
     @apply inline-flex w-fit shrink-0 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-primary-700 ring-1 ring-primary/15;
   }
-  .cresyva-product-card {
+  .tokoo -product-card {
     @apply min-w-0 overflow-hidden rounded-[18px] border border-slate-200 bg-white;
-    box-shadow: var(--cresyva-shadow-sm);
+    box-shadow: var(--tokoo -shadow-sm);
     transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
   }
-  .cresyva-product-card:hover {
+  .tokoo -product-card:hover {
     transform: translateY(-2px);
     border-color: rgb(0 209 160 / .28);
-    box-shadow: var(--cresyva-shadow-md);
+    box-shadow: var(--tokoo -shadow-md);
   }
-  .cresyva-empty {
+  .tokoo -empty {
     @apply flex min-h-[300px] flex-col items-center justify-center rounded-[20px] border border-dashed border-slate-300 bg-white p-8 text-center;
   }
-  .cresyva-empty-icon {
+  .tokoo -empty-icon {
     @apply grid h-12 w-12 place-items-center rounded-2xl bg-primary-50 text-xl font-bold text-primary-700;
   }
 
@@ -663,19 +663,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
     width: 3px;
     height: 18px;
     border-radius: 999px;
-    background: var(--cresyva-primary);
+    background: var(--tokoo -primary);
     margin-right: -2px;
   }
   .adm-sidebar-group-label { color: rgb(255 255 255 / .34); }
-  .adm-card, .adm-card-alert, .adm-kpi { border-color: var(--cresyva-border); }
-  .adm-card { border-radius: var(--cresyva-radius-lg); box-shadow: var(--cresyva-shadow-sm); }
-  .adm-card:hover { box-shadow: var(--cresyva-shadow-md); }
-  .adm-value, .adm-heading-1, .adm-heading-2 { color: var(--cresyva-navy); }
+  .adm-card, .adm-card-alert, .adm-kpi { border-color: var(--tokoo -border); }
+  .adm-card { border-radius: var(--tokoo -radius-lg); box-shadow: var(--tokoo -shadow-sm); }
+  .adm-card:hover { box-shadow: var(--tokoo -shadow-md); }
+  .adm-value, .adm-heading-1, .adm-heading-2 { color: var(--tokoo -navy); }
   .adm-table th { color: #94A3B8; background: #F8FAFC; }
   .adm-table td { border-color: #EEF2F7; }
   .adm-table tbody tr:hover { background: rgb(0 209 160 / .025); }
-  .adm-input:focus { border-color: var(--cresyva-primary) !important; box-shadow: 0 0 0 3px rgb(0 209 160 / .12) !important; }
-  .adm-shell .text-violet-600, .adm-shell .text-violet-700 { color: var(--cresyva-primary-dark) !important; }
+  .adm-input:focus { border-color: var(--tokoo -primary) !important; box-shadow: 0 0 0 3px rgb(0 209 160 / .12) !important; }
+  .adm-shell .text-violet-600, .adm-shell .text-violet-700 { color: var(--tokoo -primary-dark) !important; }
   .adm-shell .text-violet-300 { color: #6EE7D0 !important; }
   .adm-shell .bg-violet-50 { background-color: #ECFDF8 !important; }
   .adm-shell .border-violet-200 { border-color: #A7F3E0 !important; }
@@ -685,10 +685,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .site-editor-page > h1 { @apply text-3xl sm:text-4xl; }
   .site-editor-page > p { max-width: 52rem; }
   .site-editor-main { min-width: 0; }
-  .site-editor-main > * { @apply rounded-2xl border border-slate-200 bg-white p-4; box-shadow: var(--cresyva-shadow-sm); }
+  .site-editor-main > * { @apply rounded-2xl border border-slate-200 bg-white p-4; box-shadow: var(--tokoo -shadow-sm); }
   .site-editor-preview {
     @apply min-w-0 rounded-[22px] border border-slate-200 bg-white p-4;
-    box-shadow: var(--cresyva-shadow-md);
+    box-shadow: var(--tokoo -shadow-md);
   }
   .site-preview-frame {
     @apply mt-4 min-h-[620px] overflow-hidden rounded-[18px] border border-slate-200 bg-slate-50;
@@ -703,19 +703,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
   /* Marketing/public SaaS surface */
   .mkt-shell { background: #fff; }
-  .mkt-btn-primary { color: var(--cresyva-navy); box-shadow: 0 10px 24px -10px rgb(0 209 160 / .5); }
+  .mkt-btn-primary { color: var(--tokoo -navy); box-shadow: 0 10px 24px -10px rgb(0 209 160 / .5); }
   .mkt-btn-secondary:hover { border-color: rgb(0 209 160 / .28); }
-  .mkt-card:hover { border-color: rgb(0 209 160 / .22); box-shadow: var(--cresyva-shadow-md); }
+  .mkt-card:hover { border-color: rgb(0 209 160 / .22); box-shadow: var(--tokoo -shadow-md); }
 
   /* Auth / onboarding */
-  .auth-page { background: var(--cresyva-background); }
-  .auth-brand-panel { background: var(--cresyva-navy); }
-  .auth-form-card { border-color: var(--cresyva-border); box-shadow: 0 25px 70px -42px rgb(15 23 42 / .3); }
+  .auth-page { background: var(--tokoo -background); }
+  .auth-brand-panel { background: var(--tokoo -navy); }
+  .auth-form-card { border-color: var(--tokoo -border); box-shadow: 0 25px 70px -42px rgb(15 23 42 / .3); }
   .auth-form-badge { background: #ECFDF8; color: #007A63; }
 
   /* Pricing and affiliate surfaces inherit the same hierarchy. */
-  .pricing-page, .affiliate-page { background: var(--cresyva-background); }
-  .pricing-card, .affiliate-visual, .affiliate-bottom { border-color: var(--cresyva-border); box-shadow: var(--cresyva-shadow-md); }
+  .pricing-page, .affiliate-page { background: var(--tokoo -background); }
+  .pricing-card, .affiliate-visual, .affiliate-bottom { border-color: var(--tokoo -border); box-shadow: var(--tokoo -shadow-md); }
 
   /* Dark mode foundation: activated by `.dark` without requiring a rewrite
      of the existing components. */
@@ -727,17 +727,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 @media (max-width: 639px) {
-  .cresyva-page-hero { border-radius: 18px; padding: 1.125rem; }
-  .cresyva-product-card { border-radius: 16px; }
+  .tokoo -page-hero { border-radius: 18px; padding: 1.125rem; }
+  .tokoo -product-card { border-radius: 16px; }
   .site-preview-frame { min-height: 480px; }
 }
 
 @layer components {
-  .adm-btn-primary, .mkt-btn-primary, .cresyva-btn-primary {
-    background-color: var(--cresyva-primary) !important;
-    color: var(--cresyva-navy) !important;
+  .adm-btn-primary, .mkt-btn-primary, .tokoo -btn-primary {
+    background-color: var(--tokoo -primary) !important;
+    color: var(--tokoo -navy) !important;
   }
-  .adm-btn-primary:hover, .mkt-btn-primary:hover, .cresyva-btn-primary:hover { background-color: var(--cresyva-primary-hover) !important; }
+  .adm-btn-primary:hover, .mkt-btn-primary:hover, .tokoo -btn-primary:hover { background-color: var(--tokoo -primary-hover) !important; }
   .adm-shell .bg-violet-600 { background-color: #007A63 !important; }
   .adm-shell .hover\:bg-violet-500:hover { background-color: #00B98C !important; }
 }
@@ -746,7 +746,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 @layer components {
   .site-editor-tabs {
     @apply flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1;
-    box-shadow: var(--cresyva-shadow-sm);
+    box-shadow: var(--tokoo -shadow-sm);
   }
   .site-editor-tabs a {
     @apply whitespace-nowrap rounded-lg px-4 py-2 text-xs font-semibold text-slate-500 transition;
@@ -755,7 +755,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .site-editor-tabs a.is-active { @apply bg-primary-50 text-primary-700; }
   .site-editor-section-card {
     @apply rounded-2xl border border-slate-200 bg-white p-4;
-    box-shadow: var(--cresyva-shadow-sm);
+    box-shadow: var(--tokoo -shadow-sm);
   }
   .site-editor-section-heading { @apply flex items-center gap-3; }
   .site-editor-section-dot { @apply grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary-50 text-[10px] font-extrabold text-primary-700; }
@@ -1648,7 +1648,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* ================================================================
-   CRESYVA — SECTOR ART-DIRECTION PASS V18
+   tokoo  — SECTOR ART-DIRECTION PASS V18
    A final visual layer: stronger composition, editorial rhythm,
    premium micro-interactions and mobile-safe hero details.
    ================================================================ */
@@ -1762,7 +1762,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 /* ================================================================
-   CRESYVA — ART DIRECTION PASS V19
+   tokoo  — ART DIRECTION PASS V19
    Last-mile polish: stronger brand ownership, editorial framing,
    quieter luxury, honest empty states and better small-screen rhythm.
    ================================================================ */

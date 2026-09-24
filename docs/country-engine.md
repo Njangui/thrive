@@ -1,7 +1,7 @@
 # Country Engine
 
 Système centralisé de gestion des pays, devises et tarification qui
-permet à CRESYVA de s'étendre du Cameroun vers d'autres marchés africains
+permet à tokoo  de s'étendre du Cameroun vers d'autres marchés africains
 **sans modifier le code métier** — activer un pays devient une opération
 de configuration Super Admin, pas une opération de développement.
 
@@ -11,7 +11,7 @@ et `docs/internationalization.md` (devises, téléphone, langue).
 ## Principe fondateur
 
 ```
-NotchPay (capacité technique)  ≠  CRESYVA (décision commerciale)
+NotchPay (capacité technique)  ≠  tokoo  (décision commerciale)
 ```
 
 `countries.notchpay_supported = true` **n'implique jamais**

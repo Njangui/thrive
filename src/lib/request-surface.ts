@@ -8,7 +8,7 @@
  * sous des hôtes différents, et le SEO de chacune est opposé.
  *
  *  - `marketing`    : le domaine racine de la plateforme (NEXT_PUBLIC_ROOT_DOMAIN,
- *                     ou son `www.`) — la landing CRESYVA, /tarifs, etc.
+ *                     ou son `www.`) — la landing tokoo , /tarifs, etc.
  *                     À indexer, avec la plateforme comme canonique.
  *  - `tenant`       : la vitrine d'un commerçant (sous-domaine ou domaine
  *                     custom vérifié). À indexer, avec le tenant comme canonique.
@@ -81,7 +81,7 @@ export const NOINDEX_ONLY_PATHS = ["/login", "/reset-password"] as const;
 /**
  * Pages de la PLATEFORME que le routage par hôte rend aussi accessibles
  * sous le domaine de chaque commerçant (`boutique.exemple.com/tarifs`
- * affiche la page tarifs de CRESYVA). Sur un hôte tenant, elles ne doivent
+ * affiche la page tarifs de tokoo ). Sur un hôte tenant, elles ne doivent
  * pas être indexées : ce serait du contenu de la plateforme dupliqué sous
  * le nom de chaque boutique.
  */

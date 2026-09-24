@@ -46,7 +46,7 @@ function makeConfig(overrides: Partial<PaymentWebhookConfig> = {}): PaymentWebho
   };
 }
 function makeRequest(body: string, headers: Record<string, string> = {}): Request {
-  return new Request("https://cresyva.test/api/webhooks/fapshi", { method: "POST", body, headers });
+  return new Request("https://tokoo .test/api/webhooks/fapshi", { method: "POST", body, headers });
 }
 const BODY = JSON.stringify({ transId: "TX-1", status: "SUCCESSFUL" });
 

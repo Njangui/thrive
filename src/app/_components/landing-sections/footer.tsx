@@ -18,7 +18,7 @@ export function FooterSection({ tenant }: { tenant: TenantContext }) {
       <p className="mt-1">
         Site propulsé par{" "}
         <a href={env.NEXT_PUBLIC_APP_URL} className="font-medium hover:text-brand">
-          CRESYVA
+          tokoo 
         </a>
       </p>
     </footer>

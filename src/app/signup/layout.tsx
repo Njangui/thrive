@@ -15,9 +15,9 @@ import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
 export async function generateMetadata(): Promise<Metadata> {
   return buildMarketingMetadata({
     path: "/signup",
-    title: "Créer un compte — CRESYVA",
+    title: "Créer un compte — tokoo ",
     description:
-      "Créez votre compte CRESYVA : catalogue, WhatsApp, réseaux sociaux, clients et finances au même endroit.",
+      "Créez votre compte tokoo  : catalogue, WhatsApp, réseaux sociaux, clients et finances au même endroit.",
   });
 }
 

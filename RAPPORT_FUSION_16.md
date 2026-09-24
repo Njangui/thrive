@@ -1,7 +1,7 @@
-# Rapport de fusion #16 — fichiers modifiés du 19/09 + Freemium, sur cresyva-fusionne-15b
+# Rapport de fusion #16 — fichiers modifiés du 19/09 + Freemium, sur tokoo -fusionne-15b
 
 Fait suite à `RAPPORT_FUSION_15.md` (dont l'addendum décrit le passage
-SME-OS → CRESYVA). Deux archives reçues :
+SME-OS → tokoo ). Deux archives reçues :
 
 1. **`thrive-fichiers-modifies__1_.zip`** — 78 fichiers accompagnés d'un
    `CHANGELOG_2026-09-19.md` : correctifs (crédits IA consommés sans IA
@@ -23,7 +23,7 @@ de la fusion #14, arbre actuel) : la version dont il s'écarte le moins est
 **systématiquement celle du zip de la fusion #14** (exemple : les pages
 d'édition produit/service s'en écartent de 10–11 lignes, contre 54 pour l'arbre
 actuel et 129–282 pour la fusion #13). Ces fichiers ont donc été produits **à
-partir de `cresyva-fusionne-14.zip`**, sans les correctifs de redirection ni la
+partir de `tokoo -fusionne-14.zip`**, sans les correctifs de redirection ni la
 2ᵉ livraison Catalogue V2 de #15. Base des fusions à trois voies = ce zip.
 
 **Freemium.** L'archive contient le lot WhatsApp Coexistence déjà fusionné en

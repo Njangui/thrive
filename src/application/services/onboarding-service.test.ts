@@ -147,7 +147,7 @@ describe("createOrganization — Country Engine (section 12/13)", () => {
   }
 
   it("rejette un pays invalide AVANT toute vérification de session ou écriture DB", async () => {
-    mockValidateCountryForSignup.mockRejectedValue(new ValidationError("Ghana arrive bientôt sur CRESYVA."));
+    mockValidateCountryForSignup.mockRejectedValue(new ValidationError("Ghana arrive bientôt sur tokoo ."));
 
     await expect(createOrganization({ name: "Ma Boutique", countryCode: "GH" })).rejects.toBeInstanceOf(
       ValidationError,

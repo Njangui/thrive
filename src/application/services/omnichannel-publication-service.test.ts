@@ -66,7 +66,7 @@ vi.mock("@/infrastructure/supabase/server-client", () => ({
 import { publishOmnichannel, buildCatalogPublicationContent, type PublicationTarget } from "./omnichannel-publication-service";
 import type { CatalogProductSummary } from "./catalog-service";
 
-const ORIGIN = "https://habynex.cresyva.app";
+const ORIGIN = "https://habynex.tokoo .app";
 
 const SAC: CatalogProductSummary = {
   id: "p1",

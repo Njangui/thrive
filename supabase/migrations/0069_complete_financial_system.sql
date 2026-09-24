@@ -1,5 +1,5 @@
 -- 0069_complete_financial_system.sql
--- Financial cockpit CRESYVA + comptabilité de gestion tenant.
+-- Financial cockpit tokoo  + comptabilité de gestion tenant.
 --
 -- Principes :
 -- 1) Revenus reconnus = lignes `revenues` pour les tenants / paiements
@@ -106,7 +106,7 @@ select * from (values
   ('Comptabilité', 'Comptabilité / conseil', 'accounting', 'operating', 'fixed', 'monthly', null::numeric, 'Renseigner uniquement si ce poste existe réellement.'),
   ('Juridique', 'Juridique / conformité', 'legal', 'operating', 'fixed', 'monthly', null::numeric, 'Renseigner uniquement si ce poste existe réellement.'),
   ('Marketing', 'Acquisition / publicité', 'marketing', 'operating', 'usage', 'monthly', null::numeric, 'Budget mensuel réellement engagé.'),
-  ('CRESYVA', 'Salaires / rémunérations', 'salary', 'operating', 'fixed', 'monthly', null::numeric, 'Renseigner uniquement lorsque ce coût est réellement engagé.')
+  ('tokoo ', 'Salaires / rémunérations', 'salary', 'operating', 'fixed', 'monthly', null::numeric, 'Renseigner uniquement lorsque ce coût est réellement engagé.')
 ) as seed(provider, label, category, cost_class, billing_type, billing_cycle, monthly_budget_fcfa, notes)
 where not exists (
   select 1 from platform_costs existing

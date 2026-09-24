@@ -14,48 +14,48 @@ import {
 
 describe("isPlatformRootHost", () => {
   it("reconnaît le domaine racine et son www., sans tenir compte de la casse ni des espaces", () => {
-    expect(isPlatformRootHost("cresyva.com", "cresyva.com")).toBe(true);
-    expect(isPlatformRootHost("www.cresyva.com", "cresyva.com")).toBe(true);
-    expect(isPlatformRootHost("  CRESYVA.com ", "cresyva.com")).toBe(true);
+    expect(isPlatformRootHost("tokoo .com", "tokoo .com")).toBe(true);
+    expect(isPlatformRootHost("www.tokoo .com", "tokoo .com")).toBe(true);
+    expect(isPlatformRootHost("  tokoo .com ", "tokoo .com")).toBe(true);
     expect(isPlatformRootHost("localhost:3000", "localhost:3000")).toBe(true);
   });
 
   it("refuse un sous-domaine tenant, un domaine custom et un déploiement de prévisualisation", () => {
-    expect(isPlatformRootHost("habynex.cresyva.com", "cresyva.com")).toBe(false);
-    expect(isPlatformRootHost("habynex.com", "cresyva.com")).toBe(false);
+    expect(isPlatformRootHost("habynex.tokoo .com", "tokoo .com")).toBe(false);
+    expect(isPlatformRootHost("habynex.com", "tokoo .com")).toBe(false);
     expect(isPlatformRootHost("thrive-git-main-abc123.vercel.app", "thrive.vercel.app")).toBe(false);
-    expect(isPlatformRootHost("evilcresyva.com", "cresyva.com")).toBe(false);
-    expect(isPlatformRootHost("cresyva.com.evil.example", "cresyva.com")).toBe(false);
+    expect(isPlatformRootHost("eviltokoo .com", "tokoo .com")).toBe(false);
+    expect(isPlatformRootHost("tokoo .com.evil.example", "tokoo .com")).toBe(false);
   });
 
   it("ne classe jamais un hôte vide comme la plateforme", () => {
-    expect(isPlatformRootHost("", "cresyva.com")).toBe(false);
-    expect(isPlatformRootHost("cresyva.com", "")).toBe(false);
+    expect(isPlatformRootHost("", "tokoo .com")).toBe(false);
+    expect(isPlatformRootHost("tokoo .com", "")).toBe(false);
   });
 });
 
 describe("classifySurface", () => {
-  const rootDomain = "cresyva.com";
+  const rootDomain = "tokoo .com";
 
   it("tenant résolu -> vitrine, quel que soit l'hôte", () => {
-    expect(classifySurface({ hasTenant: true, host: "habynex.cresyva.com", rootDomain })).toBe("tenant");
+    expect(classifySurface({ hasTenant: true, host: "habynex.tokoo .com", rootDomain })).toBe("tenant");
     expect(classifySurface({ hasTenant: true, host: "habynex.com", rootDomain })).toBe("tenant");
   });
 
   it("aucun tenant + domaine racine -> landing marketing (à indexer)", () => {
-    expect(classifySurface({ hasTenant: false, host: "cresyva.com", rootDomain })).toBe("marketing");
-    expect(classifySurface({ hasTenant: false, host: "www.cresyva.com", rootDomain })).toBe("marketing");
+    expect(classifySurface({ hasTenant: false, host: "tokoo .com", rootDomain })).toBe("marketing");
+    expect(classifySurface({ hasTenant: false, host: "www.tokoo .com", rootDomain })).toBe("marketing");
   });
 
   it("aucun tenant + autre hôte (sous-domaine inconnu, tenant suspendu, preview) -> rien à indexer", () => {
-    expect(classifySurface({ hasTenant: false, host: "inconnu.cresyva.com", rootDomain })).toBe("unrecognized");
+    expect(classifySurface({ hasTenant: false, host: "inconnu.tokoo .com", rootDomain })).toBe("unrecognized");
     expect(classifySurface({ hasTenant: false, host: "thrive-abc.vercel.app", rootDomain })).toBe("unrecognized");
   });
 });
 
 describe("buildPlatformOrigin", () => {
   it("https en production, http uniquement en local", () => {
-    expect(buildPlatformOrigin("cresyva.com")).toBe("https://cresyva.com");
+    expect(buildPlatformOrigin("tokoo .com")).toBe("https://tokoo .com");
     expect(buildPlatformOrigin("Thrive.Vercel.app")).toBe("https://thrive.vercel.app");
     expect(buildPlatformOrigin("localhost:3000")).toBe("http://localhost:3000");
     expect(buildPlatformOrigin("127.0.0.1:3000")).toBe("http://127.0.0.1:3000");

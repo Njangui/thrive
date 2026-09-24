@@ -77,7 +77,7 @@ beforeEach(() => {
   vi.mocked(resolveBusinessInfo).mockReset().mockResolvedValue(null);
   vi.mocked(rememberMentionedProducts).mockReset().mockResolvedValue(undefined);
   vi.mocked(getRecentlyMentionedProducts).mockReset().mockResolvedValue([]);
-  vi.mocked(getTenantPublicOrigin).mockReset().mockResolvedValue("https://monsalon.cresyva.app");
+  vi.mocked(getTenantPublicOrigin).mockReset().mockResolvedValue("https://monsalon.tokoo .app");
   vi.mocked(getMessagingOrgContext).mockReset().mockResolvedValue(NEUTRAL_CONTEXT);
 });
 

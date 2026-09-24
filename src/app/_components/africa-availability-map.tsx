@@ -98,7 +98,7 @@ export function AfricaAvailabilityMap({ countries }: { countries: PublicCountry[
             height={MAP_HEIGHT}
             projection={projection}
             role="img"
-            aria-label="Carte d'Afrique indiquant les pays où CRESYVA est disponible ou bientôt disponible"
+            aria-label="Carte d'Afrique indiquant les pays où tokoo  est disponible ou bientôt disponible"
             className="block h-auto w-full"
           >
             <Geographies geography={geography}>

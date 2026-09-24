@@ -49,7 +49,7 @@ self.addEventListener("fetch", (event) => {
  */
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "CRESYVA",
+    title: "tokoo ",
     body: "Vous avez une nouvelle notification.",
     url: "/dashboard/notifications",
   };
@@ -58,7 +58,7 @@ self.addEventListener("push", (event) => {
     try {
       payload = { ...payload, ...event.data.json() };
     } catch {
-      // Payload non-JSON (ne devrait pas arriver côté CRESYVA, mais un
+      // Payload non-JSON (ne devrait pas arriver côté tokoo , mais un
       // service worker doit rester défensif face à n'importe quel push) :
       // on garde au moins le texte brut comme corps du message.
       payload.body = event.data.text();

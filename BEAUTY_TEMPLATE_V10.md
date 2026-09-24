@@ -1,4 +1,4 @@
-# CRESYVA — Template sectoriel Beauté & Bien-être (V10)
+# tokoo  — Template sectoriel Beauté & Bien-être (V10)
 
 Ajout d'une vitrine publique dédiée au secteur `beauty` / preset `salon`.
 

@@ -213,7 +213,7 @@ export async function sendTestPush(organizationId: string): Promise<void> {
   await sendPush(
     organizationId,
     "Notifications activées",
-    "Vous recevrez désormais vos notifications même quand CRESYVA est fermé.",
+    "Vous recevrez désormais vos notifications même quand tokoo  est fermé.",
     "/dashboard/notifications",
   );
 }

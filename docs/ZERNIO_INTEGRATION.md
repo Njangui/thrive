@@ -61,7 +61,7 @@ de message entrant.**
 **CONFIRMÉ (Lot M, docs.zernio.com/platforms/whatsapp/groups)** — fait
 central qui débloque tout : *"Each group has its own conversation thread
 identified by the group ID"* — pour un groupe, `conversationId ===
-l'id du groupe lui-même` (`external_id` côté CRESYVA). La conversation
+l'id du groupe lui-même` (`external_id` côté tokoo ). La conversation
 Zernio n'existe simplement pas tant que personne n'a écrit dedans, mais
 son id est connu D'AVANCE : c'est le même que celui du groupe. Le Lot F
 avait laissé `zernio_conversation_id` NULL pour toujours ("hors scope"
@@ -209,10 +209,10 @@ d'intégration. **Verdict : les deux sont CONFIRMÉES.**
   the platform-native post id", ~horaire, PAS temps réel) via
   `social-post-tracking-service.ts::trackExternalPost`, ceci couvre
   maintenant aussi les commentaires sur un post publié DIRECTEMENT sur la
-  plateforme (hors CRESYVA) — jusque-là structurellement impossible
+  plateforme (hors tokoo ) — jusque-là structurellement impossible
   (`social_comments.social_post_id` référence `social_posts(id)` en NOT
   NULL, et aucune ligne `social_posts` n'existe pour un post non publié
-  par CRESYVA — voir 0064_external_post_tracking.sql, qui ajoute
+  par tokoo  — voir 0064_external_post_tracking.sql, qui ajoute
   `social_posts.source` et l'index unique permettant cet upsert).
   Limite honnête à communiquer au commerçant : un post fait directement
   sur la plateforme peut mettre jusqu'à ~1h avant d'être "tracké" par
@@ -302,7 +302,7 @@ que cette limite appelait, plutôt que de la contourner par une simulation.
 
 ## Messagerie WhatsApp ≠ Groupes WhatsApp (à lire avant de toucher au webhook)
 
-Trois choses différentes portent le nom « WhatsApp » dans CRESYVA. Ne jamais les confondre :
+Trois choses différentes portent le nom « WhatsApp » dans tokoo . Ne jamais les confondre :
 
 | | **Messagerie WhatsApp** | **Groupes WhatsApp** | **Bouton WhatsApp de la vitrine** |
 |---|---|---|---|

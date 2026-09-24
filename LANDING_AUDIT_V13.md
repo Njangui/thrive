@@ -1,4 +1,4 @@
-# CRESYVA — Audit profond des vitrines tenant V13
+# tokoo  — Audit profond des vitrines tenant V13
 
 ## Résultat
 
@@ -16,10 +16,10 @@ Les personnalisations de couleurs, titres, sous-titres, images et identité cont
 
 ### 2. Suppression des identités hardcodées dans les vitrines tenant
 
-Suppression des références de marque CRESYVA dans le contenu éditorial des tenants :
-- `CRESYVA SHOP` -> nom réel du tenant + `BOUTIQUE`
-- `L'EXPÉRIENCE CRESYVA` -> nom réel du tenant
-- `CRESYVA PRO` -> nom réel du tenant + `PRO`
+Suppression des références de marque tokoo  dans le contenu éditorial des tenants :
+- `tokoo  SHOP` -> nom réel du tenant + `BOUTIQUE`
+- `L'EXPÉRIENCE tokoo ` -> nom réel du tenant
+- `tokoo  PRO` -> nom réel du tenant + `PRO`
 
 ### 3. Suppression de la localisation hardcodée
 

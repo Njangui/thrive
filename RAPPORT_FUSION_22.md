@@ -2,7 +2,7 @@
 
 Fait suite à `RAPPORT_FUSION_21.md` et intègre `RAPPORT_LOT_O.md`. Date : 21 septembre 2026.
 
-**Demande** : « fusionne ». Entrées : `cresyva-fusionne-21.zip` (fusion #21 = `thrive-main` + fusions #18 → #21) et `thrive-main-lot-O.zip` (lot O, bâti sur `thrive-main`, donc **sans** les fusions #18 → #21 : Fapshi, Next 16, Zod 4, Tailwind 4, refonte SEO, directions artistiques V17 → V19).
+**Demande** : « fusionne ». Entrées : `tokoo -fusionne-21.zip` (fusion #21 = `thrive-main` + fusions #18 → #21) et `thrive-main-lot-O.zip` (lot O, bâti sur `thrive-main`, donc **sans** les fusions #18 → #21 : Fapshi, Next 16, Zod 4, Tailwind 4, refonte SEO, directions artistiques V17 → V19).
 
 ## 1. Résultat en bref
 

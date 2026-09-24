@@ -3,8 +3,8 @@
 Fait suite à `RAPPORT_FUSION_11.md`. Contrairement aux lots précédents,
 il ne s'agit pas d'un merge de plusieurs sources : le point de départ est
 `thrive-main__9_.zip`, la version du dépôt telle que vous l'avez ensuite
-travaillée vous-même (511 fichiers, déjà rebrandée **CRESYVA** — `name`
-dans `package.json`, `CresyvaBrand`, `.mkt-*`/`.adm-*` avec les couleurs
+travaillée vous-même (511 fichiers, déjà rebrandée **tokoo ** — `name`
+dans `package.json`, `tokoo Brand`, `.mkt-*`/`.adm-*` avec les couleurs
 de la nouvelle marque). Trois fonctionnalités ajoutées dessus, à votre
 demande.
 
@@ -81,7 +81,7 @@ droit — ce paragraphe a été mis à jour en conséquence.
 
 Les tenants (vitrines publiques sur sous-domaine/domaine custom) ne sont
 pas concernés — seule la landing marketing racine (celle du produit
-CRESYVA lui-même) affiche ce lien, une vitrine tenant n'a pas de notion
+tokoo  lui-même) affiche ce lien, une vitrine tenant n'a pas de notion
 de "mon tableau de bord" pour ses propres visiteurs.
 
 `e2e/marketing-landing.spec.ts` (parcours non-authentifié, sans compte de

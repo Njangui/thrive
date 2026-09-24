@@ -21,7 +21,7 @@ describe("ZernioAdapter.sendMessage — bouton CTA URL (corrigé 19/09/2026, con
       channel: "whatsapp",
       content: "Sac en cuir — 25 000 FCFA",
       externalThreadId: "conv_zernio_1",
-      buttons: [{ text: "Voir plus", url: "https://monsalon.cresyva.app/produits/sac-en-cuir" }],
+      buttons: [{ text: "Voir plus", url: "https://monsalon.tokoo .app/produits/sac-en-cuir" }],
     });
 
     expect(sendInboxMessage).toHaveBeenCalledWith("conv_zernio_1", {
@@ -29,7 +29,7 @@ describe("ZernioAdapter.sendMessage — bouton CTA URL (corrigé 19/09/2026, con
       interactive: {
         type: "cta_url",
         body: { text: "Sac en cuir — 25 000 FCFA" },
-        action: { name: "cta_url", parameters: { display_text: "Voir plus", url: "https://monsalon.cresyva.app/produits/sac-en-cuir" } },
+        action: { name: "cta_url", parameters: { display_text: "Voir plus", url: "https://monsalon.tokoo .app/produits/sac-en-cuir" } },
       },
     });
   });
@@ -63,8 +63,8 @@ describe("ZernioAdapter.sendMessage — bouton CTA URL (corrigé 19/09/2026, con
       content: "Deux produits avec leurs liens en texte",
       externalThreadId: "conv_zernio_1",
       buttons: [
-        { text: "Voir : A", url: "https://monsalon.cresyva.app/produits/a" },
-        { text: "Voir : B", url: "https://monsalon.cresyva.app/produits/b" },
+        { text: "Voir : A", url: "https://monsalon.tokoo .app/produits/a" },
+        { text: "Voir : B", url: "https://monsalon.tokoo .app/produits/b" },
       ],
     });
 

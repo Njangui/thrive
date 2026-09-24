@@ -32,7 +32,7 @@ describe("classifySource", () => {
   });
 
   it("une navigation interne (même hôte) n'est jamais une source externe", () => {
-    expect(classifySource({ referrer: "https://ma-boutique.cresyva.com/produits", ownHost: "ma-boutique.cresyva.com" }).source).toBe("Direct");
+    expect(classifySource({ referrer: "https://ma-boutique.tokoo .com/produits", ownHost: "ma-boutique.tokoo .com" }).source).toBe("Direct");
   });
 });
 

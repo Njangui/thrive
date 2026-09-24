@@ -2,7 +2,7 @@
 -- 0072_fix_plan_prices_drift.sql
 --
 -- (renommée depuis 0071_fix_plan_prices_drift.sql lors de la fusion
--- CRESYVA×THRIVE du 23/09/2026 — 0071 est désormais
+-- tokoo ×THRIVE du 23/09/2026 — 0071 est désormais
 -- ai_handoff_auto_resume, cf. son en-tête)
 --
 -- Lot 4 — diagnostic et correctif de dérive entre le prix par défaut

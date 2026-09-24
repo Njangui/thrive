@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCurrentAffiliate } from "@/application/services/affiliate-auth-service";
-import { CresyvaBrand } from "@/app/_components/cresyva-brand";
+import { tokoo Brand } from "@/app/_components/tokoo -brand";
 
 export default async function AffiliateLayout({ children }: { children: React.ReactNode }) {
   const affiliate = await getCurrentAffiliate();
@@ -9,13 +9,13 @@ export default async function AffiliateLayout({ children }: { children: React.Re
     <div className="min-h-screen bg-slate-50 text-navy-900">
       <header className="border-b border-slate-200 bg-white lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
-          <CresyvaBrand href="/" />
+          <tokoo Brand href="/" />
           {affiliate?.status === "active" && <Link href="/dashboard" className="text-xs font-semibold text-slate-600">Dashboard marchand</Link>}
         </div>
       </header>
       <div className="flex min-h-screen">
         <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">
-          <div className="mb-7 px-2"><CresyvaBrand href="/" dark /></div>
+          <div className="mb-7 px-2"><tokoo Brand href="/" dark /></div>
           <div className="mb-3 px-2 text-[10px] font-bold uppercase tracking-[.16em] text-white/35">Espace affilié</div>
           {affiliate?.status === "active" ? (
             <nav className="flex flex-1 flex-col gap-1">
@@ -36,7 +36,7 @@ export default async function AffiliateLayout({ children }: { children: React.Re
           ) : (
             <nav className="flex flex-1 flex-col gap-1">
               <Link href="/affiliate/apply" className="rounded-xl bg-primary/15 px-3 py-2.5 text-sm font-semibold text-white">Devenir affilié</Link>
-              <Link href="/" className="mt-auto rounded-xl px-3 py-2.5 text-sm font-medium text-white/55 hover:text-white">← Retour à CRESYVA</Link>
+              <Link href="/" className="mt-auto rounded-xl px-3 py-2.5 text-sm font-medium text-white/55 hover:text-white">← Retour à tokoo </Link>
             </nav>
           )}
         </aside>

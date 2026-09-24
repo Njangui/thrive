@@ -1,16 +1,16 @@
-# CRESYVA — Finance Super Admin & calculateur Zernio
+# tokoo  — Finance Super Admin & calculateur Zernio
 
 ## Ajouts
 
 - `/admin` enrichi : revenus SaaS, dépenses, résultat, abonnés par plan, graphiques 30 jours et estimation Zernio.
 - Nouvelle page `/admin/finance` : détail du coût Zernio, taux USD/FCFA de pilotage, saisie des dépenses internes et historique.
 - Nouvelle table `platform_expenses` via migration `0068_platform_finance_and_zernio_costs.sql`.
-- Le coût Zernio est calculé à partir des comptes Zernio actuellement connectés dans CRESYVA : `social_accounts`, `whatsapp_accounts` et les connexions dédiées aux groupes WhatsApp. Les chaînes YouTube ne sont pas comptées car CRESYVA les connecte via son intégration Google directe.
+- Le coût Zernio est calculé à partir des comptes Zernio actuellement connectés dans tokoo  : `social_accounts`, `whatsapp_accounts` et les connexions dédiées aux groupes WhatsApp. Les chaînes YouTube ne sont pas comptées car tokoo  les connecte via son intégration Google directe.
 - Tarification graduée intégrée : 2 comptes gratuits, comptes 3–10 à 6 USD, 11–100 à 3 USD, 101+ à 1 USD par compte/mois. Le calcul suit la tarification publiée par Zernio et ne mélange pas les frais d'usage supplémentaires.
 - Le taux USD/FCFA est un réglage de pilotage interne, modifiable depuis `/admin/finance`. Il ne prétend pas être le taux effectivement appliqué par la banque ou Zernio.
 - Les revenus SaaS proviennent des `subscription_payments` confirmés ; ils ne sont pas mélangés aux revenus des boutiques clientes.
 - Les dépenses saisies dans `platform_expenses` sont distinctes de l'estimation Zernio pour éviter de présenter une estimation comme une facture réellement payée.
-- L'ancienne pastille « S / CRESYVA Admin » du menu admin mobile a été remplacée par le vrai composant de marque CRESYVA.
+- L'ancienne pastille « S / tokoo  Admin » du menu admin mobile a été remplacée par le vrai composant de marque tokoo .
 - Les pages admin `Canaux` et `Paiements` ont été reprises avec les primitives visuelles de la console.
 - La page `Devenir affilié` explique maintenant explicitement l'existence des codes promo et, lorsqu'un affilié est actif, affiche ses codes issus de ses liens actifs.
 

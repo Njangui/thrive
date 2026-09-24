@@ -183,7 +183,7 @@ export function resolveMarketingOrigin(): string {
  *
  * Différence avec `resolveRequestOrigin()` : celle-ci renvoie l'hôte
  * effectivement visité. Or un tenant qui a branché un domaine custom vérifié
- * est joignable sur DEUX hôtes (`boutique.cresyva.com` ET `boutique.com`)
+ * est joignable sur DEUX hôtes (`boutique.tokoo .com` ET `boutique.com`)
  * avec un contenu identique — chacun se déclarait sa propre canonique, donc
  * deux versions concurrentes de chaque page dans l'index. Ici, les deux
  * pointent vers le domaine custom principal (`is_primary`, sinon le premier

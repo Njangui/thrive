@@ -71,7 +71,7 @@ Build : copie jetable avec polices stubées et identifiants Supabase factices, c
 ## 7. Limites — à lire
 
 - **Rien n'a été testé contre Zernio.** Les tests reposent sur ce que documente le projet : pour un groupe, l'identifiant de conversation est celui du groupe. Je n'ai pas vu un vrai payload de groupe.
-- **Détection par la base uniquement.** Un fil est reconnu comme groupe s'il figure dans `whatsapp_groups`. Aucun champ « est un groupe » n'est confirmé dans l'API Zernio et je n'en ai pas inventé. Un groupe jamais connecté dans CRESYVA ne serait pas reconnu s'il arrivait sur un numéro de messagerie (cas que la séparation des deux comptes rend improbable).
+- **Détection par la base uniquement.** Un fil est reconnu comme groupe s'il figure dans `whatsapp_groups`. Aucun champ « est un groupe » n'est confirmé dans l'API Zernio et je n'en ai pas inventé. Un groupe jamais connecté dans tokoo  ne serait pas reconnu s'il arrivait sur un numéro de messagerie (cas que la séparation des deux comptes rend improbable).
 - **Hypothèse sur le webhook** : les événements du numéro de groupes doivent arriver sur le même endpoint que le reste. À vérifier dans le tableau de bord Zernio (un webhook par clé API, ou par profil ?).
 - **Les messages reçus dans un groupe ne sont pas conservés** (il n'existe pas de boîte de groupe) : ils servent uniquement à activer le groupe. Décision produit à prendre si vous voulez les voir.
 - `activateGroupFromInboundConversation` est toujours appelée pour chaque message entrant (un `UPDATE` sans effet pour un client) : négligeable, non modifié.
