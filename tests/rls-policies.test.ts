@@ -94,6 +94,11 @@ const SERVICE_ROLE_ONLY_TABLES = new Set([
   "telegram_bots", // jeton (Vault) + secret de webhook par bot
   "youtube_accounts", // référence Vault des jetons OAuth
   "zernio_social_profiles", // profils Zernio additionnels (routage interne)
+  // Fusion V22 (0068/0069, finance plateforme) : dépenses internes et
+  // référentiel de coûts récurrents de CRESYVA, jamais des données tenant —
+  // lecture/écriture exclusivement via la console Super Admin (service role).
+  "platform_expenses",
+  "platform_costs",
 ]);
 
 /**

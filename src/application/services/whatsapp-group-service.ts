@@ -253,28 +253,16 @@ export async function listAvailableGroupsFromZernio(organizationId: string): Pro
  * s'exécutait, MAIS `handleInboundMessage`/`processInboundAutoReply`
  * s'exécutaient quand même juste après, sans aucune distinction.
  *
- * Limite honnête : ceci ne détecte QUE les groupes explicitement connectés
- * par le commerçant (`/dashboard/groups`) — Zernio n'expose, à notre
- * connaissance confirmée (voir types.ts), aucun champ `isGroup` sur
- * `message.received` permettant de repérer un groupe WhatsApp inconnu de
- * CRESYVA. Toujours `false` en cas d'erreur (best-effort : une panne de
- * lecture ne doit jamais bloquer un vrai message client).
+ * CORRECTIF (build V22) : cette vérification vivait ici en double avec
+ * `isWhatsAppGroupThread` (whatsapp-group-threads.ts) — même requête, même
+ * table, même comportement en erreur. `whatsapp-group-threads.ts` a été créé
+ * précisément pour être la version partagée, volontairement isolée pour
+ * rester importable depuis le webhook et les diffusions sans tirer ce
+ * fichier-ci (voir son en-tête) ; le webhook Zernio a été trouvé appelant
+ * encore CETTE version-ci (le doublon), ce qui la rendait "vivante" alors
+ * qu'elle n'aurait jamais dû l'être. Supprimée : voir
+ * whatsapp-group-threads.ts::isWhatsAppGroupThread, seule version désormais.
  */
-export async function isKnownWhatsAppGroupConversation(organizationId: string, conversationId: string): Promise<boolean> {
-  if (!organizationId || !conversationId) return false;
-  try {
-    const { data } = await getSupabaseServiceClient()
-      .from("whatsapp_groups")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .eq("external_id", conversationId)
-      .maybeSingle();
-    return Boolean(data);
-  } catch (error) {
-    console.warn(`isKnownWhatsAppGroupConversation(${organizationId}, ${conversationId}): lecture impossible, traité comme non-groupe.`, error);
-    return false;
-  }
-}
 
 export async function activateGroupFromInboundConversation(
   organizationId: string,

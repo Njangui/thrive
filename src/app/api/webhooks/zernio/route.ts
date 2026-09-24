@@ -19,7 +19,6 @@ import {
   resolveOrganizationIdBySocialProfile,
   resolveOrganizationIdByWhatsAppGroupsAccount,
 } from "@/infrastructure/providers/messaging/zernio/resolve-organization";
-import { isWhatsAppGroupThread } from "@/application/services/whatsapp-group-threads";
 import { handleInboundMessage } from "@/application/services/conversation-service";
 import { processInboundAutoReply } from "@/application/services/inbound-auto-reply-service";
 import { handleTikTokUrlResolvedWebhook } from "@/application/services/first-comment-service";
@@ -27,7 +26,8 @@ import { processCommentAutoReply } from "@/application/services/comment-auto-rep
 import { evaluateInboxChannel } from "@/application/services/inbox-channel-policy";
 import { resolveOrganizationIdBySocialAccount, setSocialAccountStatus } from "@/application/services/social-account-registry-service";
 import { getMessagingProviderForChannel } from "@/infrastructure/providers/registry";
-import { activateGroupFromInboundConversation, isKnownWhatsAppGroupConversation } from "@/application/services/whatsapp-group-service";
+import { activateGroupFromInboundConversation } from "@/application/services/whatsapp-group-service";
+import { isWhatsAppGroupThread } from "@/application/services/whatsapp-group-threads";
 import { handlePostStatusWebhook } from "@/application/services/marketing-service";
 import { handleAccountStatusChanged } from "@/application/services/provider-connection-service";
 import { notifyOrgAdmins } from "@/application/services/notification-service";
@@ -126,32 +126,41 @@ export async function POST(request: Request) {
     // doit rester non-résolu (null), jamais deviné.
     const isSocialAccountEvent = isZernioExternalPostEvent(rawEvent) || rawEvent.event === "comment.received";
 
-    const resolvedOrganizationId = isZernioPostEvent(rawEvent)
-      ? await resolveOrganizationIdByProviderPostId(
-          rawEvent.post?._id ?? rawEvent.post?.id ?? rawEvent.postId ?? "",
-        )
-      : isSocialAccountEvent
-        ? (await resolveOrganizationIdBySocialAccount(rawEvent.account.id)) ??
-          (rawEvent.account.profileId ? await resolveOrganizationIdBySocialProfile(rawEvent.account.profileId) : null)
-        : // CORRECTIF Lot 3 : account.connected/disconnected doivent rester
-          // routables quel que soit le statut ACTUEL de la ligne (c'est
-          // justement ce que l'event change) — voir resolve-organization.ts.
-          rawEvent.event === "account.connected" || rawEvent.event === "account.disconnected"
-          ? await resolveOrganizationIdByZernioAccountAnyStatus(rawEvent.account.id)
-          : (await resolveOrganizationIdByZernioAccount(rawEvent.account.id)) ??
-            // Lot O : comptes Messenger / Instagram (registre social_accounts).
-            (await resolveOrganizationIdBySocialAccount(rawEvent.account.id));
+    // Fusion V22 — correctif : le numéro Zernio DÉDIÉ aux groupes WhatsApp
+    // (`resolveOrganizationIdByWhatsAppGroupsAccount`, distinct du compte de
+    // messagerie) n'était jamais interrogé ici — ses événements étaient
+    // systématiquement ignorés faute de tenant résolu, et l'activation de
+    // groupe (juste plus bas) ne se déclenchait donc jamais. `isGroupsAccountEvent`
+    // trace le fait que la résolution vient bien de ce compte dédié : TOUT
+    // message qui en provient est un message de groupe, indépendamment de
+    // whatsapp_groups (un groupe pas encore "connecté" par le marchand doit
+    // quand même être traité comme un groupe, jamais comme un client).
+    let organizationId: string | null;
+    let isGroupsAccountEvent = false;
 
-    // Numéro DÉDIÉ aux groupes WhatsApp (`provider_type = 'whatsapp_groups'`, Cloud API) : compte Zernio
-    // distinct de la messagerie, jamais reconnu par les résolveurs ci-dessus. Ses événements doivent
-    // être routés (c'est ce qui active un groupe) mais restent des événements de GROUPE, pas de client.
-    const eventAccountId = (rawEvent as { account?: { id?: string } }).account?.id;
-    const groupsOrganizationId =
-      !resolvedOrganizationId && eventAccountId && !isZernioPostEvent(rawEvent) && !isSocialAccountEvent
-        ? await resolveOrganizationIdByWhatsAppGroupsAccount(eventAccountId)
-        : null;
-    const organizationId = resolvedOrganizationId ?? groupsOrganizationId;
-    const fromGroupsAccount = !resolvedOrganizationId && groupsOrganizationId !== null;
+    if (isZernioPostEvent(rawEvent)) {
+      organizationId = await resolveOrganizationIdByProviderPostId(
+        rawEvent.post?._id ?? rawEvent.post?.id ?? rawEvent.postId ?? "",
+      );
+    } else if (isSocialAccountEvent) {
+      organizationId =
+        (await resolveOrganizationIdBySocialAccount(rawEvent.account.id)) ??
+        (rawEvent.account.profileId ? await resolveOrganizationIdBySocialProfile(rawEvent.account.profileId) : null);
+    } else if (rawEvent.event === "account.connected" || rawEvent.event === "account.disconnected") {
+      // CORRECTIF Lot 3 : account.connected/disconnected doivent rester
+      // routables quel que soit le statut ACTUEL de la ligne (c'est
+      // justement ce que l'event change) — voir resolve-organization.ts.
+      organizationId = await resolveOrganizationIdByZernioAccountAnyStatus(rawEvent.account.id);
+    } else {
+      organizationId =
+        (await resolveOrganizationIdByZernioAccount(rawEvent.account.id)) ??
+        // Lot O : comptes Messenger / Instagram (registre social_accounts).
+        (await resolveOrganizationIdBySocialAccount(rawEvent.account.id));
+      if (!organizationId) {
+        organizationId = await resolveOrganizationIdByWhatsAppGroupsAccount(rawEvent.account.id);
+        isGroupsAccountEvent = organizationId !== null;
+      }
+    }
 
     if (!organizationId) {
       console.warn(`Zernio webhook: aucun tenant résolu pour l'événement ${rawEvent.event} (${externalEventId}), ignoré.`);
@@ -212,17 +221,15 @@ export async function POST(request: Request) {
         await activateGroupFromInboundConversation(organizationId, rawEvent.conversation.id);
         // Lot P : un message de groupe WhatsApp connecté (diffusion) ne doit
         // jamais déclencher de réponse automatique — voir
-        // whatsapp-group-service.ts::isKnownWhatsAppGroupConversation.
-        isGroupMessage = await isKnownWhatsAppGroupConversation(organizationId, rawEvent.conversation.id);
-      }
-
-      // Numéro dédié aux groupes (fusion #23) : un message reçu ici vient TOUJOURS d'un groupe, jamais
-      // d'un client en tête-à-tête. L'activation ci-dessus est son seul effet utile : ni contact, ni
-      // conversation, ni réponse automatique (l'IA répondrait sinon à tout le groupe), ni alerte
-      // « message sans réponse ».
-      if (fromGroupsAccount && rawEvent.event === "message.received") {
-        await markWebhookEvent(externalEventId, "processed");
-        continue;
+        // whatsapp-group-threads.ts::isWhatsAppGroupThread. Deux façons de
+        // le savoir : (1) l'événement vient du compte Zernio DÉDIÉ aux
+        // groupes (isGroupsAccountEvent, toujours vrai dans ce cas) ; (2) un
+        // groupe reçu par erreur sur le compte de messagerie standard, en
+        // défense en profondeur — uniquement pertinent pour WhatsApp, les
+        // autres canaux (Messenger/Instagram) n'ont pas de notion de groupe.
+        isGroupMessage =
+          isGroupsAccountEvent ||
+          (rawEvent.account.platform === "whatsapp" && (await isWhatsAppGroupThread(organizationId, rawEvent.conversation.id)));
       }
 
       const domainEvent = mapZernioEventToDomainEvent(rawEvent, organizationId);
@@ -242,10 +249,11 @@ export async function POST(request: Request) {
         domainEvent.payload.channel === "whatsapp" &&
         (await isWhatsAppGroupThread(organizationId, domainEvent.payload.externalThreadId))
       ) {
-        // Défense en profondeur (fusion #23) : un fil dont l'identifiant est celui d'un groupe WhatsApp
-        // connecté n'est pas une conversation client, même reçu par un compte de messagerie normal —
-        // couvre les cas que le contrôle isKnownWhatsAppGroupConversation ci-dessus ne verrait pas
-        // (ex. conversation.id absent du payload de cet événement précis).
+        // Défense en profondeur (fusion #23, restaurée lors de la fusion CRESYVA×THRIVE
+        // du 23/09/2026) : un fil dont l'identifiant est celui d'un groupe WhatsApp connecté
+        // n'est pas une conversation client, même reçu par un compte de messagerie normal —
+        // couvre les cas que le contrôle isGroupMessage ci-dessus ne verrait pas (ex.
+        // rawEvent.conversation.id absent du payload de cet événement précis).
         console.info(`Zernio webhook: message du groupe WhatsApp ${domainEvent.payload.externalThreadId} (org ${organizationId}) — ignoré, jamais traité comme un client.`);
         await markWebhookEvent(externalEventId, "processed");
         continue;

@@ -77,16 +77,16 @@ export default async function FinancePage({
       {success && <p className="adm-alert-success">{success}</p>}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="adm-card"><p className="adm-label">Chiffre d'affaires</p><p className="adm-value mt-2">{format(financial.revenue30d)}</p><p className="mt-1 text-xs adm-muted">Revenus reconnus</p></div>
+        <div className="adm-card"><p className="adm-label">Chiffre d&apos;affaires</p><p className="adm-value mt-2">{format(financial.revenue30d)}</p><p className="mt-1 text-xs adm-muted">Revenus reconnus</p></div>
         <div className="adm-card"><p className="adm-label">Bénéfice brut</p><p className={`adm-value mt-2 ${financial.grossProfit30d >= 0 ? "text-success-600" : "text-danger-600"}`}>{format(financial.grossProfit30d)}</p><p className="mt-1 text-xs adm-muted">Marge brute : {margin(financial.grossMarginPct)}</p></div>
-        <div className="adm-card"><p className="adm-label">Charges d'exploitation</p><p className="adm-value mt-2">{format(financial.operatingExpenses30d)}</p><p className="mt-1 text-xs adm-muted">Hors coûts directs</p></div>
+        <div className="adm-card"><p className="adm-label">Charges d&apos;exploitation</p><p className="adm-value mt-2">{format(financial.operatingExpenses30d)}</p><p className="mt-1 text-xs adm-muted">Hors coûts directs</p></div>
         <div className="adm-card"><p className="adm-label">Bénéfice net</p><p className={`adm-value mt-2 ${financial.netProfit30d >= 0 ? "text-success-600" : "text-danger-600"}`}>{format(financial.netProfit30d)}</p><p className="mt-1 text-xs adm-muted">Marge nette : {margin(financial.netMarginPct)}</p></div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="adm-card min-w-0 overflow-hidden">
           <div className="flex items-start justify-between gap-3"><div><p className="adm-eyebrow">Performance</p><h2 className="adm-heading-2 mt-1">CA, bénéfice brut et bénéfice net</h2></div><span className="adm-label">30 jours</span></div>
-          <div className="mt-4"><AppLineChart points={financial.revenueTrend30d.map((p, i) => ({ label: p.label, value: p.value }))} /></div>
+          <div className="mt-4"><AppLineChart points={financial.revenueTrend30d.map((p) => ({ label: p.label, value: p.value }))} /></div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-xs"><div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">CA</span><strong className="mt-1 block">{format(financial.revenue30d)}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">Coût des ventes</span><strong className="mt-1 block">{format(financial.cogs30d)}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">Encaissements</span><strong className="mt-1 block">{format(financial.cashCollected30d)}</strong></div></div>
         </div>
         <div className="adm-card"><p className="adm-eyebrow">Santé financière</p><h2 className="adm-heading-2 mt-1">Les chiffres à surveiller</h2><div className="mt-4 space-y-3"><div className="flex justify-between gap-4 border-b border-slate-100 pb-3"><span className="text-sm text-slate-500">Marge brute</span><strong>{margin(financial.grossMarginPct)}</strong></div><div className="flex justify-between gap-4 border-b border-slate-100 pb-3"><span className="text-sm text-slate-500">Marge nette</span><strong>{margin(financial.netMarginPct)}</strong></div><div className="flex justify-between gap-4 border-b border-slate-100 pb-3"><span className="text-sm text-slate-500">Créances ouvertes</span><strong>{format(financial.receivablesOpen)}</strong></div><div className="flex justify-between gap-4"><span className="text-sm text-slate-500">Créances en retard</span><strong className="text-danger-600">{format(financial.receivablesOverdue)}</strong></div></div></div>
@@ -103,7 +103,7 @@ export default async function FinancePage({
 
       <div className="adm-card overflow-x-auto">
         <div className="flex items-center justify-between gap-3"><div><p className="adm-eyebrow">Détail</p><h2 className="adm-heading-2 mt-1">Dernières écritures</h2></div><span className="adm-badge-neutral">20 dernières</span></div>
-        {entries.length === 0 ? <p className="py-8 text-sm adm-muted">Aucune écriture pour l'instant.</p> : <table className="adm-table mt-3"><thead><tr><th>Date</th><th>Libellé</th><th>Montant</th></tr></thead><tbody>{entries.map((e) => <tr key={`${e.type}-${e.id}`}><td className="adm-muted">{e.date}</td><td>{e.label}</td><td className={`text-right font-semibold ${e.type === "revenue" ? "text-success-600" : "text-danger-600"}`}>{e.type === "revenue" ? "+" : "-"}{format(e.amount)}</td></tr>)}</tbody></table>}
+        {entries.length === 0 ? <p className="py-8 text-sm adm-muted">Aucune écriture pour l&apos;instant.</p> : <table className="adm-table mt-3"><thead><tr><th>Date</th><th>Libellé</th><th>Montant</th></tr></thead><tbody>{entries.map((e) => <tr key={`${e.type}-${e.id}`}><td className="adm-muted">{e.date}</td><td>{e.label}</td><td className={`text-right font-semibold ${e.type === "revenue" ? "text-success-600" : "text-danger-600"}`}>{e.type === "revenue" ? "+" : "-"}{format(e.amount)}</td></tr>)}</tbody></table>}
       </div>
     </div>
   );

@@ -41,7 +41,6 @@ function monthKey(d: Date): string { return d.toISOString().slice(0, 7); }
 
 export async function getTenantFinancialOverview(organizationId: string): Promise<TenantFinancialOverview> {
   const supabase = getSupabaseServiceClient();
-  const now = new Date();
   const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const since12 = new Date(); since12.setDate(1); since12.setHours(0, 0, 0, 0); since12.setMonth(since12.getMonth() - 11);
 

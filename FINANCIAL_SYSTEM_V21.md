@@ -44,7 +44,7 @@ Les dépenses effectivement payées restent dans `platform_expenses` et seules c
 
 ## 3. Zernio
 
-Le coût Zernio est calculé automatiquement à partir des comptes connectés, avec les paliers officiels actuellement publiés : 2 comptes gratuits, puis 6 USD pour les comptes 3–10, 3 USD pour les comptes 11–100 et 1 USD pour chaque compte à partir du 101e, sans plafond annoncé dans le barème self-service actuel. Les changements de connexion sont proratisés au jour.
+Le coût Zernio est calculé automatiquement à partir des comptes connectés, avec les paliers officiels actuellement publiés : 2 comptes gratuits, puis 6 USD pour les comptes 3–10, 3 USD pour les comptes 11–100 et 1 USD pour les comptes 101–2 000. Au-delà de 2 000, Zernio indique une tarification custom.
 
 Les frais variables spécifiques (numéros, X/Twitter, publicité, etc.) restent séparés et doivent être enregistrés lorsqu'ils apparaissent sur la facture.
 

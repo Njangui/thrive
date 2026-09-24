@@ -77,6 +77,60 @@ export function AppLineChart({
   );
 }
 
+export function AppBarChart({
+  items,
+  height = 200,
+}: {
+  items: { label: string; value: number }[];
+  height?: number;
+}) {
+  const width = 600;
+  const paddingX = 8;
+  const paddingTop = 16;
+  const paddingBottom = 28;
+  const plotHeight = height - paddingTop - paddingBottom;
+  const plotWidth = width - paddingX * 2;
+
+  if (items.length === 0) {
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" role="img" aria-label="Aucune donnée">
+        <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={12} fill="#64748B">
+          Pas encore de données
+        </text>
+      </svg>
+    );
+  }
+
+  const max = Math.max(...items.map((i) => i.value), 1);
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((t) => paddingTop + plotHeight * (1 - t));
+
+  const slot = plotWidth / items.length;
+  const barWidth = Math.min(slot * 0.55, 56);
+
+  const bars = items.map((item, i) => {
+    const barHeight = max > 0 ? (item.value / max) * plotHeight : 0;
+    const x = paddingX + slot * i + (slot - barWidth) / 2;
+    const y = paddingTop + plotHeight - barHeight;
+    return { ...item, x, y, barHeight, centerX: paddingX + slot * i + slot / 2 };
+  });
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none" role="img" aria-label="Répartition par catégorie">
+      {gridLines.map((y) => (
+        <line key={y} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#0F172A" strokeOpacity={0.05} strokeWidth={1} />
+      ))}
+      {bars.map((b) => (
+        <rect key={b.label} x={b.x} y={b.y} width={barWidth} height={Math.max(b.barHeight, 1)} rx={4} fill="#00D1A0" />
+      ))}
+      {bars.map((b) => (
+        <text key={`${b.label}-label`} x={b.centerX} y={height - 8} textAnchor="middle" fontSize={11} fill="#64748B">
+          {b.label.length > 12 ? `${b.label.slice(0, 11)}…` : b.label}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
 export function AppDonutChart({
   segments,
   centerLabel,
@@ -138,49 +192,5 @@ export function AppDonutChart({
         ))}
       </ul>
     </div>
-  );
-}
-
-export function AppBarChart({
-  items,
-}: {
-  items: { label: string; value: number }[];
-}) {
-  const width = 600;
-  const height = 220;
-  const padding = { top: 18, right: 12, bottom: 42, left: 12 };
-  const chartHeight = height - padding.top - padding.bottom;
-  const chartWidth = width - padding.left - padding.right;
-  const max = Math.max(...items.map((item) => item.value), 1);
-  const slot = items.length ? chartWidth / items.length : chartWidth;
-  const barWidth = Math.min(72, slot * 0.56);
-
-  if (!items.length) {
-    return <div className="grid min-h-[220px] place-items-center text-sm adm-muted">Pas encore de données.</div>;
-  }
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" role="img" aria-label="Répartition des abonnés par plan">
-      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-        const y = padding.top + chartHeight - chartHeight * ratio;
-        return <line key={ratio} x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="#0F172A" strokeOpacity={0.05} />;
-      })}
-      {items.map((item, index) => {
-        const barHeight = (item.value / max) * chartHeight;
-        const x = padding.left + index * slot + (slot - barWidth) / 2;
-        const y = padding.top + chartHeight - barHeight;
-        return (
-          <g key={item.label}>
-            <rect x={x} y={y} width={barWidth} height={Math.max(barHeight, 2)} rx={8} fill="#00D1A0" opacity={0.9} />
-            <text x={x + barWidth / 2} y={Math.max(y - 7, 12)} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0F172A">
-              {item.value}
-            </text>
-            <text x={x + barWidth / 2} y={height - 14} textAnchor="middle" fontSize={10.5} fill="#64748B">
-              {item.label.length > 13 ? `${item.label.slice(0, 12)}…` : item.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
   );
 }

@@ -15,9 +15,8 @@ describe("calculateZernioMonthlyCost", () => {
     expect(calculateZernioMonthlyCost(100).netMonthlyUsd).toBe(318);
     expect(calculateZernioMonthlyCost(101).netMonthlyUsd).toBe(319);
     expect(calculateZernioMonthlyCost(2000).netMonthlyUsd).toBe(2218);
-    expect(calculateZernioMonthlyCost(2001).over2000Accounts).toBe(1);
-    expect(calculateZernioMonthlyCost(2001).netMonthlyUsd).toBe(2219);
-    expect(calculateZernioMonthlyCost(10000).netMonthlyUsd).toBe(10218);
+    expect(calculateZernioMonthlyCost(2001).customAccounts).toBe(1);
+    expect(calculateZernioMonthlyCost(2001).netMonthlyUsd).toBe(2218);
   });
 
   it("does not charge the free credit twice", () => {

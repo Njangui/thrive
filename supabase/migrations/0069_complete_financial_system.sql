@@ -11,42 +11,42 @@
 -- 4) Les coûts récurrents de plateforme sont des budgets/engagements
 --    distincts des dépenses réellement payées.
 
-alter table public.order_items
+alter table order_items
   add column if not exists unit_cost numeric(14,2);
 
-update public.order_items oi
+update order_items oi
 set unit_cost = coalesce(p.cost_price, 0)
-from public.products p
+from products p
 where oi.product_id = p.id
   and oi.unit_cost is null;
 
-update public.order_items
+update order_items
 set unit_cost = 0
 where unit_cost is null;
 
-alter table public.order_items
+alter table order_items
   alter column unit_cost set default 0,
   alter column unit_cost set not null;
 
-comment on column public.order_items.unit_cost is
+comment on column order_items.unit_cost is
   'Coût unitaire figé pour le calcul historique du COGS et de la marge. '
   'Renseigné à la création de la commande depuis products.cost_price.';
 
-alter table public.expenses
+alter table expenses
   add column if not exists expense_class text not null default 'operating'
     check (expense_class in ('cost_of_revenue', 'operating', 'tax'));
 
 create index if not exists idx_expenses_org_class_date
-  on public.expenses(organization_id, expense_class, expense_date desc);
+  on expenses(organization_id, expense_class, expense_date desc);
 
-alter table public.platform_expenses
+alter table platform_expenses
   add column if not exists expense_class text not null default 'operating'
     check (expense_class in ('cost_of_revenue', 'operating', 'tax'));
 
 create index if not exists idx_platform_expenses_class_date
-  on public.platform_expenses(expense_class, expense_date desc);
+  on platform_expenses(expense_class, expense_date desc);
 
-create table if not exists public.platform_costs (
+create table if not exists platform_costs (
   id uuid primary key default gen_random_uuid(),
   provider text not null,
   label text not null,
@@ -75,16 +75,16 @@ create table if not exists public.platform_costs (
   check (ends_on is null or ends_on >= starts_on)
 );
 
-create index if not exists idx_platform_costs_active on public.platform_costs(active, starts_on, ends_on);
-create index if not exists idx_platform_costs_category on public.platform_costs(category);
+create index if not exists idx_platform_costs_active on platform_costs(active, starts_on, ends_on);
+create index if not exists idx_platform_costs_category on platform_costs(category);
 
-alter table public.platform_costs enable row level security;
+alter table platform_costs enable row level security;
 
 create trigger trg_platform_costs_updated_at
-  before update on public.platform_costs
+  before update on platform_costs
   for each row execute function public.set_updated_at();
 
-comment on table public.platform_costs is
+comment on table platform_costs is
   'Référentiel des coûts récurrents/engagements de la plateforme. '
   'Ne remplace pas platform_expenses : les dépenses réellement payées '
   'restent enregistrées séparément pour le calcul du résultat réalisé.';
@@ -92,7 +92,7 @@ comment on table public.platform_costs is
 -- Checklist initiale : aucun montant n'est inventé. Ces lignes rendent les
 -- principaux postes visibles dès la première ouverture du cockpit ; le
 -- Super Admin renseigne ensuite le budget réel du contrat/facture.
-insert into public.platform_costs (provider, label, category, cost_class, billing_type, billing_cycle, monthly_budget_fcfa, notes)
+insert into platform_costs (provider, label, category, cost_class, billing_type, billing_cycle, monthly_budget_fcfa, notes)
 select * from (values
   ('Vercel', 'Hébergement / déploiement', 'hosting', 'cost_of_revenue', 'usage', 'monthly', null::numeric, 'Configurer le budget réel ou le montant moyen mensuel.'),
   ('Supabase', 'Base de données PostgreSQL', 'database', 'cost_of_revenue', 'usage', 'monthly', null::numeric, 'Inclut compute, base et éventuels dépassements.'),
@@ -109,6 +109,6 @@ select * from (values
   ('CRESYVA', 'Salaires / rémunérations', 'salary', 'operating', 'fixed', 'monthly', null::numeric, 'Renseigner uniquement lorsque ce coût est réellement engagé.')
 ) as seed(provider, label, category, cost_class, billing_type, billing_cycle, monthly_budget_fcfa, notes)
 where not exists (
-  select 1 from public.platform_costs existing
+  select 1 from platform_costs existing
   where existing.provider = seed.provider and existing.label = seed.label
 );

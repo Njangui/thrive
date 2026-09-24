@@ -45,26 +45,10 @@ export interface TelegramAudio { file_id: string; file_unique_id: string; durati
 export interface TelegramVideo { file_id: string; file_unique_id: string; width: number; height: number; duration: number; mime_type?: string; file_size?: number; }
 export interface TelegramVoice { file_id: string; file_unique_id: string; duration: number; mime_type?: string; file_size?: number; }
 export interface TelegramFile { file_id: string; file_unique_id: string; file_size?: number; file_path?: string; }
-/** core.telegram.org/bots/api#messageentity — sous-ensemble utilisé par isDirectedAtBot (mapper.ts) : commande (`/start`) et mention (`@bot_username`) dans le texte d'un message de GROUPE. */
+
+/** core.telegram.org/bots/api#messageentity — sert uniquement à repérer une commande (`/xxx`) ou une mention (`@bot`) dans le texte, voir mapper.ts::isDirectedAtBot. */
 export interface TelegramMessageEntity {
-  type:
-    | "mention"
-    | "hashtag"
-    | "cashtag"
-    | "bot_command"
-    | "url"
-    | "email"
-    | "phone_number"
-    | "bold"
-    | "italic"
-    | "underline"
-    | "strikethrough"
-    | "spoiler"
-    | "code"
-    | "pre"
-    | "text_link"
-    | "text_mention"
-    | "custom_emoji";
+  type: string;
   offset: number;
   length: number;
 }
@@ -81,16 +65,10 @@ export interface TelegramMessage {
   audio?: TelegramAudio;
   video?: TelegramVideo;
   voice?: TelegramVoice;
-  /** Présent uniquement sur un message texte contenant une commande, une mention, un lien, etc. — voir isDirectedAtBot (mapper.ts). */
-  entities?: TelegramMessageEntity[];
-  /**
-   * Message auquel celui-ci répond (bouton "Répondre" Telegram). Type
-   * `TelegramMessage` complet côté API réelle (récursif) — ici on ne
-   * déclare que ce qui est réellement consommé (`from`) pour éviter un
-   * type récursif complexe non nécessaire ; élargir si un futur besoin
-   * lit d'autres champs de reply_to_message.
-   */
+  /** Message auquel celui-ci répond (reply) — n'inclut pas son propre `reply_to_message` côté API réelle ; voir mapper.ts::isDirectedAtBot (réponse directe à un message du bot). */
   reply_to_message?: { message_id: number; from?: TelegramUser };
+  /** Commandes / mentions repérées dans `text` — voir mapper.ts::isDirectedAtBot. */
+  entities?: TelegramMessageEntity[];
 }
 
 /** Une "update" telle que livrée au webhook tenant. `update_id` n'est PAS globalement unique (propre à chaque bot tenant) — voir resolve-organization.ts/webhook-handler.ts pour la clé d'idempotence réellement utilisée. */

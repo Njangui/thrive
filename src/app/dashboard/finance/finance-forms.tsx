@@ -48,7 +48,7 @@ export function FinanceForms({
         <input name="category" placeholder="Ex : transport, loyer..." className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />
         <select name="expenseClass" defaultValue="operating" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm">
           <option value="cost_of_revenue">Coût direct / achat revendu</option>
-          <option value="operating">Charge d'exploitation</option>
+          <option value="operating">Charge d&apos;exploitation</option>
           <option value="tax">Impôt / taxe</option>
         </select>
         <input name="description" placeholder="Description (optionnel)" className="rounded-xl border border-navy-900/10 px-3 py-2 text-sm" />

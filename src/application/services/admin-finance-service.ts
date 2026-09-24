@@ -26,7 +26,7 @@ export interface ZernioCostBreakdown {
   tier6Accounts: number;
   tier3Accounts: number;
   tier1Accounts: number;
-  over2000Accounts: number;
+  customAccounts: number;
   grossMonthlyUsd: number;
   freeCreditUsd: number;
   netMonthlyUsd: number;
@@ -37,12 +37,13 @@ export function calculateZernioMonthlyCost(connectedAccounts: number): ZernioCos
   const tier6Accounts = Math.max(0, Math.min(accounts, 10) - 2);
   const tier3Accounts = Math.max(0, Math.min(accounts, 100) - 10);
   const tier1Accounts = Math.max(0, Math.min(accounts, 2000) - 100);
-  const over2000Accounts = Math.max(0, accounts - 2000);
-  // Zernio's current pricing remains $1/account from account 101 onward,
-  // including accounts above 2,000. The calculator is a run-rate estimate
-  // for the current connected-account count; Zernio itself prorates changes
-  // by day during the month.
-  const grossMonthlyUsd = tier6Accounts * 6 + tier3Accounts * 3 + tier1Accounts + over2000Accounts;
+  // FUSION 23/09/2026 (issue de la session « build V22 ») : au-delà de 2000
+  // comptes, Zernio passe à une tarification négociée/custom, plus le tarif
+  // standard 1 $/compte — non comptée dans grossMonthlyUsd tant que le tarif
+  // réel n'est pas connu (mieux vaut sous-estimer et vérifier la facture que
+  // d'inventer un chiffre). Couvert par un test dédié.
+  const customAccounts = Math.max(0, accounts - 2000);
+  const grossMonthlyUsd = tier6Accounts * 6 + tier3Accounts * 3 + tier1Accounts;
   return {
     connectedAccounts: accounts,
     freeAccounts: Math.min(accounts, 2),
@@ -50,9 +51,9 @@ export function calculateZernioMonthlyCost(connectedAccounts: number): ZernioCos
     tier6Accounts,
     tier3Accounts,
     tier1Accounts,
-    over2000Accounts,
+    customAccounts,
     grossMonthlyUsd,
-    freeCreditUsd: 12,
+    freeCreditUsd: Math.min(accounts, 2) * 6,
     netMonthlyUsd: grossMonthlyUsd,
   };
 }

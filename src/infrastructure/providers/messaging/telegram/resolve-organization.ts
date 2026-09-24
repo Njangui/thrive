@@ -18,7 +18,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
  */
 export async function resolveOrganizationIdByTelegramWebhookToken(
   webhookPathToken: string,
-): Promise<{ organizationId: string; webhookSecret: string; botId: string; botTelegramId: number | null; botUsername: string } | null> {
+): Promise<{ organizationId: string; webhookSecret: string; botId: string; botTelegramId: number; botUsername: string } | null> {
   const supabase = getSupabaseServiceClient();
 
   // Lot O : un bot par ligne de `telegram_bots` (plusieurs bots par organisation).
@@ -39,14 +39,11 @@ export async function resolveOrganizationIdByTelegramWebhookToken(
     organizationId: data.organization_id as string,
     webhookSecret: data.webhook_secret as string,
     botId: data.id as string,
-    // Extension groupe : identité Telegram du bot lui-même (pas notre id
-    // interne `botId` ci-dessus), pour détecter mention/réponse dans un
-    // groupe — voir mapper.ts::isDirectedAtBot. `bot_id` (colonne
-    // `telegram_bots.bot_id`, bigint) est nullable en base : un bot
-    // connecté avant l'introduction de ce champ peut ne pas l'avoir —
-    // dans ce cas `directedAtBot` retombe uniquement sur la détection par
-    // commande/mention (jamais sur la réponse-au-bot), jamais une erreur.
-    botTelegramId: (data.bot_id as number | null) ?? null,
+    // NB : distinct de `botId` ci-dessus (l'UUID de la ligne) — `bot_id` est
+    // l'identifiant numérique Telegram du bot (celui renvoyé par getMe(),
+    // voir telegram-channel-service.ts::connectTelegramBot). Utilisé UNIQUEMENT
+    // par mapper.ts::isDirectedAtBot pour détecter une réponse directe au bot.
+    botTelegramId: data.bot_id as number,
     botUsername: data.bot_username as string,
   };
 }
