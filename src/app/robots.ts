@@ -12,7 +12,7 @@ import { CRAWL_BLOCKED_PATHS, PLATFORM_ONLY_PATHS } from "@/lib/request-surface"
  * par `src/proxy.ts` (son matcher n'exclut que
  * `_next/static|_next/image|favicon.ico`).
  *
- *  - `marketing`    : la landing tokoo , /tarifs, /devenir-affilie… sont
+ *  - `marketing`    : la landing flexco , /tarifs, /devenir-affilie… sont
  *                     ouverts à l'exploration. Avant l'audit SEO de
  *                     sept. 2026, ce cas retombait dans « pas de tenant »
  *                     et renvoyait `Disallow: /` : toute la plateforme

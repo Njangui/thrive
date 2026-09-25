@@ -156,7 +156,7 @@ uniquement** dans cette itération — les services n'ont pas de
 - Relecture de chaque nouvel appel de fonction contre la signature réelle
   de la fonction appelée (noms de champs, ordre des paramètres).
 - Vérification que toutes les classes CSS réutilisées (`adm-*`,
-  `tokoo -*`) existent bien dans `globals.css`.
+  `flexco -*`) existent bien dans `globals.css`.
 
 ## Non vérifié — à faire avant mise en production
 

@@ -76,7 +76,7 @@ export interface SocialAnalyticsEntry {
  * d'un profil personnel ne sont pas exposés par l'API de la plateforme
  * elle-même (limite plateforme, pas Zernio). `canReply`/`canHide` viennent
  * tels quels de la réponse Zernio (elle-même dérivée des permissions
- * réelles du compte connecté) — jamais recalculés côté tokoo .
+ * réelles du compte connecté) — jamais recalculés côté flexco .
  */
 export interface SocialComment {
   id: string;

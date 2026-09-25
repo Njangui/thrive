@@ -76,7 +76,7 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
 
   return (
     <div className="flex flex-col gap-6">
-      <AdminSectionHeader title="Finance plateforme" description="Pilotez le chiffre d'affaires tokoo , les coûts de revient, les charges, la marge et le bénéfice net." action={<Link href="/admin/payments" className="adm-btn-secondary">Paiements</Link>} />
+      <AdminSectionHeader title="Finance plateforme" description="Pilotez le chiffre d'affaires flexco , les coûts de revient, les charges, la marge et le bénéfice net." action={<Link href="/admin/payments" className="adm-btn-secondary">Paiements</Link>} />
       {error && <div className="adm-alert-danger">{error}</div>}
       {success && <div className="adm-alert-success">{success === "cost" ? "Coût récurrent enregistré." : success === "cost-update" ? "Budget du coût mis à jour." : success === "rate" ? "Taux USD/FCFA enregistré." : "Opération enregistrée."}</div>}
 

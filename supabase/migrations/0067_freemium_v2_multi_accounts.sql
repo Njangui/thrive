@@ -58,7 +58,7 @@ insert into plan_entitlements (plan_key, entitlement_key, limit_value) values
   ('free',    'custom_domain',  0),
   ('starter', 'custom_domain',  1),
   ('pro',     'custom_domain',  1),
-  -- Badge « Site propulsé par tokoo  » retirable en Pro uniquement.
+  -- Badge « Site propulsé par flexco  » retirable en Pro uniquement.
   ('free',    'remove_branding', 0),
   ('starter', 'remove_branding', 0),
   ('pro',     'remove_branding', 1),

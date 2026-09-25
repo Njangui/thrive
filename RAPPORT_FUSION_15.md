@@ -1,4 +1,4 @@
-# Rapport de fusion #15 — trois livraisons sur tokoo -fusionne-14
+# Rapport de fusion #15 — trois livraisons sur flexco -fusionne-14
 
 Fait suite à `RAPPORT_FUSION_14.md` (dont l'addendum décrit le bug de
 redirection et l'hypothèse des migrations non appliquées). Trois archives
@@ -23,12 +23,12 @@ fichiers touchés d'un côté sont retrouvés intacts de l'autre (510 fichiers
 d'ancêtre). Ce qui permet de faire de vraies **fusions à trois voies**
 (`git merge-file`, base = ancêtre) au lieu de raisonner à partir de diffs :
 
-- fichier touché d'un seul côté (tokoo  = ancêtre) → version de la livraison ;
+- fichier touché d'un seul côté (flexco  = ancêtre) → version de la livraison ;
 - fichier touché des deux côtés → fusion à trois voies, chaque conflit tranché
   à la main.
 
 L'arbre de départ est celui de #14 **plus** les correctifs de redirection (faits
-après la livraison de `tokoo -fusionne-14.zip`, donc absents de ce zip-là et
+après la livraison de `flexco -fusionne-14.zip`, donc absents de ce zip-là et
 présents dans celui-ci).
 
 ## 1. `fix-redirect-bug.zip` — déjà couvert, rien à importer
@@ -77,15 +77,15 @@ automatique du numéro et **suspension** des groupes qu'il alimente.
 
 **Fichiers** (14 fichiers de code ; `package-lock.json` et
 `tsconfig.tsbuildinfo` de l'archive non repris — `package.json` est inchangé côté
-WhatsApp, le `package-lock.json` tokoo  est conservé) :
+WhatsApp, le `package-lock.json` flexco  est conservé) :
 
 | Traitement | Fichiers |
 |---|---|
-| Repris tels quels (tokoo  = ancêtre) | `zernio/client.ts`, `zernio-channel-service.ts`, `providers/registry.ts`, `admin-addons-service.ts`, `admin/addons/page.tsx`, `admin/numbers/page.tsx` |
+| Repris tels quels (flexco  = ancêtre) | `zernio/client.ts`, `zernio-channel-service.ts`, `providers/registry.ts`, `admin-addons-service.ts`, `admin/addons/page.tsx`, `admin/numbers/page.tsx` |
 | Nouveaux | `phone-number-rental-service.ts`, `api/cron/process-phone-number-renewals/route.ts`, migration |
 | Fusion à trois voies, sans conflit | `dashboard/groups/page.tsx` (+ mon correctif de redirection), `whatsapp-group-service.ts`, `subscription-payment-service.ts` |
 | Fusion à trois voies, **1 conflit** chacun | `notification-service.ts`, `dashboard/channels/page.tsx` |
-| Corrigé pour compatibilité entre lots (fichier tokoo , pas dans l'archive WhatsApp) | `omnichannel-publication-service.ts` |
+| Corrigé pour compatibilité entre lots (fichier flexco , pas dans l'archive WhatsApp) | `omnichannel-publication-service.ts` |
 
 **Conflits tranchés**
 - `notification-service.ts` (`buildRelatedEntityUrl`) : les deux lots ont ajouté
@@ -95,11 +95,11 @@ WhatsApp, le `package-lock.json` tokoo  est conservé) :
   dans une fusion future ; `subscription_payment` reste dirigé vers « Mon
   abonnement ».
 - `dashboard/channels/page.tsx` : les deux côtés avaient modifié les mêmes deux
-  lignes de la carte « WhatsApp Business ». Base **tokoo ** (marque tokoo ,
+  lignes de la carte « WhatsApp Business ». Base **flexco ** (marque flexco ,
   palette `#F8FAFC`) + **texte de la coexistence** repris de WhatsApp (« Connectez
   le numéro que vous utilisez déjà… », « Sélectionnez votre compte WhatsApp
   Business existant », « votre app continue de fonctionner »). Le « SME-OS » du
-  texte d'origine devient « tokoo  » sur cette surface d'interface.
+  texte d'origine devient « flexco  » sur cette surface d'interface.
 
 ### Numéro de migration — `0055` → `0058`
 
@@ -109,7 +109,7 @@ noms de fichiers et références numériques mis à jour dans le code et la
 migration (contrôle final : `grep` sans aucune référence obsolète dans `src/` ni
 `supabase/`).
 
-### Vérifications d'interaction avec tokoo 
+### Vérifications d'interaction avec flexco 
 
 - La migration `0058` **remplace trois contraintes CHECK** (`drop constraint`
   puis `add constraint`) : `provider_connections_provider_type_check`,
@@ -120,7 +120,7 @@ migration (contrôle final : `grep` sans aucune référence obsolète dans `src/
   de régression silencieuse.
 - **Conflit sémantique réel, invisible dans un merge de texte, corrigé.**
   `omnichannel-publication-service.ts` (Telegram Omnichannel v3, code propre à
-  tokoo ) envoyait immédiatement vers un groupe WhatsApp via
+  flexco ) envoyait immédiatement vers un groupe WhatsApp via
   `getMessagingProvider(orgId, "zernio")`, c'est-à-dire le profil de messagerie
   1:1 — qui, en Coexistence, **ne supporte pas l'API Groupes**. Après cette
   fusion, une publication immédiate vers un groupe depuis
@@ -206,7 +206,7 @@ Livré en zip du projet complet (`node_modules`, `.next` et
 
 ---
 
-## Addendum — passage SME-OS → tokoo  (version `15b`)
+## Addendum — passage SME-OS → flexco  (version `15b`)
 
 Suite à votre accord sur la question posée à la fin de #15. **62 remplacements de
 la chaîne exacte `SME-OS` dans 34 fichiers**, casse exacte volontairement (les
@@ -216,24 +216,24 @@ noms d'hôte en minuscules, `sme-os.app`, ne sont donc pas touchés).
 
 | Où | Avant | Après |
 |---|---|---|
-| Email d'invitation d'équipe (objet + corps) | « … sur SME-OS » | « … sur tokoo  » |
-| Description envoyée à NotchPay (vue par le payeur) | « Abonnement SME-OS — forfait … », « Add-on SME-OS : … », « SME-OS — Numéro WhatsApp dédié … » | idem avec tokoo  |
-| Notification d'échéance d'abonnement | « … continuer à utiliser SME-OS » | tokoo  |
-| Messages « pays indisponible / bientôt / liste d'attente » | « … sur SME-OS » | tokoo  |
-| `/dashboard/channels` (numéro dédié) | « l'équipe SME-OS », « que SME-OS m'en fournisse un » | tokoo  |
-| Titre YouTube par défaut (publication sans texte) | « Publication SME-OS » | « Publication tokoo  » |
-| Profil Zernio (nom de repli si l'entreprise n'a pas de nom, description) | « SME-OS … » | tokoo  |
-| Expéditeur d'email **par défaut** (`EMAIL_FROM_ADDRESS`) | `SME-OS <onboarding@resend.dev>` | `tokoo  <onboarding@resend.dev>` |
+| Email d'invitation d'équipe (objet + corps) | « … sur SME-OS » | « … sur flexco  » |
+| Description envoyée à NotchPay (vue par le payeur) | « Abonnement SME-OS — forfait … », « Add-on SME-OS : … », « SME-OS — Numéro WhatsApp dédié … » | idem avec flexco  |
+| Notification d'échéance d'abonnement | « … continuer à utiliser SME-OS » | flexco  |
+| Messages « pays indisponible / bientôt / liste d'attente » | « … sur SME-OS » | flexco  |
+| `/dashboard/channels` (numéro dédié) | « l'équipe SME-OS », « que SME-OS m'en fournisse un » | flexco  |
+| Titre YouTube par défaut (publication sans texte) | « Publication SME-OS » | « Publication flexco  » |
+| Profil Zernio (nom de repli si l'entreprise n'a pas de nom, description) | « SME-OS … » | flexco  |
+| Expéditeur d'email **par défaut** (`EMAIL_FROM_ADDRESS`) | `SME-OS <onboarding@resend.dev>` | `flexco  <onboarding@resend.dev>` |
 
 Plus : commentaires de code, `globals.css`, `tailwind.config.ts`, `.env.example`,
 `README.md` et 9 documents `docs/*.md` (docs vivantes).
 
-### Décision — liens « Site propulsé par tokoo  »
+### Décision — liens « Site propulsé par flexco  »
 
-Le texte affiché disait déjà « tokoo  » sur toutes les vitrines et landings
+Le texte affiché disait déjà « flexco  » sur toutes les vitrines et landings
 tenant, mais le lien pointait en dur vers `https://sme-os.app`. Il pointe
 désormais vers `NEXT_PUBLIC_APP_URL` (URL publique de la plateforme, déjà
-utilisée ailleurs pour les liens absolus). Raison : le domaine réel de tokoo 
+utilisée ailleurs pour les liens absolus). Raison : le domaine réel de flexco 
 n'est pas connu du dépôt et diffère selon le déploiement ; cette variable est la
 seule source correcte partout. **Conséquence : `NEXT_PUBLIC_APP_URL` doit être
 l'URL publique de la plateforme en production** (sinon le lien retombe sur

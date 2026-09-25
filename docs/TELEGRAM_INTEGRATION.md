@@ -105,6 +105,6 @@ appelé par `telegram-channel-service.ts::connectTelegramChannel`).
 
 ## Limites restantes
 
-- Les pièces jointes ENTRANTES nécessitent encore un pipeline média dédié (récupération du `file_id`, téléchargement puis stockage tokoo ).
+- Les pièces jointes ENTRANTES nécessitent encore un pipeline média dédié (récupération du `file_id`, téléchargement puis stockage flexco ).
 - Le partage de contact (numéro de téléphone) côté Telegram n'est pas encore intégré.
 - La configuration du canal client par un Super Admin reste volontairement hors du parcours : la connexion est self-service depuis `/dashboard/channels`.

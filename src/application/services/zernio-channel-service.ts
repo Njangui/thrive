@@ -79,7 +79,7 @@ async function ensureZernioWhatsAppMessagingProfile(organizationId: string, orga
 
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
   const created = await client.createProfile({
-    name: `${organizationName.trim().slice(0, 55) || "Entreprise tokoo "} — WhatsApp ${accounts.length + 1}`,
+    name: `${organizationName.trim().slice(0, 55) || "Entreprise flexco "} — WhatsApp ${accounts.length + 1}`,
     description: `Numéro WhatsApp de messagerie ${accounts.length + 1} — ${organizationName}`,
     color: "#009979",
   });
@@ -114,7 +114,7 @@ export async function ensureZernioGroupsProfile(organizationId: string, organiza
 
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
   const created = await client.createProfile({
-    name: `${organizationName.trim().slice(0, 60) || `tokoo  ${organizationId.slice(0, 8)}`} — Groupes WhatsApp`,
+    name: `${organizationName.trim().slice(0, 60) || `flexco  ${organizationId.slice(0, 8)}`} — Groupes WhatsApp`,
     description: `Numéro WhatsApp dédié aux groupes — ${organizationName}`,
     color: "#7c3aed",
   });
@@ -142,8 +142,8 @@ export async function ensureZernioProfile(organizationId: string, organizationNa
 
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
   const created = await client.createProfile({
-    name: organizationName.trim().slice(0, 80) || `tokoo  ${organizationId.slice(0, 8)}`,
-    description: `Profil tokoo  — ${organizationName}`,
+    name: organizationName.trim().slice(0, 80) || `flexco  ${organizationId.slice(0, 8)}`,
+    description: `Profil flexco  — ${organizationName}`,
     color: "#009979",
   });
   const profileId = created.profile._id;
@@ -219,8 +219,8 @@ export async function pickProfileForPlatform(
 
   const client = new ZernioSocialClient(await getZernioApiKey(organizationId));
   const created = await client.createProfile({
-    name: `${organizationName.trim() || "tokoo "} · ${platform} ${profileIds.length + 1}`.slice(0, 80),
-    description: `Profil additionnel tokoo  — ${platform}`,
+    name: `${organizationName.trim() || "flexco "} · ${platform} ${profileIds.length + 1}`.slice(0, 80),
+    description: `Profil additionnel flexco  — ${platform}`,
     color: "#009979",
   });
   const supabase = getSupabaseServiceClient();

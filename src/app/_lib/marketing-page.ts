@@ -3,10 +3,10 @@ import { resolveRequestSurface, resolveMarketingOrigin } from "@/infrastructure/
 import { buildSocialMetadata } from "@/lib/seo";
 
 /** Nom de la plateforme, pour `og:site_name` et les données structurées de la landing. */
-export const PLATFORM_NAME = "tokoo ";
+export const PLATFORM_NAME = "flexco ";
 
 /** Image de partage de la landing marketing (1200×630, < 300 Ko : WhatsApp ignore les images plus lourdes). */
-export const MARKETING_OG_IMAGE_PATH = "/images/og-tokoo .png";
+export const MARKETING_OG_IMAGE_PATH = "/images/og-flexco .png";
 
 /**
  * Métadonnées d'une page de la PLATEFORME (landing, /tarifs, /devenir-affilie,
@@ -15,7 +15,7 @@ export const MARKETING_OG_IMAGE_PATH = "/images/og-tokoo .png";
  *
  * Ces routes existent aussi sous le domaine de CHAQUE commerçant (le routage
  * par hôte ne les distingue pas : `boutique.exemple.com/tarifs` sert la page
- * tarifs de tokoo ). Sous un hôte qui n'est pas le domaine racine de la
+ * tarifs de flexco ). Sous un hôte qui n'est pas le domaine racine de la
  * plateforme, la page est donc `noindex` : sinon le contenu de la plateforme
  * serait dupliqué, sous le nom de domaine de chaque boutique. Dans tous les
  * cas la canonique pointe vers la plateforme.

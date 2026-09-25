@@ -1,4 +1,4 @@
-# tokoo 
+# flexco 
 
 Plateforme SaaS de gestion et d'automatisation commerciale pour petites
 entreprises, commerçants et prestataires de services — pensée pour le

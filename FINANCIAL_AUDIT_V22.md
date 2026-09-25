@@ -1,4 +1,4 @@
-# tokoo  — Finance audit & polish V22 — 2026-09-22
+# flexco  — Finance audit & polish V22 — 2026-09-22
 
 ## Corrections effectuées
 
@@ -13,7 +13,7 @@
    - `social_accounts` connectés + `whatsapp_accounts` connectés.
    - Les profils Zernio ne sont pas comptés.
    - Le provider de groupes WhatsApp n'est pas compté comme un compte Zernio supplémentaire.
-   - YouTube n'est pas compté : dans tokoo  il est connecté directement via Google.
+   - YouTube n'est pas compté : dans flexco  il est connecté directement via Google.
 
 3. **Série quotidienne corrigée**
    - Les remboursements sont soustraits de la courbe de revenus quotidienne.

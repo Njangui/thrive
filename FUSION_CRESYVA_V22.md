@@ -1,11 +1,11 @@
-# tokoo  — Fusion complète V22
+# flexco  — Fusion complète V22
 
 ## Sources fusionnées
 
 Cette version combine :
 
-1. Le socle `tokoo -financial-system-v21` : cockpit financier plateforme + finance tenant + calcul Zernio + coûts récurrents + P&L.
-2. `tokoo -fusionne-24.zip` fourni par l'utilisateur : socle applicatif le plus récent avant les lots supplémentaires.
+1. Le socle `flexco -financial-system-v21` : cockpit financier plateforme + finance tenant + calcul Zernio + coûts récurrents + P&L.
+2. `flexco -fusionne-24.zip` fourni par l'utilisateur : socle applicatif le plus récent avant les lots supplémentaires.
 3. Lot P : amélioration du moteur conversationnel, compréhension déterministe des intentions, contexte sectoriel, reprise automatique de l'IA après prise en main humaine, nouveaux écrans conversations/IA et mappings webhook.
 4. Lot 4 : résolution du prix d'abonnement selon le pays et diagnostic/correctif de dérive `plan_prices`.
 5. Lot 24 commentaires : tracking des posts sociaux et gestion des commentaires.

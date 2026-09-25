@@ -1,6 +1,6 @@
-# Canaux sociaux — architecture tokoo 
+# Canaux sociaux — architecture flexco 
 
-tokoo  ne présente jamais le nom d'un fournisseur d'infrastructure dans le dashboard marchand.
+flexco  ne présente jamais le nom d'un fournisseur d'infrastructure dans le dashboard marchand.
 
 ## Périmètre
 
@@ -19,7 +19,7 @@ Ainsi :
 Dashboard / CRM / Marketing
           |
           v
-   Ports métier tokoo 
+   Ports métier flexco 
           |
     Provider Registry
       /      |      \

@@ -9,7 +9,7 @@ import { requireStorefront } from "./_lib/storefront-page";
  *
  * La page d'accueil (`src/app/page.tsx`) reste volontairement en dehors
  * de ce groupe de routes : elle est partagée avec le domaine racine de
- * tokoo , où elle rend la landing marketing et où un `notFound()` sur
+ * flexco , où elle rend la landing marketing et où un `notFound()` sur
  * absence de tenant serait faux. Elle applique donc `StorefrontShell`
  * elle-même, sur sa seule branche tenant.
  *

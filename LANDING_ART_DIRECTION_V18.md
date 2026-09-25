@@ -1,4 +1,4 @@
-# tokoo  — Landing Art Direction V18
+# flexco  — Landing Art Direction V18
 
 ## Objective
 Raise the tenant storefronts from "good template" to a sector-specific premium experience while keeping the data-driven architecture intact.

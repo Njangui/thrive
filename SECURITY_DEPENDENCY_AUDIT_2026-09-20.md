@@ -1,4 +1,4 @@
-# tokoo  — Audit dépendances, migration et sécurité
+# flexco  — Audit dépendances, migration et sécurité
 
 > **Mise à jour — fusion #18 (20 septembre 2026).** Ce rapport a été rédigé sans accès au registre npm
 > (voir §6). La fusion #18 a exécuté pour de vrai `npm install`, `npm audit`, typecheck, lint, tests et
@@ -17,7 +17,7 @@
 > document décrivent l'intention de l'audit ; `package.json` fait foi.
 
 **Date : 20 septembre 2026**  
-**Base auditée : tokoo  Sector Polish V15**  
+**Base auditée : flexco  Sector Polish V15**  
 **Objectif :** mettre les dépendances stables à jour, migrer les changements nécessaires et documenter les erreurs/failles détectées.
 
 ## 1. Résumé exécutif

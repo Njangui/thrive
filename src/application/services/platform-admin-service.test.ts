@@ -101,8 +101,8 @@ describe("getPlatformAdminStatus", () => {
   it("retourne l'admin si présent dans platform_admins", async () => {
     mockMaybeSingle.mockResolvedValue({ data: { role: "super_admin" }, error: null });
 
-    const result = await getPlatformAdminStatus("user_1", "admin@tokoo .test");
+    const result = await getPlatformAdminStatus("user_1", "admin@flexco .test");
 
-    expect(result).toEqual({ userId: "user_1", role: "super_admin", email: "admin@tokoo .test" });
+    expect(result).toEqual({ userId: "user_1", role: "super_admin", email: "admin@flexco .test" });
   });
 });

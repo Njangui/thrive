@@ -99,7 +99,7 @@ export interface AdminPaymentSummary extends SubscriptionPaymentSummary {
  * Lot 5 (section 52 du master prompt — "Payments" dans la liste des
  * sections attendues du Super Admin). `listPaymentsForOrganization`
  * ci-dessus n'existait qu'à l'échelle d'un tenant (dashboard) ; jusqu'à
- * ce lot, l'opérateur tokoo  n'avait aucune vue d'ensemble des paiements
+ * ce lot, l'opérateur CRESYVA n'avait aucune vue d'ensemble des paiements
  * plateforme (rapprochement, paiements en attente/échoués tous tenants
  * confondus). Lecture seule : les changements de statut restent la
  * responsabilité exclusive de handlePaymentWebhook() ci-dessous — cette
@@ -200,7 +200,7 @@ export async function initiatePayment(
     amount,
     currency: currencyCode,
     customerEmail: payerEmail,
-    description: `Abonnement tokoo  — forfait ${plan.name}`,
+    description: `Abonnement CRESYVA — forfait ${plan.name}`,
   });
 
   // La ligne locale n'est créée qu'APRÈS l'appel provider, avec sa vraie
@@ -423,6 +423,30 @@ export async function reconcileStalePayments(staleAfterMinutes = 20): Promise<{
   const result = { checked: 0, completed: 0, failed: 0, stillPending: 0 };
   for (const payment of stalePayments ?? []) {
     result.checked += 1;
+
+    // CORRECTIF 2026-09-24 : avant le 21/09, `initiatePayment()`
+    // insérait la ligne AVANT l'appel provider avec
+    // `provider_reference = paymentId` (id interne) comme valeur
+    // provisoire — voir le commentaire "ABSTRACTION PROVIDER" plus haut
+    // dans ce fichier expliquant pourquoi ce n'est plus le cas
+    // aujourd'hui. Les lignes créées SOUS L'ANCIEN CODE sont restées
+    // bloquées avec cette référence bidon, qui ne correspondra JAMAIS à
+    // une transaction Fapshi réelle : les retenter indéfiniment ne fait
+    // que polluer les logs. On les détecte ici (provider_reference ===
+    // id) et on les marque `failed` directement, sans appeler Fapshi.
+    if (payment.provider_reference === payment.id) {
+      console.warn(
+        `reconcileStalePayments: paiement ${payment.id} a une provider_reference bidon (égale à son propre id, séquelle d'avant le correctif du 21/09) — marqué failed sans appeler Fapshi.`,
+      );
+      await supabase
+        .from("subscription_payments")
+        .update({ status: "failed" })
+        .eq("id", payment.id)
+        .eq("status", "pending");
+      result.failed += 1;
+      continue;
+    }
+
     try {
       const outcome = await verifyAndReconcilePayment(payment as SubscriptionPaymentRow);
       if (outcome === "completed") result.completed += 1;
@@ -432,7 +456,13 @@ export async function reconcileStalePayments(staleAfterMinutes = 20): Promise<{
       // Un paiement dont la réconciliation échoue (ex: provider
       // temporairement indisponible) ne doit jamais bloquer les
       // suivants — repris automatiquement au prochain passage du cron.
-      console.error(`reconcileStalePayments: échec réconciliation ${payment.id}:`, reconcileError);
+      // provider_reference (la vraie valeur envoyée à Fapshi) loggée
+      // explicitement — CORRECTIF 2026-09-24 : l'ancien log n'affichait
+      // que l'id interne, inutile pour diagnostiquer une erreur Fapshi.
+      console.error(
+        `reconcileStalePayments: échec réconciliation paiement=${payment.id} provider_reference=${payment.provider_reference}:`,
+        reconcileError,
+      );
     }
   }
   return result;

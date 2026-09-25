@@ -71,7 +71,7 @@ export async function notifyPlatformAdminTelegram(
     const notifier = await getNotificationProvider();
     const meta = EVENT_LABELS[event];
     const lines = [
-      `${meta.icon} tokoo  · ${meta.label}`,
+      `${meta.icon} flexco  · ${meta.label}`,
       details.organizationId ? `Entreprise : ${details.organizationId}` : "Portée : plateforme",
       details.entityType ? `Type : ${details.entityType}` : null,
       details.entityId ? `ID : ${details.entityId}` : null,
@@ -99,7 +99,7 @@ export async function notifyPlatformAdminMessage(
 ): Promise<void> {
   try {
     const notifier = await getNotificationProvider();
-    await notifier.send({ title: `tokoo  · ${title}`, body, channel: "telegram", relatedEntityType, relatedEntityId });
+    await notifier.send({ title: `flexco  · ${title}`, body, channel: "telegram", relatedEntityType, relatedEntityId });
   } catch (error) {
     console.warn("[telegram-admin] message opérateur non envoyé:", error);
   }

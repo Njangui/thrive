@@ -16,7 +16,7 @@ import { resolveOrganizationSeo, buildSocialMetadata, toMetaDescription, withPag
  */
 export async function requireStorefront(): Promise<StorefrontSite> {
   const tenant = await resolveRequestTenant();
-  // Aucun tenant = on est sur le domaine racine de tokoo . Ces routes
+  // Aucun tenant = on est sur le domaine racine de flexco . Ces routes
   // (catalogue, catégories, prestations…) n'y existent pas : 404 franc
   // plutôt qu'une page à moitié rendue sans données.
   if (!tenant) notFound();

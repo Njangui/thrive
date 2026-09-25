@@ -1,9 +1,9 @@
-# Rapport de fusion #14 — tokoo -fusionne (fusion #13) + Catalogue V2
+# Rapport de fusion #14 — flexco -fusionne (fusion #13) + Catalogue V2
 
 Fait suite à `RAPPORT_FUSION_13.md`. Deux sources reçues :
 
-1. **`tokoo -fusionne.zip`** (524 fichiers) — état livré par la fusion #13 :
-   base tokoo  + Google OAuth + lien « Console Admin » + Telegram
+1. **`flexco -fusionne.zip`** (524 fichiers) — état livré par la fusion #13 :
+   base flexco  + Google OAuth + lien « Console Admin » + Telegram
    Omnichannel v3 + patch affiliation.
 2. **`files__19_.zip`** → `thrive-main-catalogue-v2.zip` (517 fichiers) +
    `RAPPORT_CATALOGUE_V2.md` — le chantier « Catalogue V2 » : galerie photo
@@ -22,12 +22,12 @@ fourni ; il a donc fallu reconstituer qui avait touché quoi :
   **27** : ce sont exactement ceux du chantier Catalogue V2 (21 fichiers
   existants modifiés, 3 nouveaux composants, 2 migrations, le rapport).
   Tout autre écart entre les deux archives vient donc des fusions #12/#13
-  que V2 n'a jamais eues → version tokoo  conservée telle quelle.
-- tokoo  a été pris comme **base** (branche la plus avancée), puis les 27
+  que V2 n'a jamais eues → version flexco  conservée telle quelle.
+- flexco  a été pris comme **base** (branche la plus avancée), puis les 27
   fichiers V2 ont été examinés **un par un** — jamais de `cp` en masse. Pour
   chacun des 21 fichiers existants, le diff a été relu : dans 20 d'entre
-  eux, les seules lignes propres à tokoo  sont des lignes d'origine que V2
-  a remplacées ou supprimées (tokoo  = ancêtre sur ces fichiers) → version
+  eux, les seules lignes propres à flexco  sont des lignes d'origine que V2
+  a remplacées ou supprimées (flexco  = ancêtre sur ces fichiers) → version
   V2 reprise. Le 21ᵉ (`media-service.ts`) est un vrai conflit, traité
   ci-dessous.
 
@@ -36,7 +36,7 @@ fourni ; il a donc fallu reconstituer qui avait touché quoi :
 ### 1. Collision de numéro de migration — `0055`
 
 V2 livre `0055_service_images_and_specifications.sql` et
-`0056_promotion_deadline.sql`. Or `0055` est déjà pris côté tokoo  par
+`0056_promotion_deadline.sql`. Or `0055` est déjà pris côté flexco  par
 `0055_telegram_publications.sql` (Telegram Omnichannel v3). Même schéma que
 les collisions `0016`/`0038` déjà rencontrées (voir `docs/DATABASE.md`).
 
@@ -50,7 +50,7 @@ mis à jour (aucune référence `0055` propre à Telegram n'a été touchée).
 `RAPPORT_CATALOGUE_V2.md` est conservé tel quel pour l'historique, avec un
 bandeau signalant la renumérotation.
 
-Vérifié : aucune migration tokoo  ne crée déjà `service_images`,
+Vérifié : aucune migration flexco  ne crée déjà `service_images`,
 `specifications` ou `promotion_ends_at` (pas de collision de schéma, seulement
 de numéro).
 
@@ -93,13 +93,13 @@ Corrigé :
 ### 4. Ce qui n'a PAS été repris de l'archive V2
 
 `package.json`, `package-lock.json`, `.env.example`, la documentation et tout
-fichier que V2 n'a pas modifié : version tokoo  conservée. Le
+fichier que V2 n'a pas modifié : version flexco  conservée. Le
 `tsconfig.tsbuildinfo` livré dans l'archive V2 (artefact de build) n'est pas
 repris.
 
 ### 5. Vérifications de compatibilité inter-lots
 
-- Aucun appelant, dans tout le code tokoo  (y compris le lot Telegram v3),
+- Aucun appelant, dans tout le code flexco  (y compris le lot Telegram v3),
   des quatre fonctions que V2 a retirées de `service-catalog-service.ts`
   (`listServices`/`createService`/`updateService`/`deleteService`) : `grep`
   sur `src/`, `scripts/`, `tests/`, `e2e/`. Le fichier garde ses lectures
@@ -133,7 +133,7 @@ repris.
   et `src/app/layout.tsx` + variables Supabase factices, puis les deux
   fichiers **restaurés à l'identique avant livraison** (`cmp` vérifié). Le
   vrai `next/font/google` est ce qui est livré.
-- Diff final contre `tokoo -fusionne.zip` : uniquement les 21 fichiers V2
+- Diff final contre `flexco -fusionne.zip` : uniquement les 21 fichiers V2
   existants, `media-service.ts`, `storefront-service.ts` (+ test),
   `docs/DATABASE.md`, 3 nouveaux composants, 2 migrations, les deux
   rapports — rien d'autre n'a bougé.
@@ -180,7 +180,7 @@ vers le message d'erreur générique. Conséquence : **l'écriture en base
 réussissait, mais l'utilisateur voyait une erreur à chaque enregistrement**
 (le formulaire rechargé montrait d'ailleurs la case cochée). Même famille que
 le bug déjà corrigé en #13 dans `dashboard/channels/page.tsx`, présent tel
-quel dans l'archive thrive et dans tokoo  (antérieur à toute fusion).
+quel dans l'archive thrive et dans flexco  (antérieur à toute fusion).
 
 **Audit systématique** (parcours AST de tout `src/`, pas seulement le fichier
 signalé) : 16 `try/catch` contenant un appel de type redirect, dont 3 faux

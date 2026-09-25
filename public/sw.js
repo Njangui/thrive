@@ -10,7 +10,7 @@
 
 // v2 : nouveau logo (mêmes noms de fichiers d'icônes — sans changement de
 // version, les appareils déjà installés garderaient l'ancien logo en cache).
-const CACHE_NAME = "sme-os-shell-v2";
+const CACHE_NAME = "flexco-cache";
 const SHELL_ASSETS = ["/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -49,7 +49,7 @@ self.addEventListener("fetch", (event) => {
  */
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "tokoo ",
+    title: "flexco ",
     body: "Vous avez une nouvelle notification.",
     url: "/dashboard/notifications",
   };
@@ -58,7 +58,7 @@ self.addEventListener("push", (event) => {
     try {
       payload = { ...payload, ...event.data.json() };
     } catch {
-      // Payload non-JSON (ne devrait pas arriver côté tokoo , mais un
+      // Payload non-JSON (ne devrait pas arriver côté flexco , mais un
       // service worker doit rester défensif face à n'importe quel push) :
       // on garde au moins le texte brut comme corps du message.
       payload.body = event.data.text();

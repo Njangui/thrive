@@ -49,12 +49,12 @@ export default async function NewPublicationPage({ searchParams }: { searchParam
     redirect(redirectTo);
   }
 
-  return <div className="tokoo -page">
-    <header className="tokoo -page-hero">
-      <div><p className="tokoo -eyebrow">Marketing · Publication omnicanale</p><h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Publiez une fois. Diffusez partout.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Sélectionnez un ou plusieurs produits de votre catalogue, choisissez vos canaux connectés, puis publiez immédiatement ou programmez la diffusion.</p></div>
+  return <div className="flexco -page">
+    <header className="flexco -page-hero">
+      <div><p className="flexco -eyebrow">Marketing · Publication omnicanale</p><h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Publiez une fois. Diffusez partout.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Sélectionnez un ou plusieurs produits de votre catalogue, choisissez vos canaux connectés, puis publiez immédiatement ou programmez la diffusion.</p></div>
       <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/75">{targets.filter((t) => t.available).length} destination(s) disponible(s)</div>
     </header>
     {error ? <div className="adm-alert-danger">{error}</div> : null}
-    {!products.length ? <section className="tokoo -info-panel"><p className="font-semibold text-navy-900">Votre catalogue actif est vide.</p><p className="mt-1 text-sm text-slate-500">Ajoutez au moins un produit actif avant de lancer une publication omnicanale.</p><a href="/dashboard/products/new" className="mt-4 inline-flex adm-btn-primary">Ajouter un produit</a></section> : !targets.some((t) => t.available) ? <section className="tokoo -info-panel"><p className="font-semibold text-navy-900">Aucun canal de publication n&apos;est disponible.</p><p className="mt-1 text-sm text-slate-500">Connectez un réseau social, Telegram ou un groupe WhatsApp activé dans Canaux.</p><a href="/dashboard/channels" className="mt-4 inline-flex adm-btn-primary">Configurer mes canaux</a></section> : <section className="tokoo -product-card p-5 sm:p-7"><OmnichannelPublicationComposer action={publishAction} products={products} targets={targets} videos={videos} /></section>}
+    {!products.length ? <section className="flexco -info-panel"><p className="font-semibold text-navy-900">Votre catalogue actif est vide.</p><p className="mt-1 text-sm text-slate-500">Ajoutez au moins un produit actif avant de lancer une publication omnicanale.</p><a href="/dashboard/products/new" className="mt-4 inline-flex adm-btn-primary">Ajouter un produit</a></section> : !targets.some((t) => t.available) ? <section className="flexco -info-panel"><p className="font-semibold text-navy-900">Aucun canal de publication n&apos;est disponible.</p><p className="mt-1 text-sm text-slate-500">Connectez un réseau social, Telegram ou un groupe WhatsApp activé dans Canaux.</p><a href="/dashboard/channels" className="mt-4 inline-flex adm-btn-primary">Configurer mes canaux</a></section> : <section className="flexco -product-card p-5 sm:p-7"><OmnichannelPublicationComposer action={publishAction} products={products} targets={targets} videos={videos} /></section>}
   </div>;
 }

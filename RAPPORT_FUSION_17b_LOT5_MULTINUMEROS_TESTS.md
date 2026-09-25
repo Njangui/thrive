@@ -7,7 +7,7 @@ Deux archives reçues, toutes deux descendant de `RAPPORT_FUSION_16.md` +
    commentaires Facebook/Instagram/LinkedIn en temps réel + audit du
    système de notifications/crédits IA (voir `RAPPORT_LOT_5.md`, déjà à
    la racine).
-2. **`tokoo -tokoo -whatsapp-multi-numbers-v7.zip`** (573 fichiers) :
+2. **`flexco -flexco -whatsapp-multi-numbers-v7.zip`** (573 fichiers) :
    plusieurs numéros WhatsApp par entreprise (table `whatsapp_accounts`,
    migration `0063`). Corrige un vrai risque signalé par le Lot 5 lui-même
    (§4 de son rapport) : un message reçu sur un numéro WhatsApp secondaire

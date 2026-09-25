@@ -9,7 +9,7 @@ import type { CommentReceivedEvent, ExternalPostTrackedEvent } from "@/domain/ev
  *
  * Répond à une demande explicite : synchroniser les commentaires sociaux
  * "quel que soit l'endroit où le post a été publié, et automatiquement" —
- * pas seulement pour les posts publiés via le composer tokoo  (seul cas
+ * pas seulement pour les posts publiés via le composer flexco  (seul cas
  * couvert jusqu'ici par syncCommentsForPost, voir social-comment-
  * service.ts), et sans dépendre d'un clic manuel sur "Vérifier les
  * commentaires".
@@ -18,10 +18,10 @@ import type { CommentReceivedEvent, ExternalPostTrackedEvent } from "@/domain/ev
  * (docs.zernio.com/webhooks, consulté le 20/09/2026), combinées ici :
  * - `post.external.*` : la synchronisation arrière-plan de Zernio
  *   (~horaire, PAS temps réel) détecte tout post publié nativement sur
- *   la plateforme (hors Zernio/tokoo ) et le rend "tracké".
+ *   la plateforme (hors Zernio/flexco ) et le rend "tracké".
  * - `comment.received` : événement temps réel pour tout nouveau
  *   commentaire sur un post "tracké" — ce qui inclut donc, une fois le
- *   premier point câblé, les posts publiés hors tokoo .
+ *   premier point câblé, les posts publiés hors flexco .
  *
  * Limite honnête à communiquer au commerçant (voir RAPPORT livré avec ce
  * lot) : un post fait directement sur Facebook peut mettre jusqu'à ~1h
@@ -44,7 +44,7 @@ interface TrackedPostRef {
 /**
  * Fait exister une ligne `social_posts` (+ `social_post_targets`) pour un
  * post connu de Zernio par son `provider_post_id`, qu'il ait été publié
- * via tokoo  (déjà existant, jamais recréé/modifié ici) ou détecté
+ * via flexco  (déjà existant, jamais recréé/modifié ici) ou détecté
  * nativement sur la plateforme (`source = 'external'`, voir
  * 0064_external_post_tracking.sql). Idempotent — upsert conceptuel gardé
  * en lecture-puis-écriture (pas un vrai `upsert` SQL) car deux tables
@@ -93,7 +93,7 @@ async function ensureTrackedPost(
         // CONFIRMÉ non exploitable ici (voir zernio/types.ts,
         // ZernioExternalPostWebhookPost) : le texte réel du post n'est
         // pas rapatrié, `content` reste NOT NULL côté schéma.
-        content: "Publication détectée automatiquement (publiée hors tokoo ).",
+        content: "Publication détectée automatiquement (publiée hors flexco ).",
         status: "published",
         provider_post_id: providerPostId,
         source: "external",

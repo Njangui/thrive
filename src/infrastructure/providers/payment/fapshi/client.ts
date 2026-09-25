@@ -50,14 +50,30 @@ export class FapshiClient {
     return res.json() as Promise<FapshiInitiatePayResponse>;
   }
 
+  /**
+   * CORRECTIF 2026-09-24 (suite signalement utilisateur : 6/6 paiements
+   * en attente échouaient la réconciliation avec "Invalid request URL",
+   * y compris des transId Fapshi manifestement valides comme
+   * "URc5wMrwdp" — donc pas un souci d'ID invalide mais de FORME de
+   * requête). Ancien code : `${baseUrl}/payment-status/${transId}`
+   * (transId comme segment de chemin). D'après le dashboard Fapshi
+   * lui-même (Services > API > Documentation), `/payment-status` est
+   * listé SANS paramètre de chemin — contrairement à
+   * `/transaction/{userId}` qui en affiche un explicitement — et
+   * `expirePay` (juste en dessous) passe `transId` comme paramètre
+   * NOMMÉ (dans le corps JSON), jamais concaténé à l'URL. `transId` est
+   * donc passé ici en paramètre de requête, pas en segment de chemin.
+   * Si Fapshi venait à documenter explicitement l'inverse, revenir à
+   * l'ancienne forme — le message d'erreur ci-dessous inclut maintenant
+   * l'URL exacte tentée pour trancher immédiatement en cas de doute.
+   */
   async paymentStatus(transId: string): Promise<FapshiTransaction> {
     this.assertConfigured();
-    const res = await fetch(`${this.baseUrl}/payment-status/${encodeURIComponent(transId)}`, {
-      headers: this.headers(),
-    });
+    const url = `${this.baseUrl}/payment-status?transId=${encodeURIComponent(transId)}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Fapshi paymentStatus a échoué (${res.status}): ${body}`);
+      throw new Error(`Fapshi paymentStatus a échoué (${res.status}) pour l'URL ${url}: ${body}`);
     }
     return res.json() as Promise<FapshiTransaction>;
   }

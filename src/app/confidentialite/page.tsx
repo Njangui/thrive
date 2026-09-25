@@ -6,8 +6,8 @@ import { LEGAL_ENTITY, isLegalEntityComplete, legalField } from "@/application/c
 export async function generateMetadata(): Promise<Metadata> {
   return buildMarketingMetadata({
     path: "/confidentialite",
-    title: "Politique de confidentialité — tokoo ",
-    description: "Comment tokoo  traite les données de ses clients et celles que ses clients saisissent sur la plateforme.",
+    title: "Politique de confidentialité — flexco ",
+    description: "Comment flexco  traite les données de ses clients et celles que ses clients saisissent sur la plateforme.",
     // Une page légale à trous n'a pas à être indexée (voir legal-entity.ts).
     noIndex: !isLegalEntityComplete(),
   });
@@ -23,7 +23,7 @@ export default function ConfidentialitePage() {
 
       <h2>1. Deux niveaux de données</h2>
       <p>
-        tokoo  traite deux catégories de données bien distinctes :
+        flexco  traite deux catégories de données bien distinctes :
       </p>
       <ul>
         <li>
@@ -33,7 +33,7 @@ export default function ConfidentialitePage() {
         <li>
           <strong>Les données que le Client saisit ou reçoit via la plateforme</strong> concernant SES PROPRES
           clients (contacts, conversations WhatsApp, commandes) — le Client en est le responsable de traitement ;
-          tokoo  agit comme sous-traitant technique pour cette partie-là, au sens du droit applicable à la
+          flexco  agit comme sous-traitant technique pour cette partie-là, au sens du droit applicable à la
           protection des données.
         </li>
       </ul>
@@ -52,7 +52,7 @@ export default function ConfidentialitePage() {
           Usage et navigation : pages vues, clics, événements d&apos;analytics agrégés — utilisés pour les
           statistiques affichées au Client sur son propre tableau de bord, jamais revendus.
         </li>
-        <li>Paiement : le numéro de carte/Mobile Money n&apos;est jamais stocké par tokoo  — traité directement par Fapshi.</li>
+        <li>Paiement : le numéro de carte/Mobile Money n&apos;est jamais stocké par flexco  — traité directement par Fapshi.</li>
       </ul>
 
       <h2>3. Sous-traitants (prestataires tiers)</h2>
@@ -92,7 +92,7 @@ export default function ConfidentialitePage() {
 
       <h2>7. Cookies et sessions</h2>
       <p>
-        tokoo  utilise uniquement des cookies strictement nécessaires (session de connexion, préférences
+        flexco  utilise uniquement des cookies strictement nécessaires (session de connexion, préférences
         d&apos;affichage) — aucun cookie publicitaire ou de traçage tiers.
       </p>
 

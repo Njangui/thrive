@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
  * le push (service worker).
  */
 
-const SOUND_PREF_KEY = "tokoo :notification-sound";
+const SOUND_PREF_KEY = "flexco :notification-sound";
 const POLL_INTERVAL_MS = 20_000;
 const TOAST_DURATION_MS = 8_000;
 

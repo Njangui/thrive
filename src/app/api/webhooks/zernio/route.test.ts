@@ -78,7 +78,7 @@ function inbound(overrides: { accountId: string; conversationId: string; platfor
   };
 }
 function deliver(event: unknown) {
-  return POST(new Request("https://tokoo .test/api/webhooks/zernio", { method: "POST", body: JSON.stringify(event), headers: { "x-zernio-signature": "sig" } }));
+  return POST(new Request("https://flexco .test/api/webhooks/zernio", { method: "POST", body: JSON.stringify(event), headers: { "x-zernio-signature": "sig" } }));
 }
 
 beforeEach(() => {

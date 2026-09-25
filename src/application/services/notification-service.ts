@@ -153,7 +153,7 @@ export async function notifyOrgAdmins(input: NotifyOrgAdminsInput): Promise<void
 
     // Le bot Telegram opérateur n'est volontairement PAS déclenché ici.
     // Cette fonction sert aux notifications internes du commerçant ; les
-    // alertes de supervision tokoo  passent par
+    // alertes de supervision flexco  passent par
     // telegram-admin-notification-service.ts avec des événements explicites.
 
   } catch (err) {

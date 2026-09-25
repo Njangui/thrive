@@ -81,7 +81,7 @@ export const FEATURE_FLAGS: { key: string; label: string }[] = [
   { key: "appointments", label: "Rendez-vous" },
   { key: "site_analytics", label: "Analytique du site" },
   { key: "custom_domain", label: "Domaine personnalisé" },
-  { key: "remove_branding", label: "Retrait du badge tokoo " },
+  { key: "remove_branding", label: "Retrait du badge flexco " },
   { key: "facebook_auto_comments", label: "Réponse automatique aux commentaires Facebook" },
   { key: "instagram_auto_comments", label: "Réponse automatique aux commentaires Instagram" },
   { key: "unified_comments", label: "Commentaires unifiés" },

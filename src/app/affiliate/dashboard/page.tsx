@@ -42,7 +42,7 @@ export default async function AffiliateDashboardPage() {
     <div className="affiliate-page flex min-h-[calc(100vh-1px)] flex-col gap-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="tokoo -eyebrow">Espace affilié</p>
+          <p className="flexco -eyebrow">Espace affilié</p>
           <h1 className="mt-1 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Dashboard affilié</h1>
           <p className="mt-1 text-sm text-slate-500">Bonjour, {affiliate.displayName} ! Voici un aperçu de vos performances.</p>
         </div>

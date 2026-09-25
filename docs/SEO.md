@@ -46,7 +46,7 @@ landing, `/tarifs` et `/devenir-affilie` renvoyaient `Disallow: /`.
   poser `siteName`/`locale` une seule fois dans le layout racine.
 - Image de partage d'un tenant : image SEO dédiée > bannière > logo. Sans cela, un lien de
   boutique collé dans WhatsApp s'affiche en texte nu.
-- Image de la plateforme : `public/images/og-tokoo .png` (1200×630, < 300 Ko — WhatsApp
+- Image de la plateforme : `public/images/og-flexco .png` (1200×630, < 300 Ko — WhatsApp
   ignore les images plus lourdes). À régénérer si le logo change.
 - **Ne pas définir `metadataBase` dans le layout racine** : Next.js s'en servirait pour
   rendre absolus `manifest` et `icons`, et sur un domaine de commerçant ils pointeraient

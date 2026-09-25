@@ -38,15 +38,15 @@ import { MarketingLanding } from "./_components/marketing-landing";
  * n'avait ni canonique, ni image de partage, et n'était pas `noindex` sur
  * un hôte non reconnu — elle passe désormais par `buildMarketingMetadata`.
  */
-const MARKETING_TITLE = "tokoo  — Gérez votre entreprise depuis un seul endroit";
+const MARKETING_TITLE = "flexco  — Gérez votre entreprise depuis un seul endroit";
 const MARKETING_DESCRIPTION =
-  "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés. tokoo  aide les commerçants et prestataires à organiser leur activité, sans compétences techniques.";
+  "Catalogue, WhatsApp, réseaux sociaux, clients et finances connectés. flexco  aide les commerçants et prestataires à organiser leur activité, sans compétences techniques.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await resolveRequestTenant();
 
   // Lot 2 — sans tenant résolu, cette route sert la landing marketing de
-  // tokoo  lui-même (avant ce lot : aucune métadonnée du tout, `{}`).
+  // flexco  lui-même (avant ce lot : aucune métadonnée du tout, `{}`).
   if (!tenant) {
     return buildMarketingMetadata({
       path: "/",
@@ -98,7 +98,7 @@ export default async function RootPage({
     // Lien "Tableau de bord" dans le header/CTA de la landing plutôt que
     // Connexion/Inscription pour un visiteur déjà connecté (cookies de
     // session présents) — évite de redemander un login à chaque retour
-    // sur la vitrine publique de tokoo . Simple lecture de session, PAS
+    // sur la vitrine publique de flexco . Simple lecture de session, PAS
     // de résolution d'organisation ici (`/dashboard` s'en charge déjà,
     // avec son propre repli vers `/onboarding` — voir sa note ; pas de
     // raison de dupliquer cette logique sur une page publique).
@@ -109,13 +109,13 @@ export default async function RootPage({
     const marketingOrigin = resolveMarketingOrigin();
     return (
       <>
-        {/* Entité « tokoo  » + nom du site : ce que Google lit pour afficher
+        {/* Entité « flexco  » + nom du site : ce que Google lit pour afficher
             le nom de la marque (et non le domaine brut) dans les résultats. */}
         <JsonLd
           data={buildPlatformOrganizationJsonLd({
             name: PLATFORM_NAME,
             url: marketingOrigin,
-            logoUrl: `${marketingOrigin}/images/tokoo -mark-512.png`,
+            logoUrl: `${marketingOrigin}/images/flexco -mark-512.png`,
             description: MARKETING_DESCRIPTION,
           })}
         />

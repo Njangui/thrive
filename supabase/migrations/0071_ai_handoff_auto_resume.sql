@@ -4,7 +4,7 @@
 -- (renommée depuis 0068_ai_handoff_auto_resume.sql lors de la fusion —
 -- 0068-0070 étaient déjà pris par le chantier système financier, y
 -- compris 0070_finance_category_compatibility.sql ajoutée à la fusion
--- tokoo ×THRIVE du 23/09/2026)
+-- flexco ×THRIVE du 23/09/2026)
 --
 -- Lot P — l'IA est active PAR DÉFAUT dans toute conversation, sans
 -- réactivation manuelle. Deux colonnes support :

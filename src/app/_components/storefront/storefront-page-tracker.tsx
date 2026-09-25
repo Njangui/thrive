@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { trackPageViewAction } from "../track-visit-actions";
 
-const SESSION_KEY = "tokoo :storefront-session";
+const SESSION_KEY = "flexco :storefront-session";
 
 /**
  * Compte une page vue à chaque page de la vitrine visitée (y compris les

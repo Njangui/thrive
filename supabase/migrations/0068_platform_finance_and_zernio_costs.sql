@@ -1,6 +1,6 @@
 -- ============================================================
 -- 0068_platform_finance_and_zernio_costs.sql
--- Finance interne tokoo  : dépenses de plateforme et pilotage Zernio.
+-- Finance interne flexco  : dépenses de plateforme et pilotage Zernio.
 -- Les revenus SaaS restent dans subscription_payments.
 -- ============================================================
 
@@ -22,7 +22,7 @@ create index if not exists idx_platform_expenses_category_date on platform_expen
 alter table platform_expenses enable row level security;
 
 comment on table platform_expenses is
-  'Dépenses internes de la plateforme tokoo . Lecture/écriture exclusivement via la console Super Admin (service role).';
+  'Dépenses internes de la plateforme flexco . Lecture/écriture exclusivement via la console Super Admin (service role).';
 
 insert into platform_settings (key, value)
 values ('zernio_usd_to_xaf_rate', '600'::jsonb)

@@ -239,7 +239,7 @@ export interface ZernioListWhatsAppGroupsResponse {
  *   `post.platform.published`, `post.platform.failed`.
  * Seuls published/failed/partial/platform.published/platform.failed sont
  * traités par ce lot (voir marketing-service.ts::handlePostStatusWebhook) —
- * scheduled/cancelled/recycled sont déjà couverts côté tokoo  par nos
+ * scheduled/cancelled/recycled sont déjà couverts côté flexco  par nos
  * propres actions (schedulePost/cancelPost), pas par une confirmation
  * webhook a posteriori.
  */
@@ -357,7 +357,7 @@ export type ZernioWebhookEvent = ZernioInboxWebhookEvent | ZernioPostWebhookEven
 
 /**
  * Distingue un event `post.external.*` (post détecté nativement sur la
- * plateforme, HORS pipeline de publication tokoo ) d'un event `post.*`
+ * plateforme, HORS pipeline de publication flexco ) d'un event `post.*`
  * "normal" ci-dessous — à vérifier EN PREMIER, avant `isZernioPostEvent`
  * (qui matcherait sinon aussi sur le préfixe `post.`).
  */

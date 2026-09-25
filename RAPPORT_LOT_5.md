@@ -29,10 +29,10 @@ Deux signalements distincts :
 
 - Les commentaires n'étaient synchronisés que par un **pull manuel**
   (bouton), jamais en temps réel, et **uniquement pour un post publié
-  via le composer tokoo ** — un post publié directement sur Facebook
+  via le composer flexco ** — un post publié directement sur Facebook
   n'avait structurellement aucun moyen d'être suivi (`social_comments.
   social_post_id` référence `social_posts(id)` en NOT NULL, et aucune
-  ligne `social_posts` n'existe pour un post que tokoo  n'a pas publié
+  ligne `social_posts` n'existe pour un post que flexco  n'a pas publié
   lui-même).
 - La "réponse automatique" aux commentaires est, par design, une
   suggestion IA qu'un humain doit valider et envoyer — jamais un envoi

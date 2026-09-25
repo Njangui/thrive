@@ -24,7 +24,7 @@ domaine du tenant, page introuvable.
 Le bug n'était pas propre à Telegram : **4 fichiers**, couvrant tous les
 canaux sortants du SaaS, construisaient un lien produit public avec
 `env.NEXT_PUBLIC_APP_URL` — le domaine générique de la plateforme —
-au lieu du domaine RÉEL du tenant (sous-domaine `{slug}.tokoo .app`
+au lieu du domaine RÉEL du tenant (sous-domaine `{slug}.flexco .app`
 ou domaine custom vérifié comme `habynex.com`). Trouvé par recherche
 exhaustive de tous les usages de `NEXT_PUBLIC_APP_URL` dans `src/` :
 
@@ -152,7 +152,7 @@ Telegram : **un seul bouton URL par message WhatsApp** (limite du type
   en avait besoin aussi, et `omnichannel-publication-service.ts` importe
   déjà `whatsapp-group-service.ts`).
 
-Domaine racine réel confirmé par Vox (scholarmach.com, pas tokoo .app) —
+Domaine racine réel confirmé par Vox (scholarmach.com, pas flexco .app) —
 `getTenantPublicOrigin()` n'en dépend pas (lit `NEXT_PUBLIC_ROOT_DOMAIN`
 dynamiquement), seuls deux exemples en dur obsolètes corrigés
 (`.env.example`, `VAPID_SUBJECT` par défaut dans `env.ts`).

@@ -52,7 +52,7 @@ function update(overrides: { text?: string; chatId?: number } = {}) {
 function deliver(body: unknown, secret: string | null = "platform-secret") {
   const headers: Record<string, string> = {};
   if (secret !== null) headers["x-telegram-bot-api-secret-token"] = secret;
-  return POST(new Request("https://tokoo .test/api/webhooks/telegram", { method: "POST", body: JSON.stringify(body), headers }));
+  return POST(new Request("https://flexco .test/api/webhooks/telegram", { method: "POST", body: JSON.stringify(body), headers }));
 }
 
 beforeEach(() => {

@@ -67,7 +67,7 @@ export interface StorefrontCapabilities {
   hasWhatsApp: boolean;
   /** Lot O : rendez-vous inclus dans l'offre (Starter+) — sinon aucune page ni section de réservation publique. */
   bookingEnabled: boolean;
-  /** Lot O : badge « Site propulsé par tokoo  » retiré (Pro). */
+  /** Lot O : badge « Site propulsé par flexco  » retiré (Pro). */
   brandingRemoved: boolean;
 }
 

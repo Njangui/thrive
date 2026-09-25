@@ -6,12 +6,12 @@ Fait suite à `RAPPORT_FUSION_16.md` et `RAPPORT_LOT_5.md`.
 
 | Archive | Contenu | Relation |
 |---|---|---|
-| `tokoo -tokoo -whatsapp-multi-numbers-v7.zip` (**A**) | Projet complet, migrations jusqu'à `0063` | Sous-ensemble strict de B |
+| `flexco -flexco -whatsapp-multi-numbers-v7.zip` (**A**) | Projet complet, migrations jusqu'à `0063` | Sous-ensemble strict de B |
 | `files__20_.zip` → `thrive-main-lot5-commentaires-temps-reel.zip` + `RAPPORT_LOT_5.md` (**B**) | Projet complet, migrations jusqu'à `0064` | **= A + exactement les 14 fichiers du lot 5** (11 modifiés, 3 nouveaux — vérifié par `diff -r`, conforme au rapport du lot 5) |
-| `tokoo -fusionne_1_.zip` (**C**) | Projet complet, migrations jusqu'à `0056` | **Branche parallèle** : issue de la fusion #13 comme B, mais avec son propre « #14 » (liens tenant + boutons) |
+| `flexco -fusionne_1_.zip` (**C**) | Projet complet, migrations jusqu'à `0056` | **Branche parallèle** : issue de la fusion #13 comme B, mais avec son propre « #14 » (liens tenant + boutons) |
 
 A n'apporte donc rien que B n'ait déjà : la fusion réelle est **B + C**.
-Les deux branches partagent l'ancêtre (fusion #13, `tokoo -fusionne.zip`), non fourni.
+Les deux branches partagent l'ancêtre (fusion #13, `flexco -fusionne.zip`), non fourni.
 Les deux portaient un `RAPPORT_FUSION_14.md` **différent** (Catalogue V2 côté B ;
 liens tenant + boutons côté C) — celui de C est conservé sous
 `RAPPORT_FUSION_14b_LIENS_TENANT_BOUTONS.md`.
@@ -25,7 +25,7 @@ liens tenant + boutons côté C) — celui de C est conservé sous
   le 19/09 10:18 et le 20/09 01:49 sont le chantier propre de C. Même méthode que
   `RAPPORT_FUSION_14.md` (B).
 - Sur ~130 fichiers où C « diffère » de B, **la quasi-totalité sont des lignes d'ancêtre que B
-  a réécrites** (renommage SME-OS → tokoo , suivi de pages déplacé côté navigateur, FAQ
+  a réécrites** (renommage SME-OS → flexco , suivi de pages déplacé côté navigateur, FAQ
   freemium, UI multi-numéros…). Vérifié sur les cas ambigus : rien à reprendre.
 - Les ~24 fichiers réellement touchés par C ont été traités **un par un**, jamais de `cp` en
   masse (sauf `resolve-request-tenant.ts`, où B ⊂ C : C n'ajoute que 50 lignes).
@@ -100,7 +100,7 @@ l'état réel, par canal.
 ### 4.5 `scholarmach.com` (à valider)
 Le rapport de C indique que ce domaine racine a été « confirmé par Vox ». Repris dans 2 lignes
 qui ne s'exécutent qu'en l'absence de variable d'environnement (`VAPID_SUBJECT` par défaut,
-exemple de `.env.example`). La marque **tokoo ** de B est conservée partout ailleurs
+exemple de `.env.example`). La marque **flexco ** de B est conservée partout ailleurs
 (`EMAIL_FROM_ADDRESS`, titre du fichier : C avait encore « SME-OS »). **Si `scholarmach.com`
 n'est pas le bon domaine, ce sont 2 lignes à remettre.**
 

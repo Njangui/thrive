@@ -1,4 +1,4 @@
-# tokoo  — Professional Services Template V11
+# flexco  — Professional Services Template V11
 
 ## Secteur
 Services professionnels : cabinets, conseil, expertise, accompagnement, prestations B2B/B2C.

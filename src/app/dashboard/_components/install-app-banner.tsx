@@ -111,8 +111,8 @@ export function InstallAppBanner() {
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy-900/[0.06] bg-violet-50 px-4 py-2.5 text-sm text-navy-900 sm:px-6">
       <p className="font-medium">
         {showIosHint
-          ? "Installez tokoo  sur cet iPhone : appuyez sur Partager, puis « Sur l'écran d'accueil »."
-          : "Installez tokoo  sur cet appareil pour y accéder en un tap, comme une vraie appli."}
+          ? "Installez flexco  sur cet iPhone : appuyez sur Partager, puis « Sur l'écran d'accueil »."
+          : "Installez flexco  sur cet appareil pour y accéder en un tap, comme une vraie appli."}
       </p>
       <div className="flex items-center gap-2">
         {!showIosHint && (

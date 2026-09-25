@@ -47,7 +47,7 @@ champ téléphone/WhatsApp de l'étape 3 suit désormais l'indicatif
 formulaires publics de l'application (réservation, etc.) qui affichent
 encore un placeholder `+237` — recensés lors de l'inspection initiale
 mais non modifiés, car ils concernent les CLIENTS FINAUX des
-entreprises utilisatrices de tokoo , pas tokoo  elle-même (hors mission
+entreprises utilisatrices de flexco , pas flexco  elle-même (hors mission
 "country management" au sens strict). Voir rapport d'implémentation,
 section "Risques restants".
 

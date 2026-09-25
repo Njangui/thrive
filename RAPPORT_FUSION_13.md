@@ -1,13 +1,13 @@
-# Rapport de fusion #13 — thrive-main-fusionne (fusion #12) + tokoo  Telegram Omnichannel v3 + patch affiliation
+# Rapport de fusion #13 — thrive-main-fusionne (fusion #12) + flexco  Telegram Omnichannel v3 + patch affiliation
 
 Fait suite à `RAPPORT_FUSION_12.md`. Trois sources reçues et fusionnées :
 
 1. **`thrive-main-fusionne.zip`** (511 fichiers) — état documenté par
-   `RAPPORT_FUSION_12.md` : base tokoo  + connexion Google OAuth + lien
+   `RAPPORT_FUSION_12.md` : base flexco  + connexion Google OAuth + lien
    "Console Admin" dans le dashboard marchand + lien "Tableau de bord" sur
    la landing pour un visiteur déjà connecté + un bug CSS Tailwind corrigé.
-2. **`tokoo -tokoo -telegram-omnichannel-v3.zip`** (523 fichiers) —
-   même base tokoo , divergée séparément avec la fonctionnalité
+2. **`flexco -flexco -telegram-omnichannel-v3.zip`** (523 fichiers) —
+   même base flexco , divergée séparément avec la fonctionnalité
    **Publications Telegram Omnichannel** (service dédié, cron
    `process-telegram-publications`, migration `0055`, pièces jointes
    entrantes/sortantes Telegram, docs) et un refactor de fond : les
@@ -24,20 +24,20 @@ Fait suite à `RAPPORT_FUSION_12.md`. Trois sources reçues et fusionnées :
 Les deux archives complètes partagent un ancêtre commun (le point de
 départ de la fusion #12, 511 fichiers). Diff exhaustif : 511 vs 523
 fichiers, 1 fichier propre à thrive (`RAPPORT_FUSION_12.md`, conservé
-ici pour l'historique), 13 propres à tokoo  (tout le lot Telegram
+ici pour l'historique), 13 propres à flexco  (tout le lot Telegram
 Omnichannel), 51 fichiers présents des deux côtés mais divergents.
 
-tokoo  a été pris comme **base** (c'est la branche la plus avancée : elle
+flexco  a été pris comme **base** (c'est la branche la plus avancée : elle
 contient déjà tout ce que thrive a, sauf les 3 apports de la fusion #12).
 Chacun des 51 fichiers divergents a été inspecté individuellement — jamais
 un `cp` en masse d'un côté ou de l'autre — pour distinguer trois cas :
-apport de fusion #12 à reporter tel quel (aucun changement tokoo  sur ce
-fichier), évolution tokoo  à conserver telle quelle (rien à reporter),
+apport de fusion #12 à reporter tel quel (aucun changement flexco  sur ce
+fichier), évolution flexco  à conserver telle quelle (rien à reporter),
 ou les deux à la fois (fusion manuelle ligne à ligne). Le détail par
 fichier serait trop long pour ce rapport ; les points ci-dessous ne
 couvrent que les décisions non triviales et les vrais bugs trouvés.
 
-## 1. Apports de la fusion #12 reportés sur la base tokoo 
+## 1. Apports de la fusion #12 reportés sur la base flexco 
 
 Google OAuth (`auth-shell.tsx`, `login/page.tsx`, `signup/page.tsx`),
 lien "Console Admin" (`platform-admin-service.ts` + test,
@@ -48,20 +48,20 @@ lien "Console Admin" (`platform-admin-service.ts` + test,
 Tailwind (valeurs arbitraires `rgb(...)` avec espace non échappé) et la
 classe `.auth-oauth-button` dans `globals.css`, et la section OAuth de
 `docs/DEPLOYMENT.md` — tous reportés à l'identique. `globals.css`
-conserve en plus les classes propres à tokoo  (`.site-editor-*`,
+conserve en plus les classes propres à flexco  (`.site-editor-*`,
 `.affiliate-page .adm-card`) que thrive n'avait pas.
 
 **Décision** : la fusion #12 avait aussi supprimé le lien de nav
 "Affiliation" (`dashboard-nav.tsx`, icône `IconLink`), sans qu'aucune
 raison ne soit documentée dans `RAPPORT_FUSION_12.md`. Ce lien a été
-**conservé** — la branche tokoo  développe activement l'affiliation
+**conservé** — la branche flexco  développe activement l'affiliation
 (programme de parrainage, codes promo, c'est justement l'objet du patch
 `files__18_.zip`), le retirer de la navigation aurait été régressif sans
 justification.
 
 ## 2. Vrai bug trouvé et corrigé — `dashboard/channels/page.tsx`
 
-Le passage en `tokoo ` de ce fichier côté tokoo  a aussi "compacté" le
+Le passage en `flexco ` de ce fichier côté flexco  a aussi "compacté" le
 style des 5 Server Actions (`connectSocialAction`, `connectWhatsAppAction`,
 `connectTelegramAction`, `disconnectTelegramAction`, `connectYouTubeAction`)
 — et a fait disparaître au passage un vrai garde-fou documenté par un
@@ -69,18 +69,18 @@ commentaire de thrive resté, lui, intact : **`redirect()`/`flash()` ne
 doivent jamais être appelés à l'intérieur d'un `try` qui a son propre
 `catch`**, sans quoi c'est ce `catch` qui intercepte l'exception spéciale
 `NEXT_REDIRECT` de Next.js et la traite comme une vraie erreur. Les 5
-fonctions de la version tokoo  appelaient toutes leur `redirect()`/
+fonctions de la version flexco  appelaient toutes leur `redirect()`/
 `flash()` de succès *à l'intérieur* du `try` — en clair, **aucun bouton
 "Connecter" de cette page ne fonctionnait** : chaque connexion réussie
 aurait affiché un message d'erreur au lieu de rediriger. Corrigé en
 restaurant le pattern sûr (capture du résultat dans une variable, appel
 de `redirect()`/`flash()` après le `try/catch`) sur les 5 fonctions, en
-gardant le texte "tokoo " et les couleurs de la version tokoo .
+gardant le texte "flexco " et les couleurs de la version flexco .
 
 ## 3. Vrai bug trouvé et corrigé — `affiliate-admin-service.ts`
 
 `npm run typecheck` sur le résultat fusionné a révélé une erreur
-préexistante dans le zip tokoo  lui-même (indépendante de cette
+préexistante dans le zip flexco  lui-même (indépendante de cette
 fusion) : `affiliate-admin-service.ts` importait et ré-exportait
 `notifyPlatformOperators` depuis `affiliate-service.ts`, fonction que le
 refactor de centralisation Telegram avait supprimée de ce fichier sans
@@ -113,7 +113,7 @@ dépréciée en parallèle du nouveau service centralisé.
 ## 5. Vrai bug trouvé et corrigé — `affiliate/layout.tsx`
 
 Sans rapport avec les sources fusionnées (présent tel quel dans le zip
-tokoo ) : le tableau de liens de nav `[["/affiliate/dashboard",
+flexco ) : le tableau de liens de nav `[["/affiliate/dashboard",
 "Tableau de bord"], ...]` était inféré `string[][]`, donc `href`/`label`
 typés `string | undefined` une fois déstructurés — `Link href={href}`
 refusait `undefined`. Corrigé avec `as const` (tuples littéraux).

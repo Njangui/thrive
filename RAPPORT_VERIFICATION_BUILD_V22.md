@@ -1,10 +1,10 @@
 # Rapport de vérification — build V22 (module finance plateforme + tenant)
 
-Fait suite à `FUSION_tokoo _V22.md`, qui notait : *« npm ci tentée mais
+Fait suite à `FUSION_flexco _V22.md`, qui notait : *« npm ci tentée mais
 interrompu, build non validé »*. Date : 23 septembre 2026.
 
 **Demande** : « build mon projet pour voir si tout passe ». Entrée :
-`tokoo -FUSION-V22-COMPLETE.zip`.
+`flexco -FUSION-V22-COMPLETE.zip`.
 
 ## 1. Résultat en bref
 

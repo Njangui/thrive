@@ -1,4 +1,4 @@
-# Publications omnicanales tokoo 
+# Publications omnicanales flexco 
 
 ## Principe
 
@@ -6,7 +6,7 @@ La page `/dashboard/marketing/nouveau` est le point d'entrée unique pour publie
 
 Le commerçant :
 1. sélectionne un ou plusieurs produits actifs ;
-2. tokoo  construit automatiquement le contenu (nom, prix, catégorie, description, URL et images) ;
+2. flexco  construit automatiquement le contenu (nom, prix, catégorie, description, URL et images) ;
 3. sélectionne les destinations connectées ;
 4. publie immédiatement ou programme la diffusion.
 

@@ -65,7 +65,7 @@ export async function createCampaignFromProducts(
   const accountsByPlatform = new Map<string, Set<string>>();
   for (const target of input.targets) {
     const entitlementKey = entitlementByPlatform[target.platform];
-    if (!entitlementKey) throw new QuotaExceededError(`Le canal ${target.platform} n'est pas disponible dans les offres tokoo  actuelles.`);
+    if (!entitlementKey) throw new QuotaExceededError(`Le canal ${target.platform} n'est pas disponible dans les offres flexco  actuelles.`);
     const ids = accountsByPlatform.get(target.platform) ?? new Set<string>();
     ids.add(target.accountId);
     accountsByPlatform.set(target.platform, ids);
@@ -232,7 +232,7 @@ export async function createCampaignFromProducts(
  * CORRECTIF Lot 3 : la version précédente marquait `paused` de façon
  * INCONDITIONNELLE, même quand `cancelPost` échouait côté Zernio — un
  * post resté réellement actif chez le fournisseur pouvait donc être
- * affiché "en pause" par tokoo  et se publier quand même (exactement le
+ * affiché "en pause" par flexco  et se publier quand même (exactement le
  * cas que §95 interdit : "Une publication échouée [ici : une annulation
  * échouée] ne doit pas être affichée comme publiée [ici : comme mise en
  * pause]"). Désormais :

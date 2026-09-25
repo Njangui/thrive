@@ -50,16 +50,16 @@ export default async function ServicesPage({
   const draftCount = services.filter((s) => s.status === "draft").length;
 
   return (
-    <div className="tokoo -page products-page flex min-w-0 flex-col gap-6">
-      <header className="tokoo -page-hero">
+    <div className="flexco -page products-page flex min-w-0 flex-col gap-6">
+      <header className="flexco -page-hero">
         <div className="relative z-10 flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <p className="tokoo -eyebrow">Vitrine · catalogue · rendez-vous</p>
+            <p className="flexco -eyebrow">Vitrine · catalogue · rendez-vous</p>
             <h1 className="mt-2 max-w-3xl font-jakarta text-3xl font-extrabold tracking-tight sm:text-4xl">Vos prestations, présentées comme elles le méritent.</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Une seule fiche prestation alimente votre site, WhatsApp et l&apos;assistant IA — photo, description et informations complémentaires incluses.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/dashboard/services/new" className="tokoo -btn-primary">+ Ajouter une prestation</Link>
+            <Link href="/dashboard/services/new" className="flexco -btn-primary">+ Ajouter une prestation</Link>
           </div>
         </div>
       </header>
@@ -70,7 +70,7 @@ export default async function ServicesPage({
           ["Actives", activeCount, "Visibles sur votre vitrine"],
           ["Brouillons", draftCount, "Pas encore publiées"],
         ].map(([label, value, help]) => (
-          <div key={String(label)} className="tokoo -kpi">
+          <div key={String(label)} className="flexco -kpi">
             <p className="adm-label">{label}</p>
             <p className="mt-1 font-jakarta text-2xl font-extrabold tracking-tight text-navy-900">{value}</p>
             <p className="mt-1 text-xs adm-muted">{help}</p>
@@ -81,13 +81,13 @@ export default async function ServicesPage({
       {error && <p className="adm-alert-danger">{error}</p>}
       {success && <p className="adm-alert-success">{success}</p>}
 
-      <section className="tokoo -info-panel">
+      <section className="flexco -info-panel">
         <div>
-          <p className="tokoo -eyebrow text-primary">Une fiche, plusieurs usages</p>
+          <p className="flexco -eyebrow text-primary">Une fiche, plusieurs usages</p>
           <h2 className="mt-1 font-jakarta text-base font-bold">Photos, description, informations complémentaires.</h2>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Illustrez chaque prestation (coupe, consultation, réparation...) avec plusieurs photos et précisez tout ce qui aide le client à se décider (zone desservie, durée de validité, matériel utilisé...).</p>
         </div>
-        <span className="tokoo -status">Catalogue connecté</span>
+        <span className="flexco -status">Catalogue connecté</span>
       </section>
 
       <section className="min-w-0">
@@ -99,8 +99,8 @@ export default async function ServicesPage({
           <span className="hidden text-xs font-medium text-slate-400 sm:block">{services.length} prestation{services.length > 1 ? "s" : ""}</span>
         </div>
         {services.length === 0 ? (
-          <div className="tokoo -empty">
-            <div className="tokoo -empty-icon">＋</div>
+          <div className="flexco -empty">
+            <div className="flexco -empty-icon">＋</div>
             <h3 className="font-jakarta text-base font-bold">Aucune prestation pour l&apos;instant</h3>
             <p className="mt-1 max-w-md text-sm text-slate-500">Ajoutez-en une pour qu&apos;elle apparaisse sur votre site et soit reconnue par l&apos;assistant WhatsApp.</p>
             <Link href="/dashboard/services/new" className="adm-btn-primary mt-4">Ajouter ma première prestation</Link>
@@ -110,7 +110,7 @@ export default async function ServicesPage({
             {services.map((s) => {
               const isActive = s.status === "active";
               return (
-                <article key={s.id} className="tokoo -product-card group">
+                <article key={s.id} className="flexco -product-card group">
                   <div className="relative aspect-[1.25/1] overflow-hidden bg-slate-100">
                     {s.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element

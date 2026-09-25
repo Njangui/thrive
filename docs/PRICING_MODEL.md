@@ -1,4 +1,4 @@
-# tokoo  — modèle tarifaire (freemium)
+# flexco  — modèle tarifaire (freemium)
 
 > Mis à jour à la fusion #16 : la grille « v2 » précédente (Starter 9 900 / Business
 > 19 900 / Pro 39 900 FCFA, avec période d'essai) est **remplacée**. Source de vérité

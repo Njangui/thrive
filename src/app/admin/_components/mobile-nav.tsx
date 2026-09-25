@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ADMIN_NAV_GROUPS } from "./sidebar";
 import { IconGrid } from "./icons";
-import { tokoo Brand } from "@/app/_components/tokoo -brand";
+import { flexco Brand } from "@/app/_components/flexco -brand";
 
 /**
  * `AdminSidebar` est masquée sous `lg` (cf. `hidden lg:flex`) — sans ce
@@ -49,7 +49,7 @@ export function AdminMobileNav() {
               <button type="button" aria-label="Fermer le menu" onClick={() => setOpen(false)} className="flex-1 bg-navy-900/40" />
               <div className="flex h-full w-[280px] flex-col overflow-y-auto bg-navy-900 px-3 py-5">
                 <div className="mb-4 flex items-center justify-between px-2">
-                  <div onClick={() => setOpen(false)}><tokoo Brand href="/admin" compact dark /></div>
+                  <div onClick={() => setOpen(false)}><flexco Brand href="/admin" compact dark /></div>
                   <button type="button" onClick={() => setOpen(false)} aria-label="Fermer" className="text-white/60">
                     ✕
                   </button>

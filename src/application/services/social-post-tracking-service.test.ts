@@ -4,7 +4,7 @@ import type { CommentReceivedEvent, ExternalPostTrackedEvent } from "@/domain/ev
 /**
  * social-post-tracking-service.ts n'avait AUCUN test avant ce lot, alors que c'est le module qui
  * ferme la demande « synchronisation automatique des commentaires + notification push et in-app » :
- * `trackExternalPost` (détection d'un post publié hors tokoo ) et surtout `handleIncomingComment`
+ * `trackExternalPost` (détection d'un post publié hors flexco ) et surtout `handleIncomingComment`
  * (stockage + `notifyOrgAdmins`, qui couvre in-app ET push — voir notification-service.test.ts /
  * push-service.test.ts pour ce canal lui-même). Ici on verrouille le CÂBLAGE : que la notification
  * parte bien à chaque nouveau commentaire, jamais deux fois pour le même, et jamais pour le
@@ -139,7 +139,7 @@ function externalPostEvent(overrides: Partial<ExternalPostTrackedEvent["payload"
   };
 }
 
-describe("trackExternalPost — détection d'un post publié hors tokoo ", () => {
+describe("trackExternalPost — détection d'un post publié hors flexco ", () => {
   it("post jamais vu : crée la ligne social_posts (source=external) ET sa cible", async () => {
     await trackExternalPost(externalPostEvent());
 

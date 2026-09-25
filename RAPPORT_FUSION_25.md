@@ -4,9 +4,9 @@
 
 | Source | Contenu | Base |
 |---|---|---|
-| `tokoo -fusionne-24.zip` | Fusion #23 (WhatsApp) + #24 (commentaires), 985 tests | **Retenue comme base** |
+| `flexco -fusionne-24.zip` | Fusion #23 (WhatsApp) + #24 (commentaires), 985 tests | **Retenue comme base** |
 | `thrive-main-corrige.zip` | Audit sécurité : 3 correctifs | fusion ~22 |
-| `tokoo -financial-system-v22-polished.zip` | Système financier v21→v22 + correctif de prix | fusion #22 |
+| `flexco -financial-system-v22-polished.zip` | Système financier v21→v22 + correctif de prix | fusion #22 |
 | `thrive-lot-p.zip` | Refonte messagerie auto/semi-auto (delta seul, pas de projet complet) | non fusionné avant |
 | *(cette session)* | Groupes Telegram (conversation partagée), livré plus tôt aujourd'hui | fusion #24 (avant réception des 4 sources ci-dessus) |
 
@@ -33,7 +33,7 @@ fusion, ce correctif aurait été perdu en gardant fusion #24 telle quelle.
 
 **Polish additionnel repris** (superset propre, sans rien casser côté fusion #24) :
 `admin/channels/page.tsx` et `admin/_components/mobile-nav.tsx` utilisent des
-composants UI partagés plus aboutis (`AdminBadge`/`AdminTableCard`, `tokoo Brand`)
+composants UI partagés plus aboutis (`AdminBadge`/`AdminTableCard`, `flexco Brand`)
 dans le zip financier ; `admin/_components/sidebar.tsx`/`charts.tsx` et
 `app-charts.tsx` (`AppBarChart`) sont nécessaires aux nouveaux écrans finance.
 
