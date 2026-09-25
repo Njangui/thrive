@@ -22,7 +22,7 @@ import { POST } from "./route";
 const TRANSACTION = { transId: "FAP2026ABC", status: "SUCCESSFUL", amount: 15000, externalId: "pay-local-1" };
 
 function post(body: string, secret?: string): Request {
-  return new Request("https://flexco .test/api/webhooks/fapshi", { method: "POST", body, headers: secret ? { "x-wh-secret": secret } : {} });
+  return new Request("https://flexco.test/api/webhooks/fapshi", { method: "POST", body, headers: secret ? { "x-wh-secret": secret } : {} });
 }
 
 beforeEach(() => {

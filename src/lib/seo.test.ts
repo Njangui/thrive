@@ -574,17 +574,17 @@ describe("buildWebSiteJsonLd / buildPlatformOrganizationJsonLd", () => {
   });
 
   it("Organization plateforme : omet logo/description absents", () => {
-    const minimal = buildPlatformOrganizationJsonLd({ name: "flexco ", url: "https://flexco .com" });
+    const minimal = buildPlatformOrganizationJsonLd({ name: "Flexco", url: "https://flexco.com" });
     expect(minimal.logo).toBeUndefined();
     expect(minimal.description).toBeUndefined();
 
     const full = buildPlatformOrganizationJsonLd({
-      name: "flexco ",
-      url: "https://flexco .com",
-      logoUrl: "https://flexco .com/images/flexco -mark-512.png",
+      name: "Flexco",
+      url: "https://flexco.com",
+      logoUrl: "https://flexco.com/images/flexco-mark-512.png",
       description: "Gérez votre entreprise depuis un seul endroit.",
     });
-    expect(full.logo).toBe("https://flexco .com/images/flexco -mark-512.png");
+    expect(full.logo).toBe("https://flexco.com/images/flexco-mark-512.png");
     expect(full.description).toBe("Gérez votre entreprise depuis un seul endroit.");
   });
 });

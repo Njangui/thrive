@@ -79,9 +79,9 @@ export default async function AffiliateApplyPage({
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="font-display text-2xl font-bold">Devenir affilié flexco </h1>
+      <h1 className="font-display text-2xl font-bold">Devenir affilié Flexco</h1>
       <p className="mt-1 text-sm text-muted">
-        Recommandez flexco  et touchez une commission sur chaque nouveau client que vous apportez.
+        Recommandez Flexco et touchez une commission sur chaque nouveau client que vous apportez.
       </p>
 
       {success && (
@@ -119,7 +119,7 @@ export default async function AffiliateApplyPage({
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium uppercase text-muted" htmlFor="promotionChannels">
-            Comment comptez-vous promouvoir flexco  ?
+            Comment comptez-vous promouvoir Flexco ?
           </label>
           <textarea
             id="promotionChannels"

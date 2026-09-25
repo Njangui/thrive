@@ -5,7 +5,7 @@ import { ServiceWorkerRegister } from "./_components/service-worker-register";
 import { PLATFORM_FONT_VARIABLES } from "./fonts";
 
 /**
- * Paire de polices pour la landing marketing flexco  et la console Super
+ * Paire de polices pour la landing marketing Flexco et la console Super
  * Admin (`/admin/*`) UNIQUEMENT — n'a rien à voir avec `displayFont`/
  * `bodyFont` ci-dessus, qui restent le mécanisme de police PAR TENANT de
  * la vitrine publique (`resolveTenantFontClassName`, non touché ici).
@@ -42,7 +42,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "flexco  — Plus qu’un outil, un levier de croissance.",
+  title: "Flexco — Plus qu’un outil, un levier de croissance.",
   description: "Gérez. Vendez. Communiquez. Faites grandir votre entreprise.",
   // Manifest PWA global (Lot E, Partie 3) : neutre, pas de branding tenant
   // (voir public/manifest.json — le favicon PAR TENANT de la vitrine

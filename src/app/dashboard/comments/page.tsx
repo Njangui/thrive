@@ -21,7 +21,7 @@ import { CommentCard } from "./comment-card";
  * Lot 5 : les commentaires arrivent maintenant en temps réel (webhook
  * `comment.received`, voir app/api/webhooks/zernio/route.ts et
  * social-post-tracking-service.ts), pour une publication faite via
- * flexco  COMME pour une publication faite directement sur la
+ * Flexco COMME pour une publication faite directement sur la
  * plateforme (avec un délai de ~1h la toute première fois qu'un post
  * externe est détecté — voir social-post-tracking-service.ts). Le bouton
  * "Vérifier une publication" ci-dessous (pull manuel,
@@ -115,7 +115,7 @@ export default async function CommentsPage({
         <h1 className="font-jakarta text-2xl font-bold tracking-tight">Commentaires</h1>
         <p className="text-sm text-slate-500">
           Répondez aux commentaires laissés sur vos publications — ils arrivent ici automatiquement, que la
-          publication vienne de flexco  ou directement de vos réseaux.
+          publication vienne de Flexco ou directement de vos réseaux.
         </p>
       </div>
 

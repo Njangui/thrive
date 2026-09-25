@@ -98,7 +98,7 @@ export function AfricaAvailabilityMap({ countries }: { countries: PublicCountry[
             height={MAP_HEIGHT}
             projection={projection}
             role="img"
-            aria-label="Carte d'Afrique indiquant les pays où flexco  est disponible ou bientôt disponible"
+            aria-label="Carte d'Afrique indiquant les pays où Flexco est disponible ou bientôt disponible"
             className="block h-auto w-full"
           >
             <Geographies geography={geography}>

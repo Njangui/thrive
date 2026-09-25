@@ -65,7 +65,7 @@ export default async function AiConfigPage({ searchParams }: { searchParams: Pro
       {success ? <p className="adm-alert-success">{success}</p> : null}{error ? <p className="adm-alert-danger">{error}</p> : null}
       <form action={updateAiConfigAction} className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><input type="hidden" name="organizationId" value={organizationId}/>
         <section className="adm-card space-y-5">
-          <div><h2 className="adm-heading-2 text-lg">Comportement</h2><p className="mt-1 text-sm text-slate-500">flexco  utilise automatiquement une solution de secours si nécessaire.</p></div>
+          <div><h2 className="adm-heading-2 text-lg">Comportement</h2><p className="mt-1 text-sm text-slate-500">Flexco utilise automatiquement une solution de secours si nécessaire.</p></div>
           <label className="flex items-center gap-3 rounded-2xl bg-violet-50 p-4 text-sm font-semibold"><input type="checkbox" name="enabled" defaultChecked={config.enabled} className="h-4 w-4"/> Activer les réponses automatiques</label>
           {/* Lot P : ce réglage ne pilote QUE l'IA générative — le dernier recours
               quand rien d'autre ne correspond. La FAQ, le catalogue et les infos

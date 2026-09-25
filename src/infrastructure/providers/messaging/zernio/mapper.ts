@@ -185,9 +185,9 @@ export function mapZernioEventToDomainEvent(
     }
 
     // Confirmés (types.ts) mais pas encore consommés par une fonctionnalité
-    // flexco  dans ce lot : conversation.started, message.sent/edited/
+    // Flexco dans ce lot : conversation.started, message.sent/edited/
     // deleted/delivered/read, reaction.received, review.new/updated
-    // (aucune fonctionnalité "avis" dans flexco  à ce jour — voir
+    // (aucune fonctionnalité "avis" dans Flexco à ce jour — voir
     // RAPPORT_LOT_3.md, section Missing). Logué proprement plutôt que
     // silencieusement ignoré (section 44 : "Les événements non supportés
     // doivent être loggés proprement").
@@ -205,7 +205,7 @@ export function mapZernioEventToDomainEvent(
  *
  * `null` pour tout event qu'on ne traite pas activement dans ce lot
  * (post.scheduled/post.cancelled/post.recycled — déjà reflétés côté
- * flexco  par nos propres actions schedulePost/cancelPost, pas par une
+ * Flexco par nos propres actions schedulePost/cancelPost, pas par une
  * confirmation webhook a posteriori) ou pour un event sans id de post
  * exploitable (jamais deviné).
  */
@@ -303,7 +303,7 @@ export function mapZernioPostEventToDomainEvent(
  * Volontairement séparé de `mapZernioPostEventToDomainEvent` ci-dessus :
  * forme de payload différente (`ZernioExternalPostWebhookPost`, pas
  * `ZernioPostResource`) et sémantique différente (un post qui existe
- * DÉJÀ sur la plateforme, jamais un statut de publication flexco ).
+ * DÉJÀ sur la plateforme, jamais un statut de publication Flexco).
  */
 export function mapZernioExternalPostEventToDomainEvent(
   raw: ZernioExternalPostWebhookEvent,

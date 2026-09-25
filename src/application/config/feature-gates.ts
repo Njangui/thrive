@@ -66,8 +66,8 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeature> = {
   },
   remove_branding: {
     entitlementKey: "remove_branding",
-    label: "Site sans badge flexco ",
-    description: "Retire la mention « Site propulsé par flexco  » du bas de votre site.",
+    label: "Site sans badge Flexco",
+    description: "Retire la mention « Site propulsé par Flexco » du bas de votre site.",
     minPlan: "pro",
   },
   automatic_messaging: {

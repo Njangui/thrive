@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { JSX } from "react";
 import { usePathname } from "next/navigation";
-import { flexco Brand } from "@/app/_components/flexco -brand";
+import { FlexcoBrand } from "@/app/_components/flexco-brand";
 import {
   IconGrid,
   IconBuilding,
@@ -80,7 +80,7 @@ export function AdminSidebar() {
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">
       <div className="mb-4 px-2 py-1.5">
-        <flexco Brand href="/admin" compact dark />
+        <FlexcoBrand href="/admin" compact dark />
         <p className="mt-2 text-[11px] font-medium text-white/40">Console Super Admin</p>
       </div>
 

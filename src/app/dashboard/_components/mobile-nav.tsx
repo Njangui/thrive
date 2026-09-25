@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { flexco Brand } from "@/app/_components/flexco -brand";
+import { FlexcoBrand } from "@/app/_components/flexco-brand";
 import type { ModuleKey } from "@/application/config/modules";
 import { isActive, useVisibleNavGroups } from "./dashboard-nav";
 
 /**
  * `DashboardSidebar` est masquée sous `lg` (`hidden lg:flex`) — sans ce
  * composant, le dashboard serait impossible à naviguer sur mobile, alors
- * que la majorité des commerçants cibles de flexco  l'utilisent
+ * que la majorité des commerçants cibles de Flexco l'utilisent
  * probablement depuis leur téléphone. Miroir de `AdminMobileNav`.
  *
  * Filtrée par `enabledModules` comme `DashboardSidebar` (même
@@ -74,7 +74,7 @@ export function DashboardMobileNav({
               <div className="flex h-full w-[280px] flex-col overflow-y-auto bg-navy-900 px-3 py-5">
                 <div className="mb-4 flex items-center justify-between px-2">
                   <div onClick={() => setOpen(false)}>
-                    <flexco Brand href="/dashboard" compact dark />
+                    <FlexcoBrand href="/dashboard" compact dark />
                     <p className="mt-2 max-w-[180px] truncate text-[11px] font-medium text-white/40">{organizationName}</p>
                   </div>
                   <button type="button" onClick={() => setOpen(false)} aria-label="Fermer" className="text-white/60">

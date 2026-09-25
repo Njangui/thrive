@@ -2,7 +2,7 @@ import Link from "next/link";
 
 /**
  * 404 racine — avant ce fichier, une route inexistante montrait l'écran
- * par défaut de Next.js (brut, sans l'identité flexco ). Voir
+ * par défaut de Next.js (brut, sans l'identité Flexco). Voir
  * COMPARAISON_MASTER_PROMPT.md, section "Avant toute mise en production
  * réelle". S'applique à toute route non gérée (dashboard, admin, site
  * public d'un tenant, landing marketing) — reste volontairement neutre

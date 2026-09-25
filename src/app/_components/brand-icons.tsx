@@ -1,6 +1,6 @@
 /**
  * Repères visuels (logomarks) des réseaux sociaux — utilisés partout où
- * flexco  affiche "quel réseau est-ce" (canaux, analytics, commentaires,
+ * Flexco affiche "quel réseau est-ce" (canaux, analytics, commentaires,
  * site). Distinct de `app-icons.tsx` (icônes UI génériques en trait,
  * `currentColor`, 24x24) : ici chaque glyphe est un aplat (`fill`) pensé
  * pour être posé en blanc sur le badge de couleur/dégradé propre à la

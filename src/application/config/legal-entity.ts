@@ -1,5 +1,5 @@
 /**
- * Identité juridique de l'éditeur de flexco  — l'UNIQUE endroit à remplir
+ * Identité juridique de l'éditeur de Flexco — l'UNIQUE endroit à remplir
  * pour les trois pages légales (mentions légales, CGU, confidentialité).
  *
  * Jusqu'ici, les `[À COMPLÉTER]` étaient disséminés dans le texte de trois

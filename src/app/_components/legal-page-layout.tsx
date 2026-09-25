@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 /**
  * Mise en page partagée pour les 3 pages légales de la landing marketing
- * flexco  (mentions légales, CGU, politique de confidentialité).
+ * Flexco (mentions légales, CGU, politique de confidentialité).
  *
  * ⚠️ Contenu de DÉPART, pas un document juridique validé — voir le
  * bandeau ci-dessous. Claude n'est pas juriste (voir les instructions du
@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
  * factuelles pour démarrer, jamais une garantie de conformité.
  *
  * Habillage repris en violet/navy (chantier d'unification design, sept.
- * 2026) : ces pages appartiennent à la landing marketing flexco  (lien
+ * 2026) : ces pages appartiennent à la landing marketing Flexco (lien
  * retour "Accueil", liées depuis son footer), pas au thème de la vitrine
  * tenant qu'elles utilisaient jusqu'ici par erreur d'héritage. Le bandeau
  * "Brouillon" passe de `clay` (erreur) à `warning` (amber) : c'est un

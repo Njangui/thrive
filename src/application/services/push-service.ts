@@ -213,7 +213,7 @@ export async function sendTestPush(organizationId: string): Promise<void> {
   await sendPush(
     organizationId,
     "Notifications activées",
-    "Vous recevrez désormais vos notifications même quand flexco  est fermé.",
+    "Vous recevrez désormais vos notifications même quand Flexco est fermé.",
     "/dashboard/notifications",
   );
 }

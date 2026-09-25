@@ -206,7 +206,7 @@ export default async function GroupsPage({
   const connectableAvailable = available.groups.filter((g) => !g.alreadyConnected);
   const defaultScheduledAt = nowInCameroonAsDatetimeLocal();
   const minScheduledAt = nowInCameroonAsDatetimeLocal(5);
-  // Lot M — file d'attente d'activation : groupes connectés côté flexco 
+  // Lot M — file d'attente d'activation : groupes connectés côté Flexco
   // mais dont aucun message n'a encore été reçu (voir en-tête de fichier).
   const pendingActivationGroups = connectedGroups.filter((g) => g.status === "connected" && !g.isSendable);
 
@@ -268,7 +268,7 @@ export default async function GroupsPage({
                   </td>
                   <td
                     className="px-2 py-2"
-                    title="Une diffusion ne peut atteindre ce groupe que si flexco  dispose déjà d'une conversation active avec lui."
+                    title="Une diffusion ne peut atteindre ce groupe que si Flexco dispose déjà d'une conversation active avec lui."
                   >
                     {g.isSendable ? (
                       <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs text-violet-600">Prêt</span>

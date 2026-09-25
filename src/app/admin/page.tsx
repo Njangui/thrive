@@ -118,7 +118,7 @@ export default async function AdminOverviewPage() {
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[.18em] text-primary">Coût infrastructure social</p>
               <h2 className="mt-2 text-xl font-extrabold tracking-tight">Zernio</h2>
-              <p className="mt-1 max-w-xl text-xs leading-5 text-white/55">Estimation mensuelle basée sur les comptes réellement connectés dans flexco .</p>
+              <p className="mt-1 max-w-xl text-xs leading-5 text-white/55">Estimation mensuelle basée sur les comptes réellement connectés dans Flexco.</p>
             </div>
             <Link href="/admin/finance" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/5">Détails</Link>
           </div>

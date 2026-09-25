@@ -74,7 +74,7 @@ function buildInvitationEmailHtml(organizationName: string, inviteUrl: string, r
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
       <h2>Vous êtes invité(e) à rejoindre ${organizationName}</h2>
-      <p>Vous avez été invité(e) à rejoindre <strong>${organizationName}</strong> sur flexco , avec le rôle <strong>${roleLabel[role]}</strong>.</p>
+      <p>Vous avez été invité(e) à rejoindre <strong>${organizationName}</strong> sur Flexco, avec le rôle <strong>${roleLabel[role]}</strong>.</p>
       <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 20px;background:#2f6b4f;color:#fff;text-decoration:none;border-radius:8px;">Rejoindre l'équipe</a></p>
       <p style="color:#666;font-size:13px;">Ce lien expire dans ${INVITATION_TTL_HOURS / 24} jours. Si vous n'attendiez pas cette invitation, ignorez cet email.</p>
     </div>
@@ -162,7 +162,7 @@ export async function inviteMember(
     const emailProvider = await getEmailProvider();
     const result = await emailProvider.sendEmail({
       to: normalizedEmail,
-      subject: `Invitation à rejoindre ${org.name} sur flexco `,
+      subject: `Invitation à rejoindre ${org.name} sur Flexco`,
       html: buildInvitationEmailHtml(org.name, inviteUrl, role),
     });
     emailDelivered = result.delivered;

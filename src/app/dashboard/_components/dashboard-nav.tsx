@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import type { ModuleKey } from "@/application/config/modules";
 import type { CreditStatus } from "@/application/services/ai-credits-service";
 import { getIndustryUi } from "@/application/config/industry-ui";
-import { flexco Brand } from "@/app/_components/flexco -brand";
+import { FlexcoBrand } from "@/app/_components/flexco-brand";
 import {
   IconGrid,
   IconTag,
@@ -208,7 +208,7 @@ export function DashboardSidebar({
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col bg-navy-900 px-3 py-5 lg:flex">
       <div className="mb-4 px-2 py-1.5">
-        <flexco Brand href="/dashboard" compact dark />
+        <FlexcoBrand href="/dashboard" compact dark />
         <p className="mt-2 max-w-[180px] truncate text-[11px] font-medium text-white/40">{organizationName}</p>
       </div>
 

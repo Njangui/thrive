@@ -170,7 +170,7 @@ async function downloadTelegramAttachmentIfPresent(organizationId: string, botId
   const messaging = await getMessagingProvider(organizationId, "telegram", botId);
   if (!messaging.downloadInboundAttachment) throw new Error("Le canal Telegram connecté ne permet pas le téléchargement des pièces jointes.");
   const downloaded = await messaging.downloadInboundAttachment(organizationId, candidate.fileId);
-  if (downloaded.data.byteLength > 20 * 1024 * 1024) throw new Error("La pièce jointe Telegram dépasse la limite de 20 Mo prise en charge par flexco .");
+  if (downloaded.data.byteLength > 20 * 1024 * 1024) throw new Error("La pièce jointe Telegram dépasse la limite de 20 Mo prise en charge par Flexco.");
 
   const storage = await getStorageProvider(organizationId);
   const contentType = downloaded.contentType?.split(";")[0] || candidate.mimeType || "application/octet-stream";

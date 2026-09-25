@@ -24,7 +24,7 @@ const GUIDES: Record<string, { title: string; intro: string; steps: string[]; ti
       "Définissez une prochaine action plutôt que de laisser le prospect sans suivi.",
       "Passez le prospect en client dès que la vente est réellement confirmée.",
     ],
-    tip: "flexco  propose automatiquement une relance à 24 h ou 48 h selon l'engagement observé.",
+    tip: "Flexco propose automatiquement une relance à 24 h ou 48 h selon l'engagement observé.",
   },
   "/dashboard/orders": {
     title: "Traiter une commande",
@@ -38,7 +38,7 @@ const GUIDES: Record<string, { title: string; intro: string; steps: string[]; ti
   },
   "/dashboard/finance": {
     title: "Lire votre situation financière",
-    intro: "Utilisez cette page pour suivre les encaissements, dépenses et mouvements enregistrés dans flexco .",
+    intro: "Utilisez cette page pour suivre les encaissements, dépenses et mouvements enregistrés dans Flexco.",
     steps: [
       "Commencez par vérifier la période sélectionnée.",
       "Contrôlez les entrées et sorties avant d'interpréter le résultat.",
@@ -99,11 +99,11 @@ const GUIDES: Record<string, { title: string; intro: string; steps: string[]; ti
   },
   "/dashboard/channels": {
     title: "Connecter vos canaux",
-    intro: "Chaque connexion se fait depuis flexco  avec des étapes guidées. Aucun réglage technique n'est nécessaire au quotidien.",
+    intro: "Chaque connexion se fait depuis Flexco avec des étapes guidées. Aucun réglage technique n'est nécessaire au quotidien.",
     steps: [
       "Choisissez le canal à connecter.",
       "Suivez l'autorisation officielle affichée par le service concerné.",
-      "Revenez dans flexco  et vérifiez que le statut passe à Connecté.",
+      "Revenez dans Flexco et vérifiez que le statut passe à Connecté.",
       "Testez ensuite un message ou une publication avant de lancer une campagne.",
     ],
     tip: "Les détails techniques des services utilisés restent volontairement cachés dans l'interface marchand.",

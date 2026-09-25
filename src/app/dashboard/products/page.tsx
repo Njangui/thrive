@@ -67,10 +67,10 @@ export default async function ProductsPage({
   };
 
   return (
-    <div className="flexco -page flex min-w-0 flex-col gap-5">
+    <div className="flexco-page flex min-w-0 flex-col gap-5">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="flexco -eyebrow">Catalogue</p>
+          <p className="flexco-eyebrow">Catalogue</p>
           <h1 className="mt-1 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Mes produits</h1>
           <p className="mt-1 text-sm text-slate-500">Gérez votre catalogue de produits et de services.</p>
         </div>
@@ -130,7 +130,7 @@ export default async function ProductsPage({
             const stock = Number(p.current_stock ?? 0);
             const isActive = p.status === "active" && stock > 0;
             return (
-              <article key={p.id} className="flexco -product-card group">
+              <article key={p.id} className="flexco-product-card group">
                 <div className="relative aspect-square overflow-hidden bg-slate-100">
                   {imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -160,8 +160,8 @@ export default async function ProductsPage({
         </div>
 
         {items.length === 0 && (
-          <div className="flexco -empty mx-4 mb-4">
-            <div className="flexco -empty-icon">＋</div>
+          <div className="flexco-empty mx-4 mb-4">
+            <div className="flexco-empty-icon">＋</div>
             <h3 className="mt-3 font-jakarta text-base font-bold">Aucun produit trouvé</h3>
             <p className="mt-1 max-w-md text-sm text-slate-500">Modifiez vos filtres ou ajoutez votre premier produit au catalogue.</p>
             <Link href="/dashboard/products/new" className="adm-btn-primary mt-4">Ajouter un produit</Link>

@@ -198,7 +198,7 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // Lot 5 — post détecté nativement sur la plateforme (hors flexco ),
+      // Lot 5 — post détecté nativement sur la plateforme (hors Flexco),
       // voir social-post-tracking-service.ts. Catégorie séparée du bloc
       // ci-dessus : forme de payload différente (ZernioExternalPostWebhookPost,
       // pas ZernioPostResource), jamais notre propre pipeline de publication.
@@ -249,7 +249,7 @@ export async function POST(request: Request) {
         domainEvent.payload.channel === "whatsapp" &&
         (await isWhatsAppGroupThread(organizationId, domainEvent.payload.externalThreadId))
       ) {
-        // Défense en profondeur (fusion #23, restaurée lors de la fusion flexco ×THRIVE
+        // Défense en profondeur (fusion #23, restaurée lors de la fusion Flexco×THRIVE
         // du 23/09/2026) : un fil dont l'identifiant est celui d'un groupe WhatsApp connecté
         // n'est pas une conversation client, même reçu par un compte de messagerie normal —
         // couvre les cas que le contrôle isGroupMessage ci-dessus ne verrait pas (ex.
@@ -307,7 +307,7 @@ export async function POST(request: Request) {
       // le Lot M/I, voir docs/ZERNIO_INTEGRATION.md). Fonctionne quel que
       // soit l'endroit où le post a été publié : trackExternalPost
       // (ci-dessus) fait exister la ligne locale nécessaire pour un post
-      // publié hors flexco , handleIncomingComment recrée cette ligne à
+      // publié hors Flexco, handleIncomingComment recrée cette ligne à
       // la volée en filet de sécurité si besoin (voir social-post-
       // tracking-service.ts).
       if (domainEvent.type === "COMMENT_RECEIVED") {

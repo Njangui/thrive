@@ -116,7 +116,7 @@ export class TelegramMessagingAdapter implements MessagingProvider {
   async downloadInboundAttachment(_organizationId: string, fileId: string): Promise<{ data: Uint8Array; contentType: string | null }> {
     const file = await this.client.getFile(fileId);
     const maxBytes = 20 * 1024 * 1024;
-    if (file.file_size && file.file_size > maxBytes) throw new Error("La pièce jointe Telegram dépasse la limite de 20 Mo prise en charge par flexco .");
+    if (file.file_size && file.file_size > maxBytes) throw new Error("La pièce jointe Telegram dépasse la limite de 20 Mo prise en charge par Flexco.");
     if (!file.file_path) throw new Error("Telegram n'a pas fourni le chemin du fichier.");
     return this.client.downloadFile(file.file_path);
   }

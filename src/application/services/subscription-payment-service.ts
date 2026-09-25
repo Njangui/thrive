@@ -99,7 +99,7 @@ export interface AdminPaymentSummary extends SubscriptionPaymentSummary {
  * Lot 5 (section 52 du master prompt — "Payments" dans la liste des
  * sections attendues du Super Admin). `listPaymentsForOrganization`
  * ci-dessus n'existait qu'à l'échelle d'un tenant (dashboard) ; jusqu'à
- * ce lot, l'opérateur CRESYVA n'avait aucune vue d'ensemble des paiements
+ * ce lot, l'opérateur FLEXCO n'avait aucune vue d'ensemble des paiements
  * plateforme (rapprochement, paiements en attente/échoués tous tenants
  * confondus). Lecture seule : les changements de statut restent la
  * responsabilité exclusive de handlePaymentWebhook() ci-dessous — cette
@@ -200,7 +200,7 @@ export async function initiatePayment(
     amount,
     currency: currencyCode,
     customerEmail: payerEmail,
-    description: `Abonnement CRESYVA — forfait ${plan.name}`,
+    description: `Abonnement FLEXCO — forfait ${plan.name}`,
   });
 
   // La ligne locale n'est créée qu'APRÈS l'appel provider, avec sa vraie

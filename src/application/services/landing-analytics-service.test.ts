@@ -32,7 +32,7 @@ describe("classifySource", () => {
   });
 
   it("une navigation interne (même hôte) n'est jamais une source externe", () => {
-    expect(classifySource({ referrer: "https://ma-boutique.flexco .com/produits", ownHost: "ma-boutique.flexco .com" }).source).toBe("Direct");
+    expect(classifySource({ referrer: "https://ma-boutique.flexco.com/produits", ownHost: "ma-boutique.flexco.com" }).source).toBe("Direct");
   });
 });
 

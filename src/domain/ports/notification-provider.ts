@@ -10,7 +10,7 @@ export interface NotificationRequest {
    * Optionnel : le premier appelant réel de ce port (alertes plateforme
    * du programme d'affiliation, voir affiliate-service.ts) n'est scopé à
    * AUCUNE organisation — ni `organizationId` ni `recipientUserId` n'ont
-   * de sens pour "l'opérateur flexco " dans son ensemble. Un futur usage
+   * de sens pour "l'opérateur Flexco" dans son ensemble. Un futur usage
    * PAR TENANT (ex: notifier l'owner d'une organisation) les renseignera.
    */
   organizationId?: string;

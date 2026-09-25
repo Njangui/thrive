@@ -521,16 +521,16 @@ export default async function SitePage({
   const customization = await canUseFeature(organizationId, "site_customization", 1);
   if (!customization.allowed) {
     return (
-      <div className="flexco -page">
-        <section className="flexco -page-hero">
+      <div className="flexco-page">
+        <section className="flexco-page-hero">
           <div>
-            <p className="flexco -eyebrow">Ma vitrine</p>
+            <p className="flexco-eyebrow">Ma vitrine</p>
             <h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Votre site professionnel est déjà prêt.</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">Discover utilise le design professionnel de base de votre secteur. La personnalisation complète est disponible à partir de Starter.</p>
           </div>
           <div className="flex flex-wrap gap-2"><a href="/dashboard/business" className="adm-btn-primary bg-white text-navy-900 hover:bg-white/90">Modifier ma fiche entreprise</a><a href="/dashboard/subscription" className="adm-btn-primary bg-white/10 text-white hover:bg-white/20">Voir Starter</a></div>
         </section>
-        <section className="flexco -info-panel mt-5">
+        <section className="flexco-info-panel mt-5">
           <div><p className="font-semibold text-navy-900">Design de base actif</p><p className="mt-1 text-sm text-slate-500">Votre catalogue, vos informations, votre identité publique et vos contenus restent disponibles. Seuls les réglages de personnalisation sont verrouillés sur Discover.</p></div>
         </section>
       </div>
@@ -555,7 +555,7 @@ export default async function SitePage({
     <div className="site-editor-page mx-auto flex w-full max-w-7xl flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="flexco -eyebrow">Ma vitrine</p>
+          <p className="flexco-eyebrow">Ma vitrine</p>
           <h1 className="mt-1 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">Personnalisation du site</h1>
           <p className="mt-1 text-sm text-slate-500">Personnalisez l&apos;apparence et le contenu de votre site web.</p>
         </div>
@@ -707,7 +707,7 @@ export default async function SitePage({
       <aside className="site-editor-preview">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="flexco -eyebrow">Aperçu</p>
+            <p className="flexco-eyebrow">Aperçu</p>
             <h2 className="mt-1 font-jakarta text-base font-bold">Votre vitrine</h2>
           </div>
           {env.NEXT_PUBLIC_ROOT_DOMAIN !== "localhost:3000" && (

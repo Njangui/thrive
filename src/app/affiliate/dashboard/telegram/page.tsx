@@ -41,7 +41,7 @@ export default async function AffiliateTelegramPage({
         <h1 className="font-display text-2xl font-bold tracking-tight">Telegram</h1>
         <p className="mt-1 text-sm text-muted">
           Recevez vos notifications de commission en temps réel et consultez vos statistiques via le bot Telegram
-          flexco  — indépendant de tout canal client, réservé aux affiliés.
+          Flexco — indépendant de tout canal client, réservé aux affiliés.
         </p>
       </div>
 

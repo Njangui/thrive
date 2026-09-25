@@ -55,7 +55,7 @@ export interface AffiliateApplicationInput {
 
 /**
  * Ouverte à TOUT utilisateur connecté (voir docs/AFFILIATE_SYSTEM.md,
- * décision produit) : un client flexco  existant (déjà owner d'une
+ * décision produit) : un client Flexco existant (déjà owner d'une
  * organisation) et un candidat totalement externe passent par exactement
  * le même formulaire — `affiliates.user_id` n'a aucun lien avec
  * `memberships`, les deux rôles coexistent sans conflit sur un même

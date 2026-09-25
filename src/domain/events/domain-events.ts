@@ -150,7 +150,7 @@ export interface ProviderAccountStatusUpdatedEvent extends DomainEventBase {
  * `syncCommentsForPost`, voir social-comment-service.ts et
  * social-post-tracking-service.ts). `providerPostId` est l'id sous
  * lequel Zernio connaît le post commenté — id Zernio pour un post publié
- * via flexco , id natif plateforme pour un post détecté nativement (voir
+ * via Flexco, id natif plateforme pour un post détecté nativement (voir
  * EXTERNAL_POST_TRACKED ci-dessous) — les deux cas sont indifférenciés
  * ici, la résolution/création du post local est à la charge du
  * consommateur.
@@ -171,7 +171,7 @@ export interface CommentReceivedEvent extends DomainEventBase {
 
 /**
  * Lot 5 — un post authored nativement sur la plateforme (hors pipeline
- * de publication flexco ) a été détecté par la synchronisation
+ * de publication Flexco) a été détecté par la synchronisation
  * arrière-plan de Zernio (webhook `post.external.created`/`updated`/
  * `deleted`, ~horaire, pas temps réel — voir docs/ZERNIO_INTEGRATION.md).
  * Sert uniquement à faire exister une ligne `social_posts`/

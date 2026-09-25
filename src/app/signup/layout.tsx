@@ -15,9 +15,9 @@ import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
 export async function generateMetadata(): Promise<Metadata> {
   return buildMarketingMetadata({
     path: "/signup",
-    title: "Créer un compte — flexco ",
+    title: "Créer un compte — Flexco",
     description:
-      "Créez votre compte flexco  : catalogue, WhatsApp, réseaux sociaux, clients et finances au même endroit.",
+      "Créez votre compte Flexco : catalogue, WhatsApp, réseaux sociaux, clients et finances au même endroit.",
   });
 }
 

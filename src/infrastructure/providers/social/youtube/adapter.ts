@@ -36,7 +36,7 @@ export class YouTubeSocialAdapter implements SocialPublishingProvider {
       throw new Error(isZernioMediaHost(videoUrl) ? "La vidéo n'est plus disponible chez Zernio (Zernio ne conserve les fichiers que 7 jours). Téléversez-la à nouveau." : "La vidéo n'a pas pu être récupérée pour YouTube.");
     }
     const normalizedPublishAt = publishAt ? (publishAt.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(publishAt) ? new Date(publishAt).toISOString() : new Date(`${publishAt}+01:00`).toISOString()) : undefined;
-    const uploaded = await this.client.uploadVideo(media, { title: request.content.split("\n")[0] || "Publication flexco ", description: request.content, privacyStatus, publishAt: normalizedPublishAt });
+    const uploaded = await this.client.uploadVideo(media, { title: request.content.split("\n")[0] || "Publication Flexco", description: request.content, privacyStatus, publishAt: normalizedPublishAt });
     return { providerPostId: uploaded.id!, status: uploaded.status?.uploadStatus === "uploaded" ? "published" : "processing" };
   }
   async getPostStatus(providerPostId: string): Promise<SocialPostStatus> {

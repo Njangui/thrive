@@ -62,7 +62,7 @@ export async function getStorageProvider(_organizationId: string): Promise<Stora
  * AU platform (une seule ligne comptable Fapshi plateforme), pas à un
  * compte Fapshi propre à chaque tenant. Pas de lookup
  * `provider_connections` ici (ça n'aurait pas de sens : aucun commerçant
- * ne "connecte" son propre Fapshi pour payer flexco ). `organizationId`
+ * ne "connecte" son propre Fapshi pour payer Flexco). `organizationId`
  * accepté pour la même raison que StorageProvider : ne pas casser les
  * appelants si un jour plusieurs comptes providers plateforme
  * coexistent (voir contrainte XAF-only ci-dessous, qui rend ce jour
