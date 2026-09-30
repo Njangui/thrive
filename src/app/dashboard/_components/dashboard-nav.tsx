@@ -101,6 +101,7 @@ export const DASHBOARD_NAV_GROUPS: {
       { href: "/dashboard/subscription", label: "Mon abonnement", icon: IconCard },
       { href: "/dashboard/addons", label: "Add-ons", icon: IconPuzzle },
       { href: "/affiliate/dashboard", label: "Affiliation", icon: IconLink },
+      { href: "/dashboard/support", label: "Service client", icon: IconChat },
     ],
   },
 ];

@@ -26,3 +26,8 @@ Les deux archives partent de l'ancienne base cresyva ; renommage `cresyva → fl
 `next build`, rendu visuel des 3 templates + hero générique avec le CSS fusionné, migrations non concernées (aucune nouvelle dans ce lot).
 ## Reste à faire (itération 3, cf. RAPPORT_ITERATION_2.md)
 Diffusion : sélection manuelle des contacts, produits du catalogue, média de couverture — nécessite une migration.
+
+## Ajout — lien « Service client »
+- Menu du dashboard (groupe « Système », desktop + mobile : même liste) → `/dashboard/support`.
+- Page présentant les deux numéros WhatsApp du service client : +237 656 10 62 25 et +237 657 38 09 54, avec bouton « Écrire sur WhatsApp » (lien `wa.me`, message pré-rempli avec le nom de l'entreprise).
+- Numéros centralisés dans `src/application/config/customer-support.ts` (un seul endroit à modifier) ; 5 tests.
