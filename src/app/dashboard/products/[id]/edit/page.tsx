@@ -210,10 +210,10 @@ export default async function EditProductPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; addVideo?: string }>;
 }) {
   const { id } = await params;
-  const { error, success } = await searchParams;
+  const { error, success, addVideo } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
 
   let product;
@@ -240,6 +240,9 @@ export default async function EditProductPage({
       )}
       {success && (
         <p className="adm-alert-success">{success}</p>
+      )}
+      {addVideo && (
+        <p className="adm-alert-success">Produit créé ! Envoyez sa vidéo ci-dessous.</p>
       )}
 
       <form action={updateProductAction} className="flex flex-col gap-3">
@@ -543,7 +546,9 @@ export default async function EditProductPage({
         )}
       </div>
 
-      <CatalogVideosPanel productId={product.id} videos={videos} />
+      <div id="videos">
+        <CatalogVideosPanel productId={product.id} videos={videos} />
+      </div>
     </div>
   );
 }

@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import { requireCurrentOrganization, requireMembership, getCurrentUserEmail } from "@/application/services/auth-service";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { SubmitButton } from "@/app/_components/submit-button";
-import { getZernioAccounts, getZernioConnectUrl, getZernioWhatsAppConnectUrl, getZernioWhatsAppAccounts, getZernioWhatsAppGroupsConnectUrl, getZernioWhatsAppGroupsAccount } from "@/application/services/zernio-channel-service";
+import { getZernioAccounts, getZernioConnectUrl, getZernioWhatsAppConnectUrl, getZernioWhatsAppAccounts, getZernioWhatsAppGroupsConnectUrl, getZernioWhatsAppGroupsAccount, disconnectZernioWhatsAppAccount } from "@/application/services/zernio-channel-service";
 import { connectTelegramChannel, getTelegramChannelStatus, disconnectTelegramBot, resyncTelegramBotWebhook } from "@/application/services/telegram-channel-service";
 import { createYouTubeConnectUrl, disconnectYouTubeAccount, getYouTubeConnection, listYouTubeAccounts } from "@/application/services/youtube-channel-service";
-import { listOrganizationSocialAccounts, syncSocialAccountsFromZernio } from "@/application/services/social-account-registry-service";
+import { listOrganizationSocialAccounts, syncSocialAccountsFromZernio, disconnectSocialAccount } from "@/application/services/social-account-registry-service";
 import { addTelegramDestination, listTelegramDestinations, removeTelegramDestination } from "@/application/services/telegram-destination-service";
 import { MultiAccountSections, type Quota, type SocialPlatformSection } from "./multi-account-sections";
 import {
@@ -52,6 +52,19 @@ async function connectSocialAction(formData: FormData) {
   redirect(url);
 }
 
+async function disconnectSocialAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const accountId = String(formData.get("accountId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin"]);
+  try {
+    await disconnectSocialAccount(organizationId, accountId);
+  } catch (error) {
+    flash("error", error instanceof AppError ? error.message : "Déconnexion impossible.");
+  }
+  flash("success", "Compte déconnecté.");
+}
+
 async function connectWhatsAppAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
@@ -69,6 +82,19 @@ async function connectWhatsAppAction(formData: FormData) {
     flash("error", error instanceof Error ? error.message : "Impossible de démarrer WhatsApp.");
   }
   redirect(url);
+}
+
+async function disconnectWhatsAppAction(formData: FormData) {
+  "use server";
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const accountId = String(formData.get("accountId") ?? "");
+  await requireMembership(organizationId, ["owner", "admin"]);
+  try {
+    await disconnectZernioWhatsAppAccount(organizationId, accountId);
+  } catch (error) {
+    flash("error", error instanceof AppError ? error.message : "Déconnexion impossible.");
+  }
+  flash("success", "Numéro WhatsApp déconnecté.");
 }
 
 /** Numéro DÉDIÉ aux Groupes WhatsApp (Cloud API, jamais Coexistence) — chemin gratuit (le commerçant connecte son propre numéro). */
@@ -231,7 +257,7 @@ const SOCIAL_SECTIONS = [
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string }> }) {
   const { success, error } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
-  const [accounts, whatsappAccounts, telegram, youtube, whatsappGroupsAccount, dedicatedNumber, dedicatedNumberPriceFcfa] = await Promise.all([
+  const [accounts, whatsappAccountsRaw, telegram, youtube, whatsappGroupsAccount, dedicatedNumber, dedicatedNumberPriceFcfa] = await Promise.all([
     getZernioAccounts(organizationId).catch(() => []),
     getZernioWhatsAppAccounts(organizationId).catch(() => []),
     getTelegramChannelStatus(organizationId).catch(() => ({ connected: false, botUsername: null, bots: [] })),
@@ -240,6 +266,10 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
     getOrganizationDedicatedNumberStatus(organizationId).catch(() => ({ pendingRequestId: null, assignedNumber: null })),
     getDedicatedNumberMonthlyPriceFcfa().catch(() => null),
   ]);
+  // Les numéros déconnectés par le commerçant (disconnectWhatsAppAction) restent en
+  // base pour l'historique mais ne doivent plus apparaître comme "connectés" nulle
+  // part sur cette page (liste, badges, quota) — même logique que les comptes sociaux.
+  const whatsappAccounts = whatsappAccountsRaw.filter((account) => account.status !== "disconnected");
   const whatsappEntitlement = await canUseFeature(organizationId, "whatsapp", 1).catch(() => ({ allowed: false, limit: 0, used: whatsappAccounts.length, remaining: 0 }));
   // Lot O — multi-comptes : registre réaligné sur Zernio, chaînes YouTube, bots et destinations Telegram, jauges du plan.
   const quotaOf = async (key: string): Promise<Quota> => {
@@ -288,8 +318,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
 
       <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
         <div className="adm-card overflow-hidden p-0">
-          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={whatsappAccounts.length ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappAccounts.length ? `${whatsappAccounts.length} numéro${whatsappAccounts.length > 1 ? "s" : ""}` : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Chaque numéro de messagerie WhatsApp utilise son propre profil Cloud API/Zernio. Pour un numéro déjà utilisé dans WhatsApp Business, Flexco utilise la <strong>coexistence</strong> : vous gardez l&apos;application sur le téléphone et les conversations remontent aussi dans Flexco.</p></div>
-          <div className="space-y-3 p-5 sm:p-6">{whatsappAccounts.length ? whatsappAccounts.map((account, index) => <div key={account.accountId} className="flex items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4"><div className="min-w-0"><p className="text-sm font-semibold">{account.phoneNumber || account.username || `Numéro WhatsApp ${index + 1}`}</p><p className="mt-1 text-xs text-slate-500">{account.isPrimary ? "Numéro principal" : `Numéro ${index + 1}`} · {account.status === "connected" ? "Connecté" : "Connexion à vérifier"}</p></div><span className={account.status === "connected" ? "adm-badge-success" : "adm-badge-neutral"}>{account.status === "connected" ? "Actif" : "À vérifier"}</span></div>) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Aucun numéro WhatsApp de messagerie n&apos;est encore connecté.</div>}</div>
+          <div className="border-b border-navy-900/[0.06] p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Business</h2></div><span className={whatsappAccounts.length ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappAccounts.length ? `${whatsappAccounts.length} numéro${whatsappAccounts.length > 1 ? "s" : ""}` : "Non connecté"}</span></div><p className="mt-2 max-w-xl text-sm text-slate-500">Chaque numéro de messagerie WhatsApp utilise son propre profil de connexion. Pour un numéro déjà utilisé dans WhatsApp Business, Flexco utilise la <strong>coexistence</strong> : vous gardez l&apos;application sur le téléphone et les conversations remontent aussi dans Flexco.</p></div>
+          <div className="space-y-3 p-5 sm:p-6">{whatsappAccounts.length ? whatsappAccounts.map((account, index) => <div key={account.accountId} className="flex items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4"><div className="min-w-0"><p className="text-sm font-semibold">{account.phoneNumber || account.username || `Numéro WhatsApp ${index + 1}`}</p><p className="mt-1 text-xs text-slate-500">{account.isPrimary ? "Numéro principal" : `Numéro ${index + 1}`} · {account.status === "connected" ? "Connecté" : "Connexion à vérifier"}</p></div><div className="flex shrink-0 items-center gap-3"><span className={account.status === "connected" ? "adm-badge-success" : "adm-badge-neutral"}>{account.status === "connected" ? "Actif" : "À vérifier"}</span><form action={disconnectWhatsAppAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="accountId" value={account.accountId} /><SubmitButton pendingLabel="…" className="text-xs font-medium text-red-600 hover:underline disabled:opacity-60">Déconnecter</SubmitButton></form></div></div>) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Aucun numéro WhatsApp de messagerie n&apos;est encore connecté.</div>}</div>
           <div className="border-t border-navy-900/[0.06] p-5 sm:p-6"><form action={connectWhatsAppAction}><input type="hidden" name="organizationId" value={organizationId}/><SubmitButton pendingLabel="Ouverture…" disabled={!whatsappEntitlement.allowed} className="adm-btn-primary w-full sm:w-auto">{whatsappAccounts.length ? "Ajouter un numéro WhatsApp" : "Connecter mon WhatsApp"}</SubmitButton></form><p className="mt-2 text-xs text-slate-500">{whatsappEntitlement.limit === -1 ? "Numéros selon les capacités de votre offre." : `${whatsappAccounts.length}/${whatsappEntitlement.limit} numéro${whatsappEntitlement.limit > 1 ? "s" : ""} utilisé${whatsappEntitlement.limit > 1 ? "s" : ""}.`}</p></div>
         </div>
         <div className="adm-card bg-gradient-to-br from-violet-50 via-white to-indigo-50"><p className="adm-eyebrow">Messagerie</p><h2 className="mt-1 adm-heading-2 text-lg">Une boîte pour vendre</h2><div className="mt-5 space-y-3">{[['●','WhatsApp','Demandes et suivi clients'],['◎','Instagram','Conversations sociales'],['◈','Facebook','Messenger et commentaires'],['✦','Assistant','Réponse automatique puis transfert humain']].map(([i,t,d])=><div key={t} className="flex items-center gap-3 rounded-2xl bg-white/80 p-3 shadow-xs"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-700">{i}</span><div><p className="text-sm font-semibold">{t}</p><p className="text-xs text-slate-500">{d}</p></div></div>)}</div><Link href="/dashboard/conversations" className="mt-5 inline-flex text-sm font-semibold text-violet-700 hover:underline">Ouvrir la boîte de réception →</Link></div>
@@ -299,7 +329,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
         <div className="border-b border-navy-900/[0.06] p-5 sm:p-6">
           <div className="flex items-center justify-between gap-4"><div><p className="adm-eyebrow">Groupes</p><h2 className="mt-1 adm-heading-2 text-lg">WhatsApp Groupes</h2></div><span className={whatsappGroupsAccount ? "adm-badge-success" : "adm-badge-neutral"}>{whatsappGroupsAccount ? "Connecté" : "Non connecté"}</span></div>
           <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            Diffuser dans des groupes WhatsApp demande un <strong>second numéro, différent de celui de votre messagerie</strong> ci-dessus. Ce second numéro est connecté en <strong>Cloud API uniquement</strong> avec Meta/Zernio : ne choisissez pas « Connecter un compte WhatsApp Business existant » pour ce numéro, car le mode coexistence ne permet pas l&apos;API Groupes. Le numéro dédié ne sert qu&apos;aux Groupes.
+            Diffuser dans des groupes WhatsApp demande un <strong>second numéro, différent de celui de votre messagerie</strong> ci-dessus. Ce second numéro est connecté en <strong>Cloud API uniquement</strong> : ne choisissez pas « Connecter un compte WhatsApp Business existant » pour ce numéro, car le mode coexistence ne permet pas l&apos;API Groupes. Le numéro dédié ne sert qu&apos;aux Groupes.
           </p>
         </div>
 
@@ -342,6 +372,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
         telegram={{ bots: telegram.bots, destinations: telegramDestinations, botQuota, channelQuota, groupQuota }}
         actions={{
           connectSocial: connectSocialAction,
+          disconnectSocial: disconnectSocialAction,
           connectYouTube: connectYouTubeAction,
           disconnectYouTube: disconnectYouTubeAction,
           connectTelegram: connectTelegramAction,

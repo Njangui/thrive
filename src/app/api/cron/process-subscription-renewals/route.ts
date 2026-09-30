@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyCronAuth } from "@/lib/cron-auth";
 import { processSubscriptionRenewals } from "@/application/services/subscription-payment-service";
+import { processPromoTrialNotifications } from "@/application/services/promo-trial-service";
 
 /**
  * Lot N, Partie 1 — traite les échéances d'abonnement (relance J-3 +
@@ -21,7 +22,14 @@ async function handle(request: Request) {
 
   try {
     const result = await processSubscriptionRenewals();
-    return NextResponse.json({ ok: true, ...result });
+    // Essai Pro offert : rappel J-3, message de fin, retrait du bonus de
+    // crédits IA. Isolé : un échec ici ne doit pas faire échouer les
+    // renouvellements d'abonnement ci-dessus.
+    const promo = await processPromoTrialNotifications().catch((promoError) => {
+      console.error("/api/cron/process-subscription-renewals: essai Pro:", promoError);
+      return null;
+    });
+    return NextResponse.json({ ok: true, ...result, promo });
   } catch (error) {
     console.error("/api/cron/process-subscription-renewals: échec:", error);
     return NextResponse.json({ ok: false, error: "Erreur interne" }, { status: 500 });

@@ -34,7 +34,7 @@ async function authorize(): Promise<string> {
 function toFailure(error: unknown): { ok: false; error: string } {
   if (error instanceof AppError) return { ok: false, error: error.message };
   console.error("[catalog-videos] action échouée:", error);
-  const detail = error instanceof Error && /ZERNIO_API_KEY/.test(error.message) ? " (clé Zernio non configurée)" : "";
+  const detail = error instanceof Error && /ZERNIO_API_KEY/.test(error.message) ? " (hébergement vidéo non configuré)" : "";
   return { ok: false, error: `Opération impossible pour le moment${detail}. Réessayez dans un instant.` };
 }
 

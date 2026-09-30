@@ -85,12 +85,14 @@ export default async function DashboardHomePage() {
           value={formatAmount(summary.revenueLast30Days, summary.currency)}
           trend={summary.revenueTrend}
         />
-        <DashStatCard
-          label="Commandes (30j)"
-          value={String(summary.ordersCreatedLast30Days)}
-          trend={summary.ordersTrend}
-          helpText={`${summary.ordersPending} en attente`}
-        />
+        {enabledModules.includes("orders") && (
+          <DashStatCard
+            label="Commandes (30j)"
+            value={String(summary.ordersCreatedLast30Days)}
+            trend={summary.ordersTrend}
+            helpText={`${summary.ordersPending} en attente`}
+          />
+        )}
         <DashStatCard
           label="Nouveaux clients (30j)"
           value={String(summary.newCustomersLast30Days)}
@@ -161,75 +163,81 @@ export default async function DashboardHomePage() {
         </DashCard>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
-        <DashTableCard
-          title="Commandes récentes"
-          action={
-            <Link href="/dashboard/orders" className="text-xs font-medium text-violet-600 hover:underline">
-              Voir toutes
-            </Link>
-          }
-        >
-          {charts.recentOrders.length === 0 ? (
-            <DashEmptyState>Aucune commande pour l&apos;instant.</DashEmptyState>
-          ) : (
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Statut</th>
-                  <th>Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                {charts.recentOrders.map((o) => (
-                  <tr key={o.id}>
-                    <td>
-                      <p className="font-medium">{o.contactName ?? "Client"}</p>
-                      <p className="text-xs adm-muted">{formatDate(o.createdAt)}</p>
-                    </td>
-                    <td>
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${ORDER_STATUS_STYLES[o.status]}`}>
-                        {ORDER_STATUS_LABELS[o.status]}
-                      </span>
-                    </td>
-                    <td className="text-right font-semibold">{formatAmount(o.totalAmount, o.currency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {(enabledModules.includes("orders") || enabledModules.includes("inventory")) && (
+        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+          {enabledModules.includes("orders") && (
+            <DashTableCard
+              title="Commandes récentes"
+              action={
+                <Link href="/dashboard/orders" className="text-xs font-medium text-violet-600 hover:underline">
+                  Voir toutes
+                </Link>
+              }
+            >
+              {charts.recentOrders.length === 0 ? (
+                <DashEmptyState>Aucune commande pour l&apos;instant.</DashEmptyState>
+              ) : (
+                <table className="adm-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Statut</th>
+                      <th>Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {charts.recentOrders.map((o) => (
+                      <tr key={o.id}>
+                        <td>
+                          <p className="font-medium">{o.contactName ?? "Client"}</p>
+                          <p className="text-xs adm-muted">{formatDate(o.createdAt)}</p>
+                        </td>
+                        <td>
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${ORDER_STATUS_STYLES[o.status]}`}>
+                            {ORDER_STATUS_LABELS[o.status]}
+                          </span>
+                        </td>
+                        <td className="text-right font-semibold">{formatAmount(o.totalAmount, o.currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </DashTableCard>
           )}
-        </DashTableCard>
 
-        <DashTableCard
-          title="Stock critique"
-          action={
-            <Link href="/dashboard/products" className="text-xs font-medium text-violet-600 hover:underline">
-              Voir tout
-            </Link>
-          }
-        >
-          {charts.criticalStock.length === 0 ? (
-            <DashEmptyState>Aucun signal critique pour le moment.</DashEmptyState>
-          ) : (
-            <ul className="flex flex-col divide-y divide-navy-900/5 px-5 pb-4">
-              {charts.criticalStock.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-3 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-navy-900">{p.name}</p>
-                    <p className="text-xs adm-muted">
-                      Stock : {p.currentStock} (seuil : {p.minStock})
-                    </p>
-                  </div>
-                  <span className="adm-badge-danger shrink-0">
-                    {p.currentStock <= 0 ? "Rupture" : "Rupture imminente"}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {enabledModules.includes("inventory") && (
+            <DashTableCard
+              title="Stock critique"
+              action={
+                <Link href="/dashboard/products" className="text-xs font-medium text-violet-600 hover:underline">
+                  Voir tout
+                </Link>
+              }
+            >
+              {charts.criticalStock.length === 0 ? (
+                <DashEmptyState>Aucun signal critique pour le moment.</DashEmptyState>
+              ) : (
+                <ul className="flex flex-col divide-y divide-navy-900/5 px-5 pb-4">
+                  {charts.criticalStock.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-3 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-navy-900">{p.name}</p>
+                        <p className="text-xs adm-muted">
+                          Stock : {p.currentStock} (seuil : {p.minStock})
+                        </p>
+                      </div>
+                      <span className="adm-badge-danger shrink-0">
+                        {p.currentStock <= 0 ? "Rupture" : "Rupture imminente"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DashTableCard>
           )}
-        </DashTableCard>
-      </div>
+        </div>
+      )}
 
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <DashTableCard title="Activité récente">

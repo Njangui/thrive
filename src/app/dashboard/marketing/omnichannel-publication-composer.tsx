@@ -38,7 +38,7 @@ export function OmnichannelPublicationComposer({
     const expires = new Date(chosenVideo.expiresAt).getTime();
     const publishAt = schedule && datetime ? new Date(datetime).getTime() : Date.now();
     if (publishAt > expires - 30 * 60_000) {
-      return `Cette vidéo n'est conservée par Zernio que jusqu'au ${new Date(expires).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}. Choisissez une date antérieure, ou retéléversez la vidéo depuis sa fiche produit.`;
+      return `Cette vidéo n'est conservée que jusqu'au ${new Date(expires).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}. Choisissez une date antérieure, ou retéléversez la vidéo depuis sa fiche produit.`;
     }
     return null;
   })();
@@ -123,7 +123,7 @@ export function OmnichannelPublicationComposer({
           <input value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} type="url" placeholder="https://…" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-hidden focus:border-primary focus:ring-4 focus:ring-primary/10" />
           <select value={mediaType} onChange={(e) => setMediaType(e.target.value as "image" | "video")} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-hidden focus:border-primary focus:ring-4 focus:ring-primary/10"><option value="image">Image</option><option value="video">Vidéo</option></select>
         </div>
-        <p className="mt-1.5 text-xs text-slate-500">Pour YouTube, fournissez une URL vidéo publique (MP4, MOV, WebM ou M4V). Sans cela, YouTube sera refusé tandis que les autres canaux peuvent continuer. Les vidéos hébergées chez Zernio ne sont conservées que 7 jours : la programmation est limitée à cette échéance.</p>
+        <p className="mt-1.5 text-xs text-slate-500">Pour YouTube, fournissez une URL vidéo publique (MP4, MOV, WebM ou M4V). Sans cela, YouTube sera refusé tandis que les autres canaux peuvent continuer. Les vidéos en stockage temporaire ne sont conservées que 7 jours : la programmation est limitée à cette échéance.</p>
       </section>
 
       <section>

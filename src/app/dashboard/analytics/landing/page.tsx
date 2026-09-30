@@ -90,9 +90,11 @@ export default async function LandingAnalyticsPage({
   const days = (PERIODS as readonly number[]).includes(requested) ? requested : 30;
 
   const { summary, productNames, videoTitles } = await getLandingAnalytics(organizationId, days);
-  const { totals, daily } = summary;
+  const { totals, daily, hourly } = summary;
   const maxPageViews = Math.max(1, ...daily.map((d) => d.pageViews));
   const isEmpty = totals.pageViews === 0 && totals.ctaClicks === 0 && totals.videoPlays === 0;
+  const maxHourlyPageViews = Math.max(1, ...hourly.map((h) => h.pageViews));
+  const peakHour = totals.pageViews > 0 ? hourly.reduce((best, h) => (h.pageViews > best.pageViews ? h : best), hourly[0]!) : null;
 
   return (
     <div className="space-y-7">
@@ -167,6 +169,38 @@ export default async function LandingAnalyticsPage({
             <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-xs bg-violet-600" /> Part des visiteurs</span>
           </span>
           <span>{daily.at(-1)?.date}</span>
+        </div>
+      </section>
+
+      <section className="adm-card">
+        <p className="adm-eyebrow">Heure de pointe</p>
+        <h2 className="mt-1 adm-heading-2 text-lg">Pages vues par heure de la journée</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Heure locale de votre entreprise, cumulée sur les {days} derniers jours — utile pour savoir quand publier ou relancer.
+        </p>
+        {peakHour && peakHour.pageViews > 0 ? (
+          <p className="mt-3 inline-block rounded-full bg-violet-50 px-3 py-1 text-sm font-medium text-violet-700">
+            Heure de pointe : {String(peakHour.hour).padStart(2, "0")}h–{String((peakHour.hour + 1) % 24).padStart(2, "0")}h
+          </p>
+        ) : null}
+        <div className="mt-5 flex h-32 items-end gap-0.5" role="img" aria-label="Pages vues par heure de la journée">
+          {hourly.map((h) => (
+            <div
+              key={h.hour}
+              className="flex h-full flex-1 flex-col justify-end"
+              title={`${String(h.hour).padStart(2, "0")}h : ${h.pageViews} pages vues, ${h.visitors} visiteurs`}
+            >
+              <div
+                className={`w-full rounded-t ${peakHour?.hour === h.hour && h.pageViews > 0 ? "bg-violet-600" : "bg-violet-200"}`}
+                style={{ height: `${(h.pageViews / maxHourlyPageViews) * 100}%` }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex justify-between text-xs text-slate-500">
+          <span>00h</span>
+          <span>12h</span>
+          <span>23h</span>
         </div>
       </section>
 

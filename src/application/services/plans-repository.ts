@@ -1,5 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { resolveCurrencyForCountry } from "./country-service";
+import { getActivePromo } from "./promo-trial-core";
 
 /**
  * Lot B — accès bas niveau aux tables `plans` / `plan_entitlements` /
@@ -67,11 +68,14 @@ function isPlanKey(value: unknown): value is PlanKey {
 }
 
 /**
- * Résout le plan effectif d'une organisation. Retourne toujours une
- * valeur exploitable : "free" si aucune ligne `organization_subscriptions`
- * n'existe (tenant créé avant ce lot) ou en cas d'erreur de lecture — le mode freemium ne doit jamais accorder Starter par défaut.
+ * Plan RÉEL d'une organisation (celui de sa ligne `organization_subscriptions`),
+ * sans tenir compte d'un éventuel essai Pro offert. Sert à la facturation,
+ * aux statistiques et à tout ce qui doit refléter ce que le client a
+ * réellement souscrit. Retourne toujours une valeur exploitable : "free" si
+ * aucune ligne n'existe (tenant créé avant ce lot) ou en cas d'erreur de
+ * lecture — le mode freemium ne doit jamais accorder Starter par défaut.
  */
-export async function getOrganizationPlanKey(organizationId: string): Promise<PlanKey> {
+export async function getOrganizationRealPlanKey(organizationId: string): Promise<PlanKey> {
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("organization_subscriptions")
@@ -87,6 +91,20 @@ export async function getOrganizationPlanKey(organizationId: string): Promise<Pl
     return "free";
   }
   return data.plan_key;
+}
+
+/**
+ * Plan EFFECTIF : celui qui gouverne les droits (entitlements, crédits IA,
+ * pages verrouillées). Vaut « pro » pour tout le monde tant qu'un essai Pro
+ * offert est en cours (voir promo-trial-core.ts), sinon le plan réel. La
+ * fin de l'essai est une simple comparaison de dates : dès que la date de
+ * fin passe, chaque compte retrouve son vrai plan, sans traitement.
+ */
+export async function getOrganizationPlanKey(organizationId: string): Promise<PlanKey> {
+  const real = await getOrganizationRealPlanKey(organizationId);
+  if (real === "pro") return real;
+  const promo = await getActivePromo();
+  return promo ? "pro" : real;
 }
 
 /**

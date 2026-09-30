@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { StorefrontSite } from "@/application/services/storefront-service";
-import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
 import { toSafeHref } from "@/lib/safe-url";
 import { TrackedCtaLink } from "../tracked-cta-link";
+import { resolveCtaTarget } from "./cta-target";
 import { StorefrontImage } from "../storefront/storefront-image";
 import { HighlightIcon } from "../storefront/storefront-icons";
 import { Container } from "../storefront/storefront-ui";
@@ -18,29 +18,6 @@ import { Container } from "../storefront/storefront-ui";
  * boutons sont résolues vers des pages qui existent réellement pour ce
  * tenant.
  */
-function resolveCtaTarget(
-  target: "catalog" | "booking" | "contact" | "promotions" | "services" | "gallery",
-  site: StorefrontSite,
-): string | null {
-  const { capabilities } = site;
-  switch (target) {
-    case "catalog":
-      return capabilities.hasProducts ? STOREFRONT_PATHS.catalog : null;
-    case "booking":
-      return capabilities.bookingEnabled && (capabilities.hasServices || capabilities.hasWhatsApp) ? STOREFRONT_PATHS.booking : null;
-    case "promotions":
-      return capabilities.hasPromotions ? STOREFRONT_PATHS.promotions : null;
-    case "services":
-      return capabilities.hasServices ? STOREFRONT_PATHS.services : null;
-    case "gallery":
-      return capabilities.hasGallery ? STOREFRONT_PATHS.gallery : null;
-    case "contact":
-      return capabilities.hasContactDetails || capabilities.hasOpeningHours ? STOREFRONT_PATHS.contact : null;
-    default:
-      return null;
-  }
-}
-
 export function HeroSection({ site, fallbackMediaUrl = null }: { site: StorefrontSite; fallbackMediaUrl?: string | null }) {
   const { tenant, config, blueprint, heroLayout, heroMediaUrl, whatsappHref, highlights } = site;
 

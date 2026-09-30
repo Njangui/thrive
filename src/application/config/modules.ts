@@ -49,7 +49,7 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
   },
   whatsapp: {
     key: "whatsapp",
-    label: "WhatsApp (Zernio)",
+    label: "WhatsApp",
     description: "Réception/envoi de messages, product discovery, human handoff.",
     dependsOn: ["crm"],
   },
@@ -89,7 +89,7 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
   marketing: {
     key: "marketing",
     label: "Marketing & Publications",
-    description: "Publication sociale via Zernio à partir du catalogue.",
+    description: "Publication sociale à partir du catalogue.",
     dependsOn: ["catalog"],
   },
   analytics: {

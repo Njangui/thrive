@@ -1,0 +1,1063 @@
+/* ==========================================================================
+   TEMPLATE RESTAURANT — page d'accueil
+   --------------------------------------------------------------------------
+   Une seule feuille, un seul préfixe (`rl-`). Elle remplace cinq couches de
+   règles `.rest-*` / `.sector-restaurant-home` empilées dans globals.css, dont
+   chacune corrigeait la précédente sans jamais la supprimer.
+
+   Principes
+   - Aucune couleur de marque en dur : l'accent vient de --brand-primary, les
+     surfaces sombres de --brand-secondary (assombri), la police de
+     --font-display / --font-body, l'arrondi de --brand-radius. Le commerçant
+     change ses couleurs, toute la page suit.
+   - Texte courant à 16 px minimum. L'ancien template descendait à 8 px.
+   - Une seule signature graphique : la ligne de carte (nom ···· valeur),
+     reprise pour les plats, les catégories et les horaires.
+   - Une seule animation automatique : l'arrivée du hero. Le reste répond à
+     un geste (survol, focus).
+   ========================================================================== */
+
+/* -- Jetons ---------------------------------------------------------------- */
+.rl,
+.sf-site[data-sector="restaurant"] {
+  --rl-accent: var(--brand-primary, #c1562c);
+  --rl-secondary: var(--brand-secondary, #178a4c);
+
+  /* Valeurs de repli (navigateurs sans color-mix) — remplacées plus bas. */
+  --rl-forest: #0e2b21;
+  --rl-paper: #ffffff;
+  --rl-tint: #f1f6f3;
+  --rl-accent-ink: var(--rl-accent);
+
+  --rl-ink: #1b1f1c;
+  --rl-muted: #59605b;
+  --rl-line: rgb(27 31 28 / 0.16);
+  --rl-line-strong: rgb(27 31 28 / 0.4);
+  --rl-on-dark: #f6f4ee;
+  --rl-on-dark-muted: rgb(246 244 238 / 0.74);
+  --rl-line-dark: rgb(246 244 238 / 0.22);
+  --rl-star: #b7791f;
+
+  --rl-radius: var(--brand-radius, 0.5rem);
+  /* Mêmes marges que le <Container> du site (px-4, puis px-6) : la page s'aligne sur l'en-tête et le pied de page. */
+  --rl-gutter: 1rem;
+  /* Hauteur de l'en-tête (h-16 + 1 px de bordure ; sm:h-[72px] + 1 px). */
+  --rl-header-h: 65px;
+}
+
+@supports (color: color-mix(in oklab, red 50%, blue)) {
+  .rl,
+  .sf-site[data-sector="restaurant"] {
+    /* Vert profond teinté par la 2e couleur de marque. */
+    --rl-forest: color-mix(in oklab, var(--rl-secondary) 34%, #050907);
+    /* Papier : blanc à peine teinté de la même couleur — frais, pas crème. */
+    --rl-paper: color-mix(in oklab, var(--rl-secondary) 3%, #ffffff);
+    --rl-tint: color-mix(in oklab, var(--rl-secondary) 9%, #ffffff);
+    /* Accent utilisé en TEXTE sur fond clair : légèrement assombri pour le contraste. */
+    --rl-accent-ink: color-mix(in oklab, var(--rl-accent) 80%, #000000);
+  }
+}
+
+@media (min-width: 640px) {
+  .rl,
+  .sf-site[data-sector="restaurant"] {
+    --rl-gutter: 1.5rem;
+    --rl-header-h: 73px;
+  }
+}
+
+/* -- Base ------------------------------------------------------------------ */
+.rl {
+  isolation: isolate;
+  background: var(--rl-paper);
+  color: var(--rl-ink);
+  font-family: var(--font-body, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  font-size: 1rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* `:where()` = spécificité nulle : ces remises à zéro ne battent jamais une classe de composant. */
+:where(.rl) *,
+:where(.rl) *::before,
+:where(.rl) *::after {
+  box-sizing: border-box;
+}
+:where(.rl) :is(h1, h2, h3, p, ul, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+:where(.rl) :is(ul) {
+  padding: 0;
+  list-style: none;
+}
+:where(.rl) a {
+  color: inherit;
+  text-decoration: none;
+}
+:where(.rl) img {
+  display: block;
+  max-width: 100%;
+}
+:where(.rl) svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.rl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus clavier visible partout ; blanc sur les fonds sombres. */
+.rl :is(a, [tabindex]):focus-visible {
+  outline: 3px solid var(--rl-accent-ink);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.rl-hero :is(a, [tabindex]):focus-visible,
+.rl-section--forest :is(a, [tabindex]):focus-visible {
+  outline-color: #fff;
+}
+
+/* Même gabarit que <Container> (max-w-6xl, marges px-4 / sm:px-6). */
+.rl-wrap {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: var(--rl-gutter);
+}
+
+/* -- Typographie ------------------------------------------------------------ */
+.rl-h2,
+.rl-h3,
+.rl-hero__title {
+  font-family: var(--font-display, var(--font-body, ui-sans-serif, system-ui, sans-serif));
+  font-weight: 600;
+}
+.rl-h2 {
+  font-size: clamp(1.9rem, 1.3rem + 2.4vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.rl-h3 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+.rl-lead {
+  max-width: 46ch;
+  margin-top: 1rem;
+  color: var(--rl-muted);
+  font-size: clamp(1.0625rem, 1rem + 0.4vw, 1.25rem);
+  line-height: 1.6;
+}
+
+/* -- Sections ---------------------------------------------------------------- */
+.rl-section {
+  padding-block: clamp(3.5rem, 7vw, 6.5rem);
+  scroll-margin-top: 1rem;
+}
+.rl-section--tint {
+  background: var(--rl-tint);
+}
+.rl-section--forest {
+  background: var(--rl-forest);
+  color: var(--rl-on-dark);
+}
+/* Deux sections claires de suite ne cumulent pas leurs marges. */
+.rl-section:not(.rl-section--tint):not(.rl-section--forest) + .rl-section:not(.rl-section--tint):not(.rl-section--forest) {
+  padding-top: 0;
+}
+
+.rl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+  margin-bottom: clamp(1.75rem, 4vw, 3rem);
+}
+.rl-head__sub {
+  max-width: 56ch;
+  margin-top: 0.6rem;
+  color: var(--rl-muted);
+  font-size: 1.0625rem;
+}
+.rl-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  color: var(--rl-accent-ink);
+  font-weight: 600;
+  text-underline-offset: 5px;
+}
+.rl-link:hover {
+  text-decoration: underline;
+}
+.rl-link__icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* -- Boutons ---------------------------------------------------------------- */
+.rl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.25rem;
+  padding: 0.75rem 1.6rem;
+  border: 1.5px solid transparent;
+  border-radius: var(--rl-radius);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+/* Hero et sections sombres : bouton clair — lisible quelle que soit la couleur de marque. */
+.rl-btn--light {
+  background: #fff;
+  color: var(--rl-forest);
+}
+.rl-btn--light:hover {
+  background: var(--rl-on-dark);
+}
+.rl-btn--ghost {
+  border-color: rgb(255 255 255 / 0.6);
+  background: rgb(0 0 0 / 0.14);
+  color: #fff;
+}
+.rl-btn--ghost:hover {
+  background: rgb(255 255 255 / 0.16);
+}
+.rl-btn--accent {
+  background: var(--rl-accent);
+  color: var(--rl-on-accent, #fff);
+}
+.rl-btn--accent:hover {
+  background: color-mix(in oklab, var(--rl-accent) 84%, #000);
+}
+.rl-btn--outline {
+  border-color: var(--rl-line-strong);
+  color: var(--rl-ink);
+}
+.rl-btn--outline:hover {
+  border-color: var(--rl-ink);
+}
+
+/* -- Ligne de carte : nom ···· valeur ----------------------------------------- */
+.rl-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.rl-line__label {
+  min-width: 0;
+  font-family: var(--font-display, var(--font-body, ui-sans-serif, system-ui, sans-serif));
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.rl-line__dots {
+  flex: 1 1 1rem;
+  min-width: 1rem;
+  height: 0;
+  border-bottom: 2px dotted currentColor;
+  opacity: 0.32;
+  transform: translateY(-0.28em);
+}
+.rl-line__value {
+  font-family: var(--font-display, var(--font-body, ui-sans-serif, system-ui, sans-serif));
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rl-price {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.rl-price__old {
+  color: var(--rl-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* -- Pastilles -------------------------------------------------------------- */
+.rl-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+.rl-badge--promo {
+  background: var(--rl-accent);
+  color: var(--rl-on-accent, #fff);
+}
+.rl-badge--new {
+  background: #fff;
+  color: var(--rl-ink);
+}
+.rl-badge--bestseller {
+  background: rgb(27 31 28 / 0.88);
+  color: #fff;
+}
+.rl-badge--out_of_stock {
+  background: rgb(0 0 0 / 0.72);
+  color: #fff;
+}
+.rl-badge--demo {
+  margin-left: 0.75rem;
+  background: rgb(128 128 128 / 0.22);
+  vertical-align: middle;
+}
+
+/* -- Étoiles ---------------------------------------------------------------- */
+.rl-stars {
+  display: inline-flex;
+  gap: 0.15rem;
+  color: var(--rl-star);
+}
+.rl-stars svg {
+  width: 1rem;
+  height: 1rem;
+}
+.rl-stars__on {
+  fill: currentColor;
+}
+.rl-stars__off {
+  fill: none;
+  opacity: 0.45;
+}
+
+/* Photos : conteneur positionné, l'image le remplit (next/image `fill` ou <img>). */
+.rl-hero__media img,
+.rl-dish__media img,
+.rl-dish__thumb img,
+.rl-carte__thumb img,
+.rl-story__media img,
+.rl-gallery__item img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ==========================================================================
+   EN-TÊTE SUR LE HERO
+   Seul endroit où l'en-tête du restaurant est défini (il l'était à quatre
+   endroits de globals.css). L'en-tête reste DANS le flux : le hero remonte
+   dessous par une marge négative. Ainsi la barre d'annonce, quand elle
+   existe, reste visible au-dessus au lieu d'être recouverte.
+   ========================================================================== */
+.sf-site[data-sector="restaurant"] .sf-header-overlay {
+  position: relative;
+  z-index: 40;
+  border-bottom-color: transparent;
+  background: transparent;
+  backdrop-filter: none;
+  color: #fff;
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay > div > a {
+  color: #fff;
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay nav a {
+  color: rgb(255 255 255 / 0.88);
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay nav a:hover {
+  color: #fff;
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay nav a[aria-current="page"] {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 8px;
+}
+/* Le menu mobile a un fond blanc : il reprend le texte sombre, pas le blanc de l'en-tête. */
+.sf-site[data-sector="restaurant"] .sf-header-overlay #sf-mobile-menu {
+  color: var(--rl-ink);
+}
+/* `> div` = la barre desktop : le menu mobile (fond blanc) garde ses couleurs. */
+.sf-site[data-sector="restaurant"] .sf-header-overlay > div input {
+  border-color: rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay > div input::placeholder {
+  color: rgb(255 255 255 / 0.72);
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay > div .text-black\/40 {
+  color: rgb(255 255 255 / 0.72);
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay > div button {
+  border-color: rgb(255 255 255 / 0.4);
+  color: #fff;
+}
+.sf-site[data-sector="restaurant"] .sf-header-overlay > div .sf-btn-primary {
+  background: #fff;
+  color: var(--rl-forest);
+}
+
+/* Le hero générique (composition personnalisée par le commerçant) remonte de la même façon. */
+.restaurant-hero {
+  margin-top: calc(-1 * var(--rl-header-h));
+}
+
+/* ==========================================================================
+   HERO
+   ========================================================================== */
+.rl-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 640px;
+  min-height: clamp(600px, 92svh, 900px);
+  margin-top: calc(-1 * var(--rl-header-h));
+  padding-top: var(--rl-header-h);
+  overflow: hidden;
+  background: var(--rl-forest);
+  color: #fff;
+}
+.rl-hero--plain {
+  background:
+    radial-gradient(60% 80% at 85% 15%, rgb(255 255 255 / 0.08), transparent 70%),
+    var(--rl-forest);
+}
+.rl-hero--plain {
+  min-height: 480px;
+  min-height: clamp(480px, 72svh, 680px);
+}
+.rl-hero--bare {
+  min-height: 380px;
+  min-height: clamp(380px, 56svh, 560px);
+}
+.rl-hero__media {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+.rl-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(to bottom, rgb(0 0 0 / 0.5) 0, transparent 9rem),
+    linear-gradient(to top, rgb(5 18 13 / 0.95) 0%, rgb(5 18 13 / 0.74) 36%, rgb(5 18 13 / 0.3) 70%, rgb(5 18 13 / 0.45) 100%);
+}
+@supports (color: color-mix(in oklab, red 50%, blue)) {
+  .rl-hero__scrim {
+    background:
+      linear-gradient(to bottom, rgb(0 0 0 / 0.5) 0, transparent 9rem),
+      linear-gradient(
+        to top,
+        color-mix(in oklab, var(--rl-forest) 96%, transparent) 0%,
+        color-mix(in oklab, var(--rl-forest) 76%, transparent) 36%,
+        color-mix(in oklab, var(--rl-forest) 32%, transparent) 70%,
+        color-mix(in oklab, var(--rl-forest) 50%, transparent) 100%
+      );
+  }
+}
+
+.rl-hero__body {
+  padding-block: clamp(3rem, 8vw, 6rem) clamp(2rem, 4vw, 3rem);
+}
+.rl-hero__title {
+  max-width: 18ch;
+  font-size: clamp(2.75rem, 1.2rem + 6.4vw, 6rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+.rl-hero__title--long {
+  font-size: clamp(2.25rem, 1.1rem + 4.6vw, 4.5rem);
+  line-height: 1.04;
+}
+.rl-hero__lead {
+  max-width: 46ch;
+  margin-top: 1.25rem;
+  color: rgb(255 255 255 / 0.88);
+  font-size: clamp(1.0625rem, 1rem + 0.5vw, 1.3rem);
+  line-height: 1.55;
+}
+.rl-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+.rl-hero__title + .rl-hero__actions {
+  margin-top: 2.25rem;
+}
+.rl-hero__rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+  color: rgb(255 255 255 / 0.9);
+  font-size: 0.9375rem;
+  --rl-star: #f5c451;
+}
+.rl-hero__rating-count {
+  color: rgb(255 255 255 / 0.72);
+}
+
+/* Barre d'infos pratiques : adresse, horaires du jour, téléphone. */
+.rl-dock {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  border-top: 1px solid rgb(255 255 255 / 0.24);
+}
+.rl-dock__item {
+  min-width: 0;
+  border-left: 1px solid rgb(255 255 255 / 0.16);
+}
+.rl-dock__item:first-child {
+  border-left: 0;
+}
+.rl-dock__link {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 4.5rem;
+  padding: 0.9rem 1.25rem 0.9rem 1.5rem;
+  color: rgb(255 255 255 / 0.94);
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.rl-dock__item:first-child .rl-dock__link {
+  padding-left: 0;
+}
+.rl-dock__link:hover span:not(.rl-sr) {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.rl-dock__icon {
+  color: #fff;
+  opacity: 0.8;
+}
+
+/* Arrivée du hero : la seule animation automatique de la page. */
+@media (prefers-reduced-motion: no-preference) {
+  .rl-hero__media {
+    animation: rl-settle 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .rl-hero__title,
+  .rl-hero__lead,
+  .rl-hero__actions,
+  .rl-hero__rating,
+  .rl-dock {
+    animation: rl-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .rl-hero__lead {
+    animation-delay: 0.08s;
+  }
+  .rl-hero__actions {
+    animation-delay: 0.16s;
+  }
+  .rl-hero__rating {
+    animation-delay: 0.24s;
+  }
+  .rl-dock {
+    animation-delay: 0.32s;
+  }
+}
+@keyframes rl-settle {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes rl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   PLATS
+   ========================================================================== */
+.rl-dish {
+  display: block;
+  color: inherit;
+}
+.rl-dish__media {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--rl-radius);
+  background: var(--rl-tint);
+}
+.rl-dish__media img,
+.rl-dish__thumb img {
+  transition: transform 0.5s ease;
+}
+.rl-dish:hover .rl-dish__media img,
+.rl-dish:hover .rl-dish__thumb img {
+  transform: scale(1.04);
+}
+.rl-dish__badges {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.rl-dish__caption {
+  display: block;
+  margin-top: 1rem;
+}
+.rl-dish__desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  max-width: 60ch;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  color: var(--rl-muted);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+.rl-dish:hover .rl-line__label {
+  color: var(--rl-accent-ink);
+}
+
+/* Vedette + liste */
+.rl-dishes--feature {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: center;
+}
+/* Vedette seule : la photo à gauche, le plat raconté à droite. */
+.rl-dishes--spotlight .rl-dish--feature {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: center;
+}
+.rl-dishes--spotlight .rl-dish__caption {
+  margin-top: 0;
+}
+.rl-dishes--spotlight .rl-dish__desc {
+  -webkit-line-clamp: 5;
+  font-size: 1.0625rem;
+}
+.rl-dish--feature .rl-dish__media {
+  aspect-ratio: 1 / 1;
+}
+.rl-dish--feature .rl-line__label {
+  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem);
+}
+.rl-dish--feature .rl-line__value {
+  font-size: 1.125rem;
+}
+.rl-dishes__list > li {
+  border-bottom: 1px solid var(--rl-line);
+}
+.rl-dishes__list > li:last-child {
+  border-bottom: 0;
+}
+.rl-dish--row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.1rem;
+  padding-block: 1.25rem;
+}
+.rl-dishes__list > li:first-child .rl-dish--row {
+  padding-top: 1.25rem;
+}
+.rl-dishes__list > li:last-child .rl-dish--row {
+  padding-bottom: 1.25rem;
+}
+.rl-dish--row .rl-dish__caption {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+.rl-dish__thumb {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 6.5rem;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--rl-radius);
+  background: var(--rl-tint);
+}
+
+/* Cartes : autant de colonnes que la place le permet, jamais étirées à 100 %. */
+.rl-dishes--cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 22rem));
+  justify-content: start;
+  gap: 2.25rem 1.5rem;
+}
+
+/* Liste seule (aucun plat photographié) */
+.rl-dishes--lines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(2rem, 6vw, 5rem);
+}
+.rl-dishes--lines > li {
+  border-bottom: 1px solid var(--rl-line);
+}
+.rl-dishes--lines .rl-dish--row {
+  padding-block: 1.1rem;
+}
+
+/* ==========================================================================
+   LA CARTE (section sombre)
+   ========================================================================== */
+.rl-carte {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+  gap: clamp(2rem, 6vw, 6rem);
+  align-items: start;
+}
+.rl-carte__sub {
+  max-width: 34ch;
+  margin: 1rem 0 2rem;
+  color: var(--rl-on-dark-muted);
+  font-size: 1.0625rem;
+}
+.rl-carte__list > li:first-child .rl-carte__row {
+  border-top: 1px solid var(--rl-line-dark);
+}
+.rl-carte__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 0.75rem;
+  margin-inline: -0.75rem;
+  border-bottom: 1px solid var(--rl-line-dark);
+  color: inherit;
+  transition: background-color 0.18s ease;
+}
+a.rl-carte__row:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+.rl-carte__row .rl-line {
+  flex: 1;
+  min-width: 0;
+}
+.rl-carte__row .rl-line__label {
+  font-size: clamp(1.25rem, 1.05rem + 1vw, 1.75rem);
+  font-weight: 500;
+}
+.rl-carte__row .rl-line__value {
+  color: var(--rl-on-dark-muted);
+  font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.rl-carte__thumb {
+  position: relative;
+  flex: none;
+  width: 3.5rem;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--rl-radius);
+  background: var(--rl-on-dark-muted);
+}
+.rl-carte__arrow {
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+a.rl-carte__row:hover .rl-carte__arrow {
+  transform: translateX(4px);
+}
+
+/* ==========================================================================
+   HISTOIRE
+   ========================================================================== */
+.rl-story {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(2rem, 6vw, 6rem);
+  align-items: center;
+}
+.rl-story--plain {
+  grid-template-columns: minmax(0, 46rem);
+}
+.rl-story__media {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--rl-radius);
+  background: var(--rl-tint);
+}
+.rl-story__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+.rl-prose {
+  display: grid;
+  gap: 1rem;
+  max-width: 60ch;
+  color: color-mix(in oklab, var(--rl-ink) 82%, transparent);
+  font-size: 1.0625rem;
+  white-space: pre-line;
+}
+
+/* ==========================================================================
+   GALERIE
+   ========================================================================== */
+.rl-gallery {
+  display: grid;
+  gap: 0.75rem;
+}
+.rl-gallery__item {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--rl-radius);
+  background: var(--rl-tint);
+}
+.rl-gallery--mosaic {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: clamp(9rem, 17vw, 15rem);
+}
+.rl-gallery--mosaic .rl-gallery__item:first-child {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+.rl-gallery--row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: clamp(11rem, 24vw, 20rem);
+}
+
+/* ==========================================================================
+   AVIS
+   ========================================================================== */
+.rl-quotes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(1.5rem, 3vw, 3rem);
+}
+.rl-quote figure {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100%;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rl-line-strong);
+}
+.rl-quote blockquote p {
+  font-size: 1.1875rem;
+  font-weight: 500;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.rl-quote figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: auto;
+}
+.rl-quote__author {
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   RÉSERVER + INFOS
+   ========================================================================== */
+.rl-visit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: clamp(2rem, 6vw, 6rem);
+  align-items: start;
+}
+.rl-visit--solo {
+  grid-template-columns: minmax(0, 40rem);
+}
+.rl-visit__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+.rl-visit__details {
+  display: grid;
+  gap: 2.5rem;
+}
+.rl-visit__block .rl-h3 {
+  margin-bottom: 1rem;
+}
+.rl-hours__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-block: 0.45rem;
+}
+.rl-hours__row dt {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.rl-hours__row dt::after {
+  content: "";
+  flex: 1 1 1rem;
+  min-width: 1rem;
+  border-bottom: 2px dotted currentColor;
+  opacity: 0.3;
+  transform: translateY(-0.28em);
+}
+.rl-hours__row dd {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.rl-hours__row[data-today="true"] {
+  font-weight: 700;
+}
+.rl-hours__today {
+  color: var(--rl-accent-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  order: 2;
+}
+.rl-contact {
+  display: grid;
+  gap: 0.9rem;
+}
+.rl-contact li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.rl-contact__icon {
+  margin-top: 0.2rem;
+  color: var(--rl-accent-ink);
+}
+.rl-contact a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+@media (max-width: 900px) {
+  .rl-dishes--feature,
+  .rl-dishes--spotlight .rl-dish--feature,
+  .rl-carte,
+  .rl-story,
+  .rl-visit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rl-story__media {
+    aspect-ratio: 4 / 3;
+  }
+  .rl-dishes--feature {
+    gap: 2.5rem;
+  }
+  .rl-dish--feature .rl-dish__media {
+    aspect-ratio: 4 / 3;
+  }
+  .rl-quotes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Plus de 3 avis sur petit écran : une rangée qui défile, chaque avis s'aligne au bord. */
+  .rl-quotes-scroll {
+    margin-inline: calc(-1 * var(--rl-gutter));
+    padding-inline: var(--rl-gutter);
+    overflow-x: auto;
+    scroll-padding-inline: var(--rl-gutter);
+    scroll-snap-type: x mandatory;
+  }
+  .rl-quotes-scroll .rl-quotes {
+    grid-auto-flow: column;
+    grid-auto-columns: min(85%, 24rem);
+    grid-template-columns: none;
+    width: max-content;
+  }
+  .rl-quotes-scroll .rl-quote {
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .rl-hero {
+    min-height: 560px;
+    min-height: clamp(560px, 88svh, 760px);
+  }
+  .rl-hero__actions .rl-btn {
+    flex: 1 1 100%;
+  }
+  .rl-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rl-dock__item,
+  .rl-dock__item:first-child {
+    border-left: 0;
+  }
+  .rl-dock__item + .rl-dock__item {
+    border-top: 1px solid rgb(255 255 255 / 0.16);
+  }
+  .rl-dock__link,
+  .rl-dock__item:first-child .rl-dock__link {
+    min-height: 3.75rem;
+    padding: 0.75rem 0;
+  }
+  .rl-dishes--lines {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rl-dish__thumb {
+    width: 5.25rem;
+  }
+  .rl-gallery--mosaic,
+  .rl-gallery--row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: clamp(9rem, 38vw, 14rem);
+  }
+  .rl-gallery--mosaic .rl-gallery__item:first-child,
+  .rl-gallery--row .rl-gallery__item:first-child {
+    grid-column: span 2;
+    grid-row: span 1;
+  }
+  .rl-visit__actions .rl-btn {
+    flex: 1 1 100%;
+  }
+  /* Petit écran : pas de débordement des filets hors des marges de la page. */
+  .rl-carte__row {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+  .rl-head {
+    align-items: flex-start;
+  }
+}

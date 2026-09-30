@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./plans-repository", () => ({
   getOrganizationPlanKey: vi.fn(),
+  getOrganizationRealPlanKey: vi.fn(),
   getEntitlementLimit: vi.fn(),
 }));
+// Pas d'essai Pro dans ces tests : le bonus de crédits d'essai a ses propres tests.
+vi.mock("./promo-trial-core", () => ({ getActivePromo: vi.fn().mockResolvedValue(null) }));
 
 const mockFrom = vi.fn();
 const mockRpc = vi.fn();
@@ -19,9 +22,10 @@ import {
   initializeCreditBalance,
   grantCredits,
 } from "./ai-credits-service";
-import { getOrganizationPlanKey, getEntitlementLimit } from "./plans-repository";
+import { getOrganizationPlanKey, getOrganizationRealPlanKey, getEntitlementLimit } from "./plans-repository";
 
 const mockGetOrganizationPlanKey = vi.mocked(getOrganizationPlanKey);
+const mockGetOrganizationRealPlanKey = vi.mocked(getOrganizationRealPlanKey);
 const mockGetEntitlementLimit = vi.mocked(getEntitlementLimit);
 
 interface TableResult {
@@ -162,7 +166,7 @@ describe("consumeCredit — Lot 3 (corrige la race condition, voir 0038_ai_credi
       ai_credit_balances: { data: null, error: null }, // getCreditStatus() ET initializeCreditBalance() lisent/écrivent ici
       ai_usage_events: { data: null, error: null },
     });
-    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetOrganizationRealPlanKey.mockResolvedValue("starter");
     mockGetEntitlementLimit.mockResolvedValue(150);
 
     const result = await consumeCredit("org-legacy", 1);
@@ -214,12 +218,13 @@ describe("releaseCredit — Lot 3", () => {
 describe("initializeCreditBalance", () => {
   it("résout la valeur incluse depuis plan_entitlements quand aucun montant n'est fourni (remplace DEFAULT_INCLUDED_CREDITS)", async () => {
     configureSupabase({ ai_credit_balances: { data: null, error: null } });
-    mockGetOrganizationPlanKey.mockResolvedValue("starter");
+    mockGetOrganizationRealPlanKey.mockResolvedValue("starter");
     mockGetEntitlementLimit.mockResolvedValue(150);
 
     await initializeCreditBalance("org-1");
 
-    expect(mockGetOrganizationPlanKey).toHaveBeenCalledWith("org-1");
+    // Le snapshot est initialisé sur le plan RÉEL : le bonus de l'essai Pro est ajouté à part (réversible).
+    expect(mockGetOrganizationRealPlanKey).toHaveBeenCalledWith("org-1");
     expect(mockGetEntitlementLimit).toHaveBeenCalledWith("starter", "ai_credits");
   });
 
@@ -228,7 +233,7 @@ describe("initializeCreditBalance", () => {
 
     await initializeCreditBalance("org-1", 1000);
 
-    expect(mockGetOrganizationPlanKey).not.toHaveBeenCalled();
+    expect(mockGetOrganizationRealPlanKey).not.toHaveBeenCalled();
     expect(mockGetEntitlementLimit).not.toHaveBeenCalled();
   });
 });

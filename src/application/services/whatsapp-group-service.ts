@@ -904,8 +904,8 @@ async function processOneBroadcast(
       // et docs/ZERNIO_INTEGRATION.md.
       await markTargetFailed(
         target.id,
-        "Diffusion indisponible pour ce groupe : aucune conversation Zernio n'est encore établie avec lui. " +
-          "Zernio ne documente pas d'envoi initial vers un groupe — seule une réponse à un message déjà " +
+        "Diffusion indisponible pour ce groupe : aucune conversation n'est encore établie avec lui. " +
+          "L'envoi initial « à froid » vers un groupe n'est pas pris en charge — seule une réponse à un message déjà " +
           "reçu du groupe est possible pour l'instant.",
       );
       failed++;

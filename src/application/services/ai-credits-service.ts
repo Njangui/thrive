@@ -1,6 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { ValidationError } from "@/lib/errors";
-import { getOrganizationPlanKey, getEntitlementLimit, type PlanKey } from "./plans-repository";
+import { getOrganizationPlanKey, getOrganizationRealPlanKey, getEntitlementLimit, type PlanKey } from "./plans-repository";
+import { getActivePromo } from "./promo-trial-core";
 
 /**
  * ⚠️ Ce fichier n'existait PAS dans le code source fourni pour ce lot,
@@ -32,6 +33,60 @@ export interface CreditStatus {
 }
 
 /**
+ * Essai Pro offert : les crédits IA sont un snapshot en base, donc le plan
+ * « effectif » Pro ne suffit pas. Pendant l'essai on ajoute la différence
+ * (crédits Pro − crédits du plan réel) et on la mémorise dans
+ * `promo_bonus_credits` ; dès que l'essai n'est plus actif on la retire.
+ * Les deux sens sont des mises à jour conditionnelles (`promo_bonus_credits`
+ * = valeur lue) : deux appels concurrents ne peuvent pas appliquer le
+ * bonus deux fois. Ne lève jamais : au pire le bonus arrive à l'appel
+ * suivant. Le balayage de fin (`revertAllPromoCredits`) rattrape les
+ * comptes inactifs.
+ */
+export async function syncPromoCredits(organizationId: string): Promise<void> {
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { data } = await supabase
+      .from("ai_credit_balances")
+      .select("included_credits, promo_bonus_credits")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (!data) return;
+
+    const bonus = (data.promo_bonus_credits as number | null) ?? 0;
+    const promo = await getActivePromo();
+
+    if (!promo) {
+      if (bonus > 0) {
+        await supabase
+          .from("ai_credit_balances")
+          .update({ included_credits: Math.max(0, data.included_credits - bonus), promo_bonus_credits: 0 })
+          .eq("organization_id", organizationId)
+          .eq("promo_bonus_credits", bonus);
+      }
+      return;
+    }
+
+    if (bonus > 0 || data.included_credits === -1) return;
+    const realPlan = await getOrganizationRealPlanKey(organizationId);
+    const [proLimit, realLimit] = await Promise.all([
+      getEntitlementLimit("pro", "ai_credits"),
+      getEntitlementLimit(realPlan, "ai_credits"),
+    ]);
+    if (proLimit < 0 || realLimit < 0) return;
+    const grant = proLimit - realLimit;
+    if (grant <= 0) return;
+    await supabase
+      .from("ai_credit_balances")
+      .update({ included_credits: data.included_credits + grant, promo_bonus_credits: grant })
+      .eq("organization_id", organizationId)
+      .eq("promo_bonus_credits", 0);
+  } catch (error) {
+    console.error(`syncPromoCredits(${organizationId}) ignoré:`, error);
+  }
+}
+
+/**
  * Statut de crédits d'une organisation. Ne lève jamais : si
  * `ai_credit_balances` n'a pas encore de ligne (tenant créé avant ce lot,
  * ou `initializeCreditBalance` pas encore appelée), calcule un statut
@@ -39,6 +94,7 @@ export interface CreditStatus {
  * bloquerait l'IA à tort.
  */
 export async function getCreditStatus(organizationId: string): Promise<CreditStatus> {
+  await syncPromoCredits(organizationId);
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("ai_credit_balances")
@@ -91,6 +147,7 @@ export async function consumeCredit(
     throw new ValidationError("Le nombre de crédits consommés doit être positif");
   }
 
+  await syncPromoCredits(organizationId);
   const supabase = getSupabaseServiceClient();
 
   let { data, error } = await supabase.rpc("consume_ai_credit", {
@@ -186,7 +243,7 @@ export async function releaseCredit(organizationId: string, amount = 1, reason =
  */
 export async function initializeCreditBalance(organizationId: string, includedCredits?: number): Promise<void> {
   const resolvedIncluded =
-    includedCredits ?? (await getEntitlementLimit(await getOrganizationPlanKey(organizationId), "ai_credits"));
+    includedCredits ?? (await getEntitlementLimit(await getOrganizationRealPlanKey(organizationId), "ai_credits"));
 
   const supabase = getSupabaseServiceClient();
   const { error } = await supabase.from("ai_credit_balances").upsert(

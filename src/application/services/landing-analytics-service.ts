@@ -113,6 +113,13 @@ export interface LandingAnalyticsSummary {
     conversionRate: number;
   };
   daily: Array<{ date: string; pageViews: number; visitors: number }>;
+  /**
+   * Répartition par heure LOCALE du fuseau du tenant (`organizations.timezone`,
+   * ex. Africa/Douala — jamais l'heure UTC brute des `created_at`), agrégée sur
+   * toute la période demandée : 24 entrées (0 = minuit → 23 = 23h), pour que le
+   * commerçant identifie son heure de pointe et sache quand publier/relancer.
+   */
+  hourly: Array<{ hour: number; pageViews: number; visitors: number }>;
   topPages: Array<{ path: string; views: number }>;
   sources: Array<{ label: string; count: number }>;
   devices: Array<{ label: string; count: number }>;
@@ -124,6 +131,28 @@ export interface LandingAnalyticsSummary {
 
 function meta(event: RawAnalyticsEvent, key: string): unknown {
   return event.metadata?.[key];
+}
+
+// Un seul Intl.DateTimeFormat par fuseau (coûteux à instancier) plutôt qu'un
+// par événement agrégé — un tenant garde le même fuseau sur tout l'appel.
+const hourFormatterCache = new Map<string, Intl.DateTimeFormat>();
+function localHour(isoDate: string, timezone: string): number {
+  let formatter = hourFormatterCache.get(timezone);
+  if (!formatter) {
+    try {
+      formatter = new Intl.DateTimeFormat("fr-FR", { timeZone: timezone, hour: "2-digit", hour12: false });
+    } catch {
+      // Fuseau invalide/vide en base (donnée ancienne) : repli sur UTC plutôt que de planter l'analytique.
+      formatter = new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC", hour: "2-digit", hour12: false });
+    }
+    hourFormatterCache.set(timezone, formatter);
+  }
+  // formatToParts plutôt que .format() : en locale fr-FR, .format() rend
+  // "08 h" (littéral " h" inclus) — Number("08 h") vaut NaN. Le part "hour"
+  // isolé reste fiable quelle que soit la locale/l'environnement ICU.
+  // "24" possible à minuit selon l'environnement — ramené à 0.
+  const hourPart = formatter.formatToParts(new Date(isoDate)).find((part) => part.type === "hour")?.value;
+  return Number(hourPart ?? 0) % 24;
 }
 
 function ranked(map: Map<string, number>, limit: number): Array<[string, number]> {
@@ -145,10 +174,13 @@ export function aggregateLandingEvents(
   days: number,
   now: Date = new Date(),
   truncated = false,
+  timezone = "UTC",
 ): LandingAnalyticsSummary {
   const dailyPageViews = new Map<string, number>();
   const dailyVisitors = new Map<string, Set<string>>();
   const allVisitors = new Set<string>();
+  const hourlyPageViews = new Map<number, number>();
+  const hourlyVisitors = new Map<number, Set<string>>();
   const pages = new Map<string, number>();
   const sources = new Map<string, number>();
   const devices = new Map<string, number>();
@@ -168,6 +200,9 @@ export function aggregateLandingEvents(
         const path = typeof meta(event, "path") === "string" ? (meta(event, "path") as string) : "/";
         pages.set(path, (pages.get(path) ?? 0) + 1);
 
+        const hour = localHour(event.created_at, timezone);
+        hourlyPageViews.set(hour, (hourlyPageViews.get(hour) ?? 0) + 1);
+
         const visitor = meta(event, "visitor");
         if (typeof visitor === "string" && visitor) {
           const key = `${day}|${visitor}`;
@@ -175,6 +210,9 @@ export function aggregateLandingEvents(
           const set = dailyVisitors.get(day) ?? new Set<string>();
           set.add(visitor);
           dailyVisitors.set(day, set);
+          const hourSet = hourlyVisitors.get(hour) ?? new Set<string>();
+          hourSet.add(key);
+          hourlyVisitors.set(hour, hourSet);
         }
         if (meta(event, "entry") === true) {
           const source = typeof meta(event, "source") === "string" ? (meta(event, "source") as string) : "Direct";
@@ -237,6 +275,11 @@ export function aggregateLandingEvents(
       conversionRate: visitors > 0 ? leads / visitors : 0,
     },
     daily,
+    hourly: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      pageViews: hourlyPageViews.get(hour) ?? 0,
+      visitors: hourlyVisitors.get(hour)?.size ?? 0,
+    })),
     topPages: ranked(pages, 10).map(([path, views]) => ({ path, views })),
     sources: ranked(sources, 8).map(([label, count]) => ({ label, count })),
     devices: ranked(devices, 3).map(([label, count]) => ({ label, count })),
@@ -310,6 +353,13 @@ export async function getLandingAnalytics(organizationId: string, days: number):
   const supabase = getSupabaseServiceClient();
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("timezone")
+    .eq("id", organizationId)
+    .maybeSingle();
+  const timezone = org?.timezone || "Africa/Douala";
+
   const events: RawAnalyticsEvent[] = [];
   let truncated = false;
   for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -328,7 +378,7 @@ export async function getLandingAnalytics(organizationId: string, days: number):
     if (page === MAX_PAGES - 1) truncated = true;
   }
 
-  const summary = aggregateLandingEvents(events, days, new Date(), truncated);
+  const summary = aggregateLandingEvents(events, days, new Date(), truncated, timezone);
 
   const productIds = summary.products.map((p) => p.id);
   const videoIds = summary.videos.map((v) => v.id);

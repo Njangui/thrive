@@ -156,7 +156,7 @@ export function assertVideoAvailableForPublication(
   }
   if (publishAt.getTime() > video.expiresAt.getTime() - PUBLICATION_SAFETY_MARGIN_MS) {
     throw new ValidationError(
-      `La vidéo ${label} n'est conservée par Zernio que jusqu'au ${formatDeadline(video.expiresAt)} (${video.retentionDays ?? VIDEO_RETENTION_DAYS} jours après son envoi). ` +
+      `La vidéo ${label} n'est conservée que jusqu'au ${formatDeadline(video.expiresAt)} (${video.retentionDays ?? VIDEO_RETENTION_DAYS} jours après son envoi). ` +
         "Programmez la publication avant cette date, ou téléversez à nouveau la vidéo plus près de la publication.",
     );
   }
@@ -218,7 +218,7 @@ export async function requestVideoUploadTicket(
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100) || "video.mp4";
   const presign = await new ZernioSocialClient().createMediaPresign(safeName, contentType, sizeBytes, { permanent: true });
   if (!isZernioMediaUrl(presign.publicUrl)) {
-    throw new Error("Zernio a renvoyé une URL publique inattendue.");
+    throw new Error("Le service d'hébergement vidéo a renvoyé une URL publique inattendue.");
   }
   return { uploadUrl: presign.uploadUrl, publicUrl: presign.publicUrl, key: presign.key ?? null, contentType, storageClass: detectVideoStorageClass(presign.publicUrl, presign.key, presign.permanent) };
 }
@@ -408,7 +408,7 @@ export async function assertPublicationMediaAvailable(
       assertVideoAvailableForPublication({ title: video.title, expiresAt: new Date(video.expires_at), retentionDays: video.retention_days ?? undefined }, at, now);
     } else if (at.getTime() > now.getTime() + VIDEO_RETENTION_MS) {
       throw new ValidationError(
-        `Ce média est hébergé chez Zernio, qui ne le conserve que ${VIDEO_RETENTION_DAYS} jours : impossible de programmer une publication plus de ${VIDEO_RETENTION_DAYS} jours à l'avance.`,
+        `Ce média n'est conservé que ${VIDEO_RETENTION_DAYS} jours : impossible de programmer une publication plus de ${VIDEO_RETENTION_DAYS} jours à l'avance.`,
       );
     }
   }

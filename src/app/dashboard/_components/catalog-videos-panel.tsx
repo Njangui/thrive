@@ -27,9 +27,9 @@ function putFile(url: string, file: File, contentType: string, onProgress: (perc
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
     };
     xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Envoi refusé par Zernio (code ${xhr.status}).`));
+      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Envoi refusé par le service d'hébergement (code ${xhr.status}).`));
     xhr.onerror = () =>
-      reject(new Error("Envoi impossible : connexion interrompue, ou le navigateur a bloqué l'envoi vers Zernio (CORS / politique de sécurité)."));
+      reject(new Error("Envoi impossible : connexion interrompue, ou le navigateur a bloqué l'envoi (CORS / politique de sécurité)."));
     xhr.send(file);
   });
 }
@@ -81,7 +81,7 @@ export function CatalogVideosPanel({
       const ticket = await requestVideoUploadAction({ fileName: file.name, contentType: file.type, sizeBytes: file.size });
       if (!ticket.ok) throw new Error(ticket.error);
 
-      setStage("Envoi de la vidéo vers Zernio…");
+      setStage("Envoi de la vidéo…");
       setProgress(0);
       await putFile(ticket.data.uploadUrl, file, ticket.data.contentType, setProgress);
 
@@ -131,7 +131,7 @@ export function CatalogVideosPanel({
           Conservation : Discover 7 jours, Starter 30 jours, Pro 90 jours. Passé l&apos;échéance indiquée sur chaque vidéo, elle disparaît de votre catalogue et de votre
           page d&apos;accueil, et aucune publication vidéo ne peut être programmée au-delà. Pour la prolonger, retéléversez simplement la vidéo.
           {videos.some((v) => v.storageClass === "temporary")
-            ? " Une vidéo « temporaire » n'a pas obtenu de stockage permanent chez Zernio : sa durée est limitée à 7 jours quelle que soit votre offre."
+            ? " Une vidéo « temporaire » n'a pas obtenu de stockage permanent : sa durée est limitée à 7 jours quelle que soit votre offre."
             : ""}
         </p>
       </div>

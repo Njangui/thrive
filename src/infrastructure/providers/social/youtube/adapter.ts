@@ -33,7 +33,7 @@ export class YouTubeSocialAdapter implements SocialPublishingProvider {
       const downloaded = await downloadRemoteMedia(videoUrl, MAX_VIDEO_BYTES);
       media = downloaded.data.buffer as ArrayBuffer;
     } catch {
-      throw new Error(isZernioMediaHost(videoUrl) ? "La vidéo n'est plus disponible chez Zernio (Zernio ne conserve les fichiers que 7 jours). Téléversez-la à nouveau." : "La vidéo n'a pas pu être récupérée pour YouTube.");
+      throw new Error(isZernioMediaHost(videoUrl) ? "La vidéo n'est plus disponible (les fichiers en stockage temporaire ne sont conservés que 7 jours). Téléversez-la à nouveau." : "La vidéo n'a pas pu être récupérée pour YouTube.");
     }
     const normalizedPublishAt = publishAt ? (publishAt.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(publishAt) ? new Date(publishAt).toISOString() : new Date(`${publishAt}+01:00`).toISOString()) : undefined;
     const uploaded = await this.client.uploadVideo(media, { title: request.content.split("\n")[0] || "Publication Flexco", description: request.content, privacyStatus, publishAt: normalizedPublishAt });

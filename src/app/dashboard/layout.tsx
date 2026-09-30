@@ -10,6 +10,7 @@ import { getPlatformAdminStatus } from "@/application/services/platform-admin-se
 import { DashboardSidebar } from "./_components/dashboard-nav";
 import { DashboardTopbar } from "./_components/topbar";
 import { InstallAppBanner } from "./_components/install-app-banner";
+import { PromoTrialBanner } from "./_components/promo-trial-banner";
 import { ROLE_LABELS } from "./_components/role-labels";
 import { DashboardHelp } from "./_components/dashboard-help";
 import { NotificationWatcher } from "./_components/notification-watcher";
@@ -100,6 +101,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           industry={organization.data?.industry ?? null}
           isPlatformAdmin={Boolean(platformAdmin)}
         />
+        <PromoTrialBanner organizationId={currentOrg.organizationId} />
         <InstallAppBanner />
         <NotificationWatcher />
         <DashboardHelp />

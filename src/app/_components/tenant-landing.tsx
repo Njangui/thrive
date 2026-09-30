@@ -18,7 +18,10 @@ import { BookingSection } from "./landing-sections/booking";
 import { ContactSection, LocationSection, SocialLinksSection } from "./landing-sections/contact";
 import { CtaSection } from "./landing-sections/cta";
 import { VideosSection } from "./landing-sections/videos";
-import { BeautyHome, DefaultBusinessHome, ProfessionalServicesHome, RealEstateHome, RestaurantHome, RetailHome } from "./sector-home";
+import { RetailHome } from "./retail-home/retail-home";
+import { BeautyHome, DefaultBusinessHome, RealEstateHome } from "./sector-home";
+import { RestaurantHome } from "./restaurant/restaurant-home";
+import { ProfessionalServicesHome } from "./professional-services/services-home";
 
 /**
  * Composition de la PAGE D'ACCUEIL de la vitrine.
@@ -61,16 +64,25 @@ export async function TenantLanding({
   // résolu (hero, about, contact, location, social_links, cta) ne
   // déclenchent aucune requête supplémentaire.
   const dbBackedSections = enabledSections.filter((type) => DB_BACKED_SECTION_TYPES.has(type));
-  // Le template restaurant utilise aussi une photo de plat réelle comme
-  // fallback du hero lorsqu'aucune bannière n'a encore été configurée.
-  // On charge donc le catalogue même si la section « produits » n'est pas
-  // affichée sur la home par défaut.
+  // Le template restaurant montre des plats phares, utilise une photo de
+  // plat comme repli du hero (aucune bannière configurée) et une mosaïque
+  // de photos. On charge donc catalogue et galerie même si ces sections ne
+  // figurent pas dans la composition par défaut du secteur.
+  // Le template « prestataire de service » calcule ses domaines
+  // d'intervention à partir des VRAIS services (leur categoryName), pas des
+  // catégories produit (qui ne comptent que des produits — toujours 0 pour
+  // un tenant qui ne vend que des services). "categories" n'est donc plus
+  // chargée pour ce secteur ; beauty ne l'utilisait déjà pas.
   const specialTemplateTypes = ["", "restaurant", "retail", "beauty", "professional_services"].includes(site.sector)
     ? (site.sector === "beauty" || site.sector === "professional_services"
-        ? ["services", "categories", "team", "testimonials"]
+        ? ["services", "team", "testimonials"]
         : site.sector === ""
           ? ["products", "categories", "services", "gallery", "testimonials", "team"]
-          : ["products", "categories", "testimonials", ...(site.sector === "retail" ? ["promotions"] : [])]) as LandingSectionType[]
+          : site.sector === "retail"
+            ? ["products", "categories", "testimonials", "promotions", "gallery", "faq"]
+            : site.sector === "restaurant"
+              ? ["products", "categories", "testimonials", "gallery"]
+              : ["products", "categories", "testimonials"]) as LandingSectionType[]
     : [];
   const dataTypes = specialTemplateTypes.length
     ? Array.from(new Set([...dbBackedSections, ...specialTemplateTypes]))
@@ -129,15 +141,28 @@ export async function TenantLanding({
       return <BeautyHome site={site} services={services} gallery={gallery} testimonials={testimonials} team={team} />;
     }
     if (site.sector === "professional_services") {
-      return <ProfessionalServicesHome site={site} services={services} categories={categories} testimonials={testimonials} team={team} />;
+      return <ProfessionalServicesHome site={site} services={services} testimonials={testimonials} team={team} />;
     }
     if (site.sector === "real_estate") {
       return <RealEstateHome site={site} products={products} categories={categories} services={services} testimonials={testimonials} />;
     }
     if (site.sector === "restaurant") {
-      return <RestaurantHome site={site} categories={categories} testimonials={testimonials} />;
+      return <RestaurantHome site={site} products={products} categories={categories} testimonials={testimonials} gallery={gallery} />;
     }
-    return <RetailHome site={site} products={products} categories={categories} promotions={promotions} testimonials={testimonials} />;
+    const faqData = dataByType.get("faq");
+    const faqs = faqData?.type === "faq" ? faqData.faqs : [];
+    return (
+      <RetailHome
+        site={site}
+        products={products}
+        categories={categories}
+        promotions={promotions}
+        testimonials={testimonials}
+        gallery={gallery}
+        faqs={faqs}
+        videos={videos}
+      />
+    );
   }
 
   return (

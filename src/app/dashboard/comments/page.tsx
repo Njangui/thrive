@@ -10,6 +10,7 @@ import {
   commentHidingSupportedOnPlatform,
 } from "@/application/services/social-comment-service";
 import { AppError } from "@/lib/errors";
+import { canUseFeature } from "@/application/services/entitlements-service";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { CommentCard } from "./comment-card";
 
@@ -43,6 +44,35 @@ export default async function CommentsPage({
 }) {
   const { error, synced } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
+
+  // `unified_comments` (0/0/1 sur free/starter/pro) existe dans
+  // plan_entitlements depuis le 22/09/2026 mais n'était vérifié nulle
+  // part — trouvé lors de l'audit du 22/09, corrigé ici (même schéma que
+  // /dashboard/site::customization).
+  const commentsAccess = await canUseFeature(organizationId, "unified_comments", 1);
+  if (!commentsAccess.allowed) {
+    return (
+      <div className="flex flex-col gap-6">
+        <section className="flexco-page-hero">
+          <div>
+            <p className="flexco-eyebrow">Commentaires</p>
+            <h1 className="mt-2 font-jakarta text-2xl font-extrabold tracking-tight sm:text-3xl">
+              La boîte de réception unifiée des commentaires est réservée à l&apos;offre Pro.
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
+              Synchronisation automatique et réponse (manuelle ou IA) aux commentaires Facebook/Instagram/TikTok,
+              regroupés au même endroit — comme pour vos messages.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a href="/dashboard/subscription" className="adm-btn-primary bg-white text-navy-900 hover:bg-white/90">
+              Voir l&apos;offre Pro
+            </a>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   const [comments, syncablePosts] = await Promise.all([
     listComments(organizationId),

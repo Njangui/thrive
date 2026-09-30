@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { requireMembership, requireCurrentOrganization } from "@/application/services/auth-service";
-import { createProduct, listCategories } from "@/application/services/catalog-service";
-import { resolveImageFromFormData } from "@/application/services/media-service";
+import { createProduct, listCategories, appendProductImages } from "@/application/services/catalog-service";
+import { resolveImagesFromFormData } from "@/application/services/media-service";
 import { AppError } from "@/lib/errors";
-import { ImageUploadField } from "@/app/_components/image-upload-field";
+import { NewCatalogMediaField } from "@/app/_components/new-catalog-media-field";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { CategorySelect } from "../../_components/category-select";
 
@@ -12,16 +12,23 @@ async function createProductAction(formData: FormData) {
 
   const organizationId = String(formData.get("organizationId") ?? "");
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
+  const mediaMode = String(formData.get("mediaMode") ?? "images");
 
+  let productId: string;
   try {
-    const imageUrl = await resolveImageFromFormData(formData, {
-      organizationId,
-      mediaType: "product",
-      fileField: "imageFile",
-      urlField: "imageUrl",
-    });
+    // En mode "Vidéo", on ne résout aucune photo : la vidéo ne peut être
+    // envoyée qu'une fois le produit créé (voir redirection ci-dessous).
+    const imageUrls =
+      mediaMode === "video"
+        ? []
+        : await resolveImagesFromFormData(formData, {
+            organizationId,
+            mediaType: "product",
+            filesField: "newImages",
+            urlsField: "newImageUrls",
+          });
 
-    await createProduct({
+    const product = await createProduct({
       organizationId,
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? "") || undefined,
@@ -32,13 +39,20 @@ async function createProductAction(formData: FormData) {
         ? new Date(String(formData.get("promotionEndsAt"))).toISOString()
         : undefined,
       currentStock: Number(formData.get("stock") ?? 0),
-      imageUrl: imageUrl ?? undefined,
+      // Pas de `imageUrl` ici : createProduct l'ajouterait déjà à la galerie
+      // (appendProductImage interne) — on ajoute nous-mêmes la liste
+      // complète juste après pour éviter de dupliquer la première photo.
     });
+    productId = product.productId;
+    if (imageUrls.length > 0) await appendProductImages(organizationId, productId, imageUrls);
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la création du produit";
     redirect(`/dashboard/products/new?error=${encodeURIComponent(message)}`);
   }
 
+  if (mediaMode === "video") {
+    redirect(`/dashboard/products/${productId}/edit?addVideo=1#videos`);
+  }
   redirect("/dashboard/products?success=" + encodeURIComponent("Produit créé."));
 }
 
@@ -108,11 +122,7 @@ export default async function NewProductPage({
           <textarea name="description" rows={3} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
-        <ImageUploadField
-          name="image"
-          label="Photo du produit"
-          helpText="Optionnel — vous pourrez l'ajouter plus tard depuis la fiche produit."
-        />
+        <NewCatalogMediaField itemLabel="produit" />
 
         <SubmitButton pendingLabel="Création en cours...">Créer le produit</SubmitButton>
       </form>

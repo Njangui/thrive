@@ -1,7 +1,7 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { resolveCredential } from "@/infrastructure/providers/secrets-resolver";
 import { ZernioSocialClient } from "@/infrastructure/providers/social/zernio/client";
-import { ValidationError } from "@/lib/errors";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 
 /**
  * Lot O — registre durable des comptes sociaux Zernio (Facebook, Instagram,
@@ -125,6 +125,30 @@ export async function setSocialAccountStatus(accountId: string, status: SocialAc
   if (error) console.error(`setSocialAccountStatus(${accountId}) error:`, error.message);
 }
 
+/**
+ * Déconnexion demandée par le commerçant depuis /dashboard/channels.
+ * Contrairement à `setSocialAccountStatus` ci-dessus (appelée par le
+ * webhook Zernio, qui ne reçoit jamais organizationId — l'accountId y
+ * fait foi), celle-ci est atteignable depuis une Server Action côté
+ * tenant : elle DOIT vérifier que le compte appartient bien à
+ * l'organisation appelante avant d'écrire, pour éviter qu'une
+ * organisation ne déconnecte le compte d'une autre en devinant un
+ * accountId (IDOR). Purement local (statut en base) : Zernio ne fournit
+ * pas d'endpoint de révocation, cohérent avec le fonctionnement des
+ * autres déconnexions du projet (YouTube, Telegram).
+ */
+export async function disconnectSocialAccount(organizationId: string, accountId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("social_accounts")
+    .update({ status: "disconnected" })
+    .eq("organization_id", organizationId)
+    .eq("account_id", accountId)
+    .select("id");
+  if (error) throw new Error(`Déconnexion du compte impossible : ${error.message}`);
+  if (!data || data.length === 0) throw new NotFoundError("Compte introuvable pour cette organisation.");
+}
+
 export async function updateSocialAccountAutoReply(
   organizationId: string,
   accountId: string,
@@ -177,12 +201,29 @@ export async function syncSocialAccountsFromZernio(organizationId: string): Prom
   const client = new ZernioSocialClient(await resolveCredential(organizationId, "social", "zernio"));
   const supabase = getSupabaseServiceClient();
 
+  // Comptes explicitement déconnectés PAR LE COMMERÇAND (bouton
+  // "Déconnecter", disconnectSocialAccount ci-dessous) : Zernio ne propose
+  // aucune révocation côté plateforme, donc le compte reste rapporté par
+  // `client.listAccounts` indéfiniment. Sans cette exclusion, la synchro
+  // (appelée à CHAQUE chargement de /dashboard/channels) réécrirait leur
+  // statut à "connected" au tour suivant — annulant silencieusement la
+  // déconnexion et re-consommant le quota. Seule la reconnexion explicite
+  // (OAuth via persistZernioOAuthConnection, pas ce chemin passif) doit les
+  // ramener à "connected".
+  const { data: disconnectedRows } = await supabase
+    .from("social_accounts")
+    .select("account_id")
+    .eq("organization_id", organizationId)
+    .eq("status", "disconnected");
+  const disconnectedIds = new Set((disconnectedRows ?? []).map((row) => row.account_id as string));
+
   for (const profileId of profileIds) {
     const response = await client.listAccounts(profileId);
     const remote = response.accounts.filter((account) => account.platform !== "whatsapp");
     const remoteIds = new Set(remote.map((account) => account._id));
 
     for (const account of remote) {
+      if (disconnectedIds.has(account._id)) continue;
       try {
         await upsertSocialAccount({
           organizationId,

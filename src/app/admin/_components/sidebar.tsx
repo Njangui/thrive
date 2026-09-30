@@ -8,6 +8,7 @@ import {
   IconGrid,
   IconBuilding,
   IconTag,
+  IconSparkle,
   IconPuzzle,
   IconFlag,
   IconGlobe,
@@ -45,6 +46,7 @@ export const ADMIN_NAV_GROUPS: { label: string | null; items: { href: string; la
     items: [
       { href: "/admin/organizations", label: "Entreprises", icon: IconBuilding },
       { href: "/admin/plans", label: "Plans", icon: IconTag },
+      { href: "/admin/promo", label: "Essai Pro offert", icon: IconSparkle },
       { href: "/admin/countries", label: "Pays", icon: IconFlag },
       { href: "/admin/addons", label: "Add-ons", icon: IconPuzzle },
     ],

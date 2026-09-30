@@ -1,3 +1,4 @@
+import { contactReference, resolveContactIdentity, type LeadExportRow } from "./contact-identity";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { assertGatedFeature } from "./feature-gate-service";
 import type { LeadScoreResult } from "@/domain/entities/lead";
@@ -165,6 +166,12 @@ export interface LeadListItem {
   /** Lot O : notes libres sur le prospect (incluses dès Discover). */
   contactId: string | null;
   contactNotes: string | null;
+  /** Référence courte stable (« CT-3F9A1C2B ») pour distinguer deux homonymes. */
+  contactReference: string;
+  contactEmail: string | null;
+  /** Plateforme d'origine et identifiant unique côté plateforme (numéro pour WhatsApp). */
+  platform: string | null;
+  platformId: string | null;
 }
 
 export interface ListLeadsOptions {
@@ -189,7 +196,7 @@ interface LeadRow {
   next_follow_up_at: string | null;
   created_at: string;
   contact_id?: string | null;
-  contacts?: { full_name?: string | null; phone_e164?: string | null; notes?: string | null } | null;
+  contacts?: { full_name?: string | null; phone_e164?: string | null; notes?: string | null; email?: string | null; source_channel?: string | null; external_channel_id?: string | null } | null;
 }
 
 /**
@@ -207,7 +214,7 @@ export async function listLeadsForOrg(organizationId: string, options: ListLeads
   let query = supabase
     .from("leads")
     .select(
-      "id, contact_id, status, source, intent, score, score_reason, last_contact_at, next_follow_up_at, created_at, contacts(full_name, phone_e164, notes)",
+      "id, contact_id, status, source, intent, score, score_reason, last_contact_at, next_follow_up_at, created_at, contacts(full_name, phone_e164, notes, email, source_channel, external_channel_id)",
       { count: "exact" },
     )
     .eq("organization_id", organizationId)
@@ -237,9 +244,70 @@ export async function listLeadsForOrg(organizationId: string, options: ListLeads
       contactPhone: row.contacts?.phone_e164 ?? null,
       contactId: row.contact_id ?? null,
       contactNotes: row.contacts?.notes ?? null,
+      contactReference: contactReference(row.contact_id),
+      contactEmail: row.contacts?.email ?? null,
+      ...resolveContactIdentity({
+        phone: row.contacts?.phone_e164,
+        externalChannelId: row.contacts?.external_channel_id,
+        sourceChannel: row.contacts?.source_channel,
+      }),
     })),
     totalCount: count ?? 0,
   };
+}
+
+const EXPORT_PAGE_SIZE = 1000;
+/** Garde-fou mémoire : au-delà, l'export s'arrête et le signale (jamais un export silencieusement tronqué). */
+const EXPORT_MAX_ROWS = 50_000;
+
+/**
+ * Export de TOUTES les lignes du CRM (pagination interne par blocs de 1000 —
+ * la limite par défaut de PostgREST tronquerait sinon silencieusement à 1000).
+ */
+export async function listAllLeadsForExport(organizationId: string): Promise<{ rows: LeadExportRow[]; truncated: boolean }> {
+  const supabase = getSupabaseServiceClient();
+  const rows: LeadExportRow[] = [];
+
+  for (let from = 0; from < EXPORT_MAX_ROWS; from += EXPORT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("leads")
+      .select(
+        "id, contact_id, status, source, intent, budget_estimate, score, last_contact_at, next_follow_up_at, created_at, contacts(full_name, phone_e164, notes, email, source_channel, external_channel_id)",
+      )
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + EXPORT_PAGE_SIZE - 1);
+    if (error) throw new Error(`Erreur export des prospects: ${error.message}`);
+
+    const page = (data ?? []) as unknown as Array<LeadRow & { budget_estimate?: number | null }>;
+    for (const row of page) {
+      const identity = resolveContactIdentity({
+        phone: row.contacts?.phone_e164,
+        externalChannelId: row.contacts?.external_channel_id,
+        sourceChannel: row.contacts?.source_channel,
+      });
+      rows.push({
+        contactId: row.contact_id ?? null,
+        contactName: row.contacts?.full_name ?? null,
+        platform: identity.platform,
+        platformId: identity.platformId,
+        phone: row.contacts?.phone_e164 ?? null,
+        email: row.contacts?.email ?? null,
+        status: row.status,
+        source: row.source,
+        intent: row.intent,
+        score: row.score,
+        budgetEstimate: row.budget_estimate ?? null,
+        notes: row.contacts?.notes ?? null,
+        lastContactAt: row.last_contact_at,
+        nextFollowUpAt: row.next_follow_up_at,
+        createdAt: row.created_at,
+      });
+    }
+    if (page.length < EXPORT_PAGE_SIZE) return { rows, truncated: false };
+  }
+  return { rows, truncated: true };
 }
 
 /** Action rapide de l'écran (cahier, section UI) — journalise dans `lead_events`, cohérent avec le reste du pipeline (STATUS_CHANGED déjà un type d'événement attendu, voir 0003_crm.sql). */

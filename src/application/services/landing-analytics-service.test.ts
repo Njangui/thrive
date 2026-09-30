@@ -120,4 +120,32 @@ describe("aggregateLandingEvents", () => {
     expect(empty.totals.conversionRate).toBe(0);
     expect(empty.daily).toHaveLength(30);
   });
+
+  it("répartition par heure (UTC par défaut) : 24 entrées, agrégées tous jours confondus", () => {
+    expect(summary.hourly).toHaveLength(24);
+    // 08:00 + 08:01 UTC (19/09) → heure 8 ; 09:00 UTC le 19/09 ET le 18/09 → heure 9 (les deux jours cumulés).
+    expect(summary.hourly[8]).toEqual({ hour: 8, pageViews: 2, visitors: 1 });
+    expect(summary.hourly[9]).toEqual({ hour: 9, pageViews: 2, visitors: 1 });
+    expect(summary.hourly[14]).toEqual({ hour: 14, pageViews: 0, visitors: 0 });
+  });
+});
+
+describe("aggregateLandingEvents — heure LOCALE (fuseau du tenant, jamais l'UTC brut)", () => {
+  it("bascule bien de jour avec un fuseau positif (Africa/Douala, UTC+1)", () => {
+    const events: RawAnalyticsEvent[] = [
+      ev("page_view", "2026-09-19T23:30:00Z", { path: "/", entry: true, visitor: "v1" }),
+    ];
+    const utc = aggregateLandingEvents(events, 7, NOW, false, "UTC");
+    const douala = aggregateLandingEvents(events, 7, NOW, false, "Africa/Douala");
+    expect(utc.hourly[23]!.pageViews).toBe(1);
+    expect(douala.hourly[23]!.pageViews).toBe(0);
+    expect(douala.hourly[0]!.pageViews).toBe(1); // 23h30 UTC + 1h = 00h30 locale
+  });
+
+  it("fuseau invalide/vide : repli silencieux sur UTC plutôt qu'une exception", () => {
+    const events: RawAnalyticsEvent[] = [ev("page_view", "2026-09-19T08:00:00Z", { path: "/" })];
+    expect(() => aggregateLandingEvents(events, 7, NOW, false, "")).not.toThrow();
+    const fallback = aggregateLandingEvents(events, 7, NOW, false, "Pas/UnFuseau");
+    expect(fallback.hourly[8]!.pageViews).toBe(1);
+  });
 });

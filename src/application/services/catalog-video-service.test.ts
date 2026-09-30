@@ -39,7 +39,7 @@ describe("assertVideoAvailableForPublication — interdit de programmer au-delà
   });
 
   it("refuse une programmation après l'échéance, avec un message qui donne la date limite", () => {
-    expect(() => assertVideoAvailableForPublication(video, new Date(now.getTime() + 8 * DAY), now)).toThrow(/n'est conservée par Zernio que jusqu'au/);
+    expect(() => assertVideoAvailableForPublication(video, new Date(now.getTime() + 8 * DAY), now)).toThrow(/n'est conservée que jusqu'au/);
   });
 
   it("refuse aussi dans la marge de sécurité juste avant l'échéance", () => {

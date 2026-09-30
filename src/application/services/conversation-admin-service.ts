@@ -7,6 +7,8 @@ import { getHumanPauseMinutes } from "./messaging-settings-service";
 
 export interface ConversationListItem {
   id: string;
+  /** Plateforme d'origine (`whatsapp`, `facebook`, `instagram`, `telegram`…) — sert aux onglets par réseau de l'inbox. */
+  channel: string;
   contactName: string | null;
   contactPhone: string | null;
   handoffStatus: string;
@@ -16,21 +18,26 @@ export interface ConversationListItem {
   lastMessageAt: string | null;
 }
 
-/** Section 49 : liste triée pour que l'admin voie d'abord ce qui a besoin de lui. */
-export async function listConversationsForOrg(organizationId: string): Promise<ConversationListItem[]> {
+/**
+ * Section 49 : liste triée pour que l'admin voie d'abord ce qui a besoin de lui.
+ * `channel` filtre côté base (un onglet = ses propres 50 dernières conversations,
+ * pas les 50 dernières tous réseaux confondus filtrées ensuite).
+ */
+export async function listConversationsForOrg(organizationId: string, channel?: string | null): Promise<ConversationListItem[]> {
   const supabase = getSupabaseServiceClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("conversations")
-    .select("id, handoff_status, handoff_reason, last_message_at, contacts(full_name, phone_e164)")
-    .eq("organization_id", organizationId)
-    .order("last_message_at", { ascending: false })
-    .limit(50);
+    .select("id, channel, handoff_status, handoff_reason, last_message_at, contacts(full_name, phone_e164)")
+    .eq("organization_id", organizationId);
+  if (channel) query = query.eq("channel", channel);
+  const { data, error } = await query.order("last_message_at", { ascending: false }).limit(50);
 
   if (error) throw new Error(`Erreur lecture conversations: ${error.message}`);
 
   const items = (data ?? []).map((c) => ({
     id: c.id,
+    channel: (c as unknown as { channel?: string | null }).channel ?? "whatsapp",
     contactName: (c as unknown as { contacts?: { full_name?: string } }).contacts?.full_name ?? null,
     contactPhone: (c as unknown as { contacts?: { phone_e164?: string } }).contacts?.phone_e164 ?? null,
     handoffStatus: c.handoff_status,
@@ -45,6 +52,23 @@ export async function listConversationsForOrg(organizationId: string): Promise<C
     if (b.handoffStatus === "pending_human" && a.handoffStatus !== "pending_human") return 1;
     return 0;
   });
+}
+
+/** Nombre de conversations par plateforme, pour les compteurs des onglets de l'inbox. */
+export async function countConversationsByChannel(organizationId: string): Promise<Record<string, number>> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("channel")
+    .eq("organization_id", organizationId)
+    .limit(10000);
+  if (error) throw new Error(`Erreur comptage conversations: ${error.message}`);
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const channel = (row as { channel?: string | null }).channel ?? "whatsapp";
+    counts[channel] = (counts[channel] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export interface ConversationThreadMessage {

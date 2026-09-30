@@ -16,6 +16,7 @@ const m = vi.hoisted(() => ({
   processInboundAutoReply: vi.fn(),
   evaluateInboxChannel: vi.fn(),
   activateGroup: vi.fn(),
+  isKnownGroupConversation: vi.fn(),
   isGroupThread: vi.fn(),
   insertEvent: vi.fn(),
   updates: [] as Array<Record<string, unknown>>,
@@ -56,7 +57,10 @@ vi.mock("@/application/services/comment-auto-reply-service", () => ({ processCom
 vi.mock("@/application/services/inbox-channel-policy", () => ({ evaluateInboxChannel: m.evaluateInboxChannel }));
 vi.mock("@/application/services/social-account-registry-service", () => ({ resolveOrganizationIdBySocialAccount: m.resolveSocialAccount, setSocialAccountStatus: vi.fn() }));
 vi.mock("@/infrastructure/providers/registry", () => ({ getMessagingProviderForChannel: vi.fn() }));
-vi.mock("@/application/services/whatsapp-group-service", () => ({ activateGroupFromInboundConversation: m.activateGroup }));
+vi.mock("@/application/services/whatsapp-group-service", () => ({
+  activateGroupFromInboundConversation: m.activateGroup,
+  isKnownWhatsAppGroupConversation: m.isKnownGroupConversation,
+}));
 vi.mock("@/application/services/whatsapp-group-threads", () => ({ isWhatsAppGroupThread: m.isGroupThread }));
 vi.mock("@/application/services/marketing-service", () => ({ handlePostStatusWebhook: vi.fn() }));
 vi.mock("@/application/services/provider-connection-service", () => ({ handleAccountStatusChanged: vi.fn() }));
@@ -95,6 +99,7 @@ beforeEach(() => {
   m.processInboundAutoReply.mockResolvedValue(undefined);
   m.evaluateInboxChannel.mockResolvedValue({ allowed: true, autoReply: true });
   m.activateGroup.mockResolvedValue(undefined);
+  m.isKnownGroupConversation.mockResolvedValue(false);
   m.isGroupThread.mockResolvedValue(false);
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});

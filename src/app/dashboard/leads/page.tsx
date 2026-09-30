@@ -5,6 +5,7 @@ import { listLeadsForOrg, updateLeadStatus, updateContactNotes, MAX_CONTACT_NOTE
 import { isGatedFeatureEnabled } from "@/application/services/feature-gate-service";
 import { AppError } from "@/lib/errors";
 import { SubmitButton } from "@/app/_components/submit-button";
+import { SOCIAL_BRAND, type SocialPlatformKey } from "@/app/_components/brand-icons";
 
 const PAGE_SIZE = 50;
 
@@ -93,11 +94,16 @@ export default async function LeadsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-jakarta text-2xl font-bold tracking-tight">Clients</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {crmEnabled ? "Prospects et clients de votre pipeline commercial." : "Vos prospects et vos notes. Le pipeline complet est inclus à partir de l'offre Starter."}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-jakarta text-2xl font-bold tracking-tight">Clients</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {crmEnabled ? "Prospects et clients de votre pipeline commercial." : "Vos prospects et vos notes. Le pipeline complet est inclus à partir de l'offre Starter."}
+          </p>
+        </div>
+        <a href="/dashboard/leads/export" download className="rounded-xl border border-navy-900/10 bg-white px-4 py-2 text-sm font-medium hover:border-navy-900/20">
+          Exporter tout le CRM (CSV)
+        </a>
       </div>
 
       {success && <p className="adm-alert-success">{success}</p>}
@@ -159,8 +165,22 @@ export default async function LeadsPage({
               {leads.map((lead) => (
                 <tr key={lead.id} className="border-b border-navy-900/5 last:border-0">
                   <td className="px-4 py-2">
-                    <p>{lead.contactName ?? "Sans nom"}</p>
-                    <p className="text-xs text-slate-500">{lead.contactPhone ?? "—"}</p>
+                    <p className="flex items-center gap-2">
+                      {lead.platform && SOCIAL_BRAND[lead.platform as SocialPlatformKey] ? (() => {
+                        const brand = SOCIAL_BRAND[lead.platform as SocialPlatformKey];
+                        return (
+                          <span title={brand.label} className={`grid h-4 w-4 shrink-0 place-items-center rounded ${brand.badgeClassName}`}>
+                            <brand.Icon className="h-2.5 w-2.5 text-white" aria-hidden />
+                          </span>
+                        );
+                      })() : null}
+                      <span>{lead.contactName ?? "Sans nom"}</span>
+                    </p>
+                    <p className="text-xs text-slate-500">{lead.contactPhone ?? lead.platformId ?? "—"}</p>
+                    <p className="font-mono text-[11px] text-slate-400" title="Référence unique du contact">
+                      {lead.contactReference}
+                      {lead.platformId && !lead.contactPhone ? ` · ID ${lead.platformId}` : ""}
+                    </p>
                   </td>
                   {crmEnabled && (
                     <td className="px-4 py-2">

@@ -79,6 +79,11 @@ const PUBLIC_REFERENCE_TABLES = new Set([
  *   anti-fraude, réservée à la console Super Admin
  *   (`affiliate-admin-service.ts`, `requirePlatformAdmin()`) — un
  *   affilié ne doit jamais voir les signalements le concernant.
+ * - platform_costs / platform_expenses (0068/0069_*_financial_system.sql) :
+ *   cockpit financier plateforme (coûts récurrents, dépenses payées),
+ *   lu et écrit uniquement par `admin-finance-service.ts` en
+ *   service-role — jamais une donnée d'un tenant, jamais exposé à un
+ *   rôle membre. RLS activée, volontairement sans policy (deny-all).
  */
 const SERVICE_ROLE_ONLY_TABLES = new Set([
   "platform_admins",
@@ -89,6 +94,8 @@ const SERVICE_ROLE_ONLY_TABLES = new Set([
   "notchpay_sync_runs",
   "affiliate_payout_items",
   "affiliate_fraud_flags",
+  "platform_costs",
+  "platform_expenses",
   // Lot O (0067) : tables portant des secrets ou du routage interne, lues
   // uniquement par le serveur via service-role (jamais exposées aux membres).
   "telegram_bots", // jeton (Vault) + secret de webhook par bot
@@ -119,15 +126,22 @@ function readAllMigrations(): string {
   return files.map((f) => readFileSync(join(MIGRATIONS_DIR, f), "utf8")).join("\n");
 }
 
+// `(?:public\.)?` : certaines migrations (ex. 0069) qualifient le nom de
+// table avec le schéma (`public.platform_costs`) plutôt que d'utiliser le
+// nom nu comme le reste du projet — sans cette tolérance, `\w+` s'arrête
+// au point et capture le mot fantôme "public" à la place du vrai nom de
+// table, rendant la table invisible à CE test (déjà arrivé une fois pour
+// platform_costs — filet renforcé ici pour ne plus jamais le reproduire,
+// quelle que soit la migration future qui préfixerait ainsi).
 function extractCreatedTables(sql: string): Set<string> {
-  const re = /create table(?: if not exists)?\s+(\w+)/gi;
+  const re = /create table(?: if not exists)?\s+(?:public\.)?(\w+)/gi;
   const tables = new Set<string>();
   for (const match of sql.matchAll(re)) tables.add(match[1]!);
   return tables;
 }
 
 function extractRlsEnabledTables(sql: string): Set<string> {
-  const re = /alter table (\w+) enable row level security/gi;
+  const re = /alter table (?:public\.)?(\w+) enable row level security/gi;
   const tables = new Set<string>();
   for (const match of sql.matchAll(re)) tables.add(match[1]!);
   return tables;
@@ -144,7 +158,7 @@ function extractPolicies(sql: string): Policy[] {
   // imbriquées mais jamais de point-virgule dans ce projet (vérifié sur
   // toutes les migrations existantes), donc un match non-gourmand
   // jusqu'au premier `;` est fiable ici.
-  const re = /create policy\s+"[^"]+"\s+on\s+(\w+)[^;]*?(using\s*\([^;]*?\)|with check\s*\([^;]*?\))+[^;]*;/gis;
+  const re = /create policy\s+"[^"]+"\s+on\s+(?:public\.)?(\w+)[^;]*?(using\s*\([^;]*?\)|with check\s*\([^;]*?\))+[^;]*;/gis;
   const policies: Policy[] = [];
   for (const match of sql.matchAll(re)) {
     policies.push({ table: match[1]!, clause: match[0] });

@@ -155,10 +155,10 @@ export default async function EditServicePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; addVideo?: string }>;
 }) {
   const { id } = await params;
-  const { error, success } = await searchParams;
+  const { error, success, addVideo } = await searchParams;
   const { organizationId } = await requireCurrentOrganization();
 
   let service;
@@ -189,6 +189,7 @@ export default async function EditServicePage({
 
       {error && <p className="adm-alert-danger">{error}</p>}
       {success && <p className="adm-alert-success">{success}</p>}
+      {addVideo && <p className="adm-alert-success">Service créé ! Envoyez sa vidéo ci-dessous.</p>}
 
       <form action={updateServiceAction} className="flex flex-col gap-3">
         <input type="hidden" name="organizationId" value={organizationId} />
@@ -388,7 +389,9 @@ export default async function EditServicePage({
         )}
       </div>
 
-      <CatalogVideosPanel serviceId={service.id} videos={videos} />
+      <div id="videos">
+        <CatalogVideosPanel serviceId={service.id} videos={videos} />
+      </div>
     </div>
   );
 }

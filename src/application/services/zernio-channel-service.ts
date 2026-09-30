@@ -10,7 +10,7 @@ import { resolveCredential } from "@/infrastructure/providers/secrets-resolver";
 import { ZernioSocialClient } from "@/infrastructure/providers/social/zernio/client";
 import { env } from "@/lib/env";
 import { canUseFeature } from "./entitlements-service";
-import { QuotaExceededError } from "@/lib/errors";
+import { NotFoundError, QuotaExceededError } from "@/lib/errors";
 
 export type ZernioPlatform =
   | "facebook" | "instagram" | "linkedin" | "twitter" | "tiktok" | "youtube"
@@ -69,6 +69,27 @@ export async function getZernioWhatsAppAccounts(organizationId: string): Promise
     phoneNumber: row.phone_number ?? null,
     isPrimary: Boolean(row.is_primary),
   }));
+}
+
+/**
+ * Déconnexion d'un numéro WhatsApp de messagerie demandée par le
+ * commerçant depuis /dashboard/channels. Purement local (statut en base) :
+ * Zernio ne fournit pas d'endpoint de révocation, comme pour les autres
+ * déconnexions du projet (YouTube, Telegram, comptes sociaux). Contrairement
+ * aux comptes sociaux, aucune synchronisation passive ne relit
+ * périodiquement ce numéro depuis Zernio, donc pas de risque de voir le
+ * statut "disconnected" écrasé au chargement suivant de la page.
+ */
+export async function disconnectZernioWhatsAppAccount(organizationId: string, accountId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("whatsapp_accounts")
+    .update({ status: "disconnected" })
+    .eq("organization_id", organizationId)
+    .eq("account_id", accountId)
+    .select("id");
+  if (error) throw new Error(`Déconnexion du numéro WhatsApp impossible : ${error.message}`);
+  if (!data || data.length === 0) throw new NotFoundError("Numéro WhatsApp introuvable pour cette organisation.");
 }
 
 /** Crée un profil Zernio dédié à un nouveau numéro WhatsApp de messagerie. */

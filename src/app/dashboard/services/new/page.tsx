@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireMembership, requireCurrentOrganization } from "@/application/services/auth-service";
-import { createService } from "@/application/services/service-service";
+import { createService, appendServiceImages } from "@/application/services/service-service";
 import { listCategories } from "@/application/services/catalog-service";
-import { resolveImageFromFormData } from "@/application/services/media-service";
+import { resolveImagesFromFormData } from "@/application/services/media-service";
 import { AppError } from "@/lib/errors";
-import { ImageUploadField } from "@/app/_components/image-upload-field";
+import { NewCatalogMediaField } from "@/app/_components/new-catalog-media-field";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { CategorySelect } from "../../_components/category-select";
 
@@ -12,29 +12,43 @@ async function createServiceAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   await requireMembership(organizationId, ["owner", "admin", "manager"]);
+  const mediaMode = String(formData.get("mediaMode") ?? "images");
 
+  let serviceId: string;
   try {
-    const imageUrl = await resolveImageFromFormData(formData, {
-      organizationId,
-      mediaType: "service",
-      fileField: "imageFile",
-      urlField: "imageUrl",
-    });
+    // En mode "Vidéo", pas de photo à résoudre : la vidéo ne peut être
+    // envoyée qu'une fois la prestation créée (voir redirection ci-dessous).
+    const imageUrls =
+      mediaMode === "video"
+        ? []
+        : await resolveImagesFromFormData(formData, {
+            organizationId,
+            mediaType: "service",
+            filesField: "newImages",
+            urlsField: "newImageUrls",
+          });
 
-    await createService({
+    const service = await createService({
       organizationId,
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? "") || undefined,
       categoryId: String(formData.get("categoryId") ?? ""),
       price: Number(formData.get("price") ?? 0),
       durationMinutes: formData.get("durationMinutes") ? Number(formData.get("durationMinutes")) : null,
-      imageUrl: imageUrl ?? undefined,
+      // Pas de `imageUrl` ici : createService l'ajouterait déjà à la
+      // galerie (appendServiceImage interne) — on ajoute nous-mêmes la
+      // liste complète juste après pour éviter de dupliquer la 1ère photo.
     });
+    serviceId = service.serviceId;
+    if (imageUrls.length > 0) await appendServiceImages(organizationId, serviceId, imageUrls);
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Erreur lors de la création du service.";
     redirect(`/dashboard/services/new?error=${encodeURIComponent(message)}`);
   }
 
+  if (mediaMode === "video") {
+    redirect(`/dashboard/services/${serviceId}/edit?addVideo=1#videos`);
+  }
   redirect("/dashboard/services?success=" + encodeURIComponent("Service créé."));
 }
 
@@ -78,11 +92,7 @@ export default async function NewServicePage({
           <textarea name="description" rows={3} className="rounded-xl border border-navy-900/10 px-4 py-3" />
         </label>
 
-        <ImageUploadField
-          name="image"
-          label="Photo de la prestation"
-          helpText="Optionnel — vous pourrez en ajouter d'autres plus tard depuis la fiche de la prestation."
-        />
+        <NewCatalogMediaField itemLabel="service" />
 
         <SubmitButton pendingLabel="Création en cours...">Créer le service</SubmitButton>
       </form>
