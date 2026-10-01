@@ -66,3 +66,8 @@ sectoriels, Service client…) a été **gardé**. Le lot P n'a donc apporté qu
   et par dates de modification (39 fichiers modifiés après le lot O). Un fichier du lot P modifié sans changement de date
   aurait pu m'échapper — relire `git diff` avant de déployer.
 - Les anciennes bases (`__9_`, `__10_`) n'ont pas été fusionnées : elles sont contenues dans fusion-31.
+
+## 6. Mise à jour — `next build` (01/10/2026)
+- `next build --webpack` : **compilation OK, TypeScript OK, génération des pages OK** (exit 0), route `/dashboard/domain`, `/admin/domains` et le cron `process-catalog-videos` incluses.
+- Build fait avec des polices Google **simulées** (sandbox sans accès à fonts.googleapis.com) et des variables Supabase **factices** : le rendu typographique et la connexion réelle ne sont donc pas vérifiés. Sur ta machine / Vercel, le build normal (Turbopack) utilisera les vraies polices. Le mode Turbopack n'a pas pu être testé ici (le mock de polices n'y fonctionne pas).
+- Correction (erreur **préexistante dans fusion-31**, bloquait `next build`) : `dashboard/analytics/landing/page.tsx`, `searchParams` typé `Promise<…> | {…}` → `Promise<…>` (exigé par Next 16).

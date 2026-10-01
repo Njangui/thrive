@@ -81,7 +81,7 @@ function RankedCard({
 export default async function LandingAnalyticsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ days?: string }> | { days?: string };
+  searchParams?: Promise<{ days?: string }>;
 }) {
   const { organizationId } = await requireCurrentOrganization();
   if (!(await isGatedFeatureEnabled(organizationId, "site_analytics"))) return <UpgradeNotice feature="site_analytics" />;
