@@ -3,19 +3,23 @@ import { getSocialPublishingProvider } from "@/infrastructure/providers/registry
 import { routeMessage } from "./conversation-orchestrator";
 import { hasFeature } from "./entitlements-service";
 import { resolveMessagingPolicy } from "./messaging-policy-service";
-import { getSocialAccountByAccountId } from "./social-account-registry-service";
+import { getSocialAccountByAccountId, markSocialAccountNeedsReconnect } from "./social-account-registry-service";
 import { notifyOrgAdmins } from "./notification-service";
 
 /**
- * Lot O — réponse automatique aux commentaires Facebook / Instagram,
+ * Réponse automatique aux commentaires Facebook / Instagram / TikTok,
  * construite EXACTEMENT comme la messagerie : même orchestrateur (FAQ →
  * infos entreprise → catalogue → IA en dernier recours), même politique
  * de l'offre (IA seulement en « automatique »), mêmes escalades
  * (plainte / remboursement / IA indisponible → un humain), mêmes crédits.
  *
- * TikTok est volontairement à 0 dans `plan_entitlements`
- * (`tiktok_auto_comments`) : retiré à la demande, réactivable depuis
- * /admin/plans sans changement de code.
+ * Lot P — TikTok activé en Pro (`tiktok_auto_comments`) : Zernio confirme
+ * lire/répondre/masquer/épingler les commentaires TikTok pour les comptes
+ * connectés via l'API TikTok Business (annonce du 11/09/2026 + changelog —
+ * voir PLAN_LOT_P.md §0.2). NON VÉRIFIÉ EN CONDITIONS RÉELLES (aucun appel
+ * n'a été fait avec une vraie clé) : `handleReplyFailure` ci-dessous
+ * désactive automatiquement la réponse d'un compte TikTok si l'erreur
+ * ressemble à un refus de permission, plutôt que de retenter en boucle.
  */
 export const COMMENT_AUTO_REPLY_ENTITLEMENT: Record<string, string> = {
   facebook: "facebook_auto_comments",
@@ -40,8 +44,13 @@ export interface CommentAutoReplyInput {
   externalCommentId: string;
   authorExternalId?: string | null;
   authorName?: string | null;
+  /** Lot P — confirmé par Zernio quand présent (Facebook/Instagram/TikTok) ; absent ≠ faux, voir isOwnComment. */
+  isOwnAccount?: boolean;
   content: string;
 }
+
+/** Erreurs qui indiquent un problème de PERMISSION/CONNEXION (pas un incident passager) — déclenchent une reconnexion plutôt qu'un retrait silencieux. NON VÉRIFIÉ EN CONDITIONS RÉELLES : à ajuster une fois de vraies erreurs Zernio observées (script scripts/verify-zernio-capabilities.ts). */
+const RECONNECT_HINT_PATTERN = /\b(403|forbidden|unauthorized|not\s*supported|unsupported|reconnect|permission)\b/i;
 
 /** Tronque proprement (sur une frontière de mot) pour un commentaire public. */
 export function clampPublicReply(text: string, max = MAX_PUBLIC_REPLY_LENGTH): string {
@@ -52,8 +61,17 @@ export function clampPublicReply(text: string, max = MAX_PUBLIC_REPLY_LENGTH): s
   return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
-/** Le commentaire vient-il du compte lui-même (page / profil de l'entreprise) ? */
-export function isOwnComment(input: { authorExternalId?: string | null; authorName?: string | null }, account: { accountId: string; username: string | null }): boolean {
+/**
+ * Le commentaire vient-il du compte lui-même (page / profil de l'entreprise) ?
+ * Lot P : `isOwnAccount` de Zernio, quand PRÉSENT, tranche directement — un
+ * champ absent (`undefined`) n'est PAS une confirmation « faux », donc on
+ * retombe sur l'identifiant puis le pseudo, jamais l'inverse.
+ */
+export function isOwnComment(
+  input: { authorExternalId?: string | null; authorName?: string | null; isOwnAccount?: boolean },
+  account: { accountId: string; username: string | null },
+): boolean {
+  if (input.isOwnAccount !== undefined) return input.isOwnAccount;
   if (input.authorExternalId && input.authorExternalId === account.accountId) return true;
   if (input.authorName && account.username) {
     return input.authorName.trim().toLowerCase().replace(/^@/, "") === account.username.trim().toLowerCase().replace(/^@/, "");
@@ -65,6 +83,18 @@ async function markComment(commentId: string, organizationId: string, patch: Rec
   const supabase = getSupabaseServiceClient();
   const { error } = await supabase.from("social_comments").update(patch).eq("id", commentId).eq("organization_id", organizationId);
   if (error) console.error(`processCommentAutoReply: mise à jour du commentaire ${commentId} impossible:`, error.message);
+}
+
+/** Lot P — un échec TikTok qui ressemble à un refus de permission désactive la réponse ET signale « reconnexion requise » (au lieu de retenter à chaque commentaire). */
+async function handleReplyFailure(input: CommentAutoReplyInput, message: string): Promise<void> {
+  if (input.platform !== "tiktok" || !RECONNECT_HINT_PATTERN.test(message)) return;
+  await markSocialAccountNeedsReconnect(input.accountId, true).catch((error) => console.error(`handleReplyFailure(${input.accountId}): marquage reconnexion impossible:`, error));
+  await notifyOrgAdmins({
+    organizationId: input.organizationId,
+    title: "Reconnexion TikTok requise.",
+    body: "La réponse automatique aux commentaires TikTok est en pause : reconnectez ce compte depuis Canaux pour la réactiver.",
+    priority: "important",
+  }).catch((error) => console.error("handleReplyFailure: notification impossible:", error));
 }
 
 async function escalateComment(input: CommentAutoReplyInput, reason: string): Promise<void> {
@@ -105,8 +135,16 @@ export async function processCommentAutoReply(input: CommentAutoReplyInput): Pro
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const [recentByAccount, recentByAuthor] = await Promise.all([
     supabase.from("social_comments").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("provider_account_id", input.accountId).eq("reply_sender", "ai").gte("replied_at", tenMinutesAgo),
-    input.authorName
-      ? supabase.from("social_comments").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("provider_account_id", input.accountId).eq("author_name", input.authorName).eq("reply_sender", "ai").gte("replied_at", oneDayAgo)
+    // Lot P : identifiant plateforme préféré au pseudo quand Zernio le fournit (TikTok n'envoie parfois que l'id).
+    input.authorExternalId || input.authorName
+      ? supabase
+          .from("social_comments")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organizationId)
+          .eq("provider_account_id", input.accountId)
+          .eq(input.authorExternalId ? "author_external_id" : "author_name", input.authorExternalId ?? input.authorName)
+          .eq("reply_sender", "ai")
+          .gte("replied_at", oneDayAgo)
       : Promise.resolve({ count: 0 }),
   ]);
   if ((recentByAccount.count ?? 0) >= MAX_AUTO_REPLIES_PER_ACCOUNT_PER_10_MIN) {
@@ -146,6 +184,7 @@ export async function processCommentAutoReply(input: CommentAutoReplyInput): Pro
     const message = error instanceof Error ? error.message : String(error);
     console.error(`processCommentAutoReply(${input.commentId}) échec:`, message);
     await markComment(input.commentId, organizationId, { auto_reply_error: message.slice(0, 500), needs_human: true, handoff_reason: "requires_human_action" });
+    await handleReplyFailure(input, message);
     return "failed";
   }
 }

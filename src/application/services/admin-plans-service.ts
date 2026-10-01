@@ -59,8 +59,9 @@ const DEDICATED_BONUS_CATALOG: { key: string; label: string }[] = [
 const EXTRA_ADMIN_ENTITLEMENTS: { key: string; label: string }[] = [
   { key: "semi_automatic_messaging", label: "Messagerie semi-automatique (FAQ, entreprise, catalogue)" },
   { key: "follow_ups", label: "Relances clients automatiques (24 h / 48 h)" },
-  { key: "tiktok_auto_comments", label: "Réponse automatique aux commentaires TikTok (retirée — 0 partout)" },
+  { key: "tiktok_auto_comments", label: "Réponse automatique aux commentaires TikTok" },
   { key: "video_retention_days", label: "Conservation des vidéos du catalogue (jours)" },
+  { key: "whatsapp_group_numbers", label: "Numéros WhatsApp dédiés aux groupes (réservé — pas encore appliqué, voir RAPPORT_LOT_P.md)" },
 ];
 
 function isPlanKey(value: string): value is PlanKey {

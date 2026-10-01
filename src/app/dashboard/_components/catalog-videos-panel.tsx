@@ -8,11 +8,11 @@ import { deleteVideoAction, registerVideoAction, requestVideoUploadAction } from
 /**
  * Panneau « Vidéos » d'une fiche produit ou service.
  *
- * Le fichier part du navigateur DIRECTEMENT vers Zernio (URL présignée) :
- * pas de limite de 4,5 Mo de fonction Vercel, pas de bande passante
- * serveur. Zernio ne conserve les vidéos que 7 JOURS — le bandeau
- * ci-dessous l'annonce à l'utilisateur AVANT l'envoi, et chaque vidéo
- * affiche son échéance.
+ * Le fichier part du navigateur DIRECTEMENT vers Zernio (presign) : pas de
+ * limite de 4,5 Mo de fonction Vercel, pas de bande passante serveur. Les
+ * vidéos restent hébergées chez Zernio ; la conservation par offre
+ * (7 / 30 / 90 jours) est assurée par un renouvellement automatique côté
+ * serveur (voir catalog-video-service.ts) — rien à faire ici pour ça.
  */
 
 const MAX_BYTES = 200 * 1024 * 1024;
@@ -27,9 +27,9 @@ function putFile(url: string, file: File, contentType: string, onProgress: (perc
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
     };
     xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Envoi refusé par le service d'hébergement (code ${xhr.status}).`));
+      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Envoi refusé (code ${xhr.status}).`));
     xhr.onerror = () =>
-      reject(new Error("Envoi impossible : connexion interrompue, ou le navigateur a bloqué l'envoi (CORS / politique de sécurité)."));
+      reject(new Error("Envoi impossible : connexion interrompue, ou le navigateur a bloqué l'envoi."));
     xhr.send(file);
   });
 }
@@ -88,7 +88,7 @@ export function CatalogVideosPanel({
       setStage("Enregistrement…");
       const saved = await registerVideoAction({
         publicUrl: ticket.data.publicUrl,
-        storageKey: ticket.data.key,
+        storageKey: ticket.data.storageKey,
         contentType: ticket.data.contentType,
         sizeBytes: file.size,
         title: title.trim() || file.name.replace(/\.[^.]+$/, ""),
@@ -116,6 +116,8 @@ export function CatalogVideosPanel({
     else router.refresh();
   }
 
+  const hasRenewalIssue = videos.some((v) => v.renewalError && !v.expired);
+
   return (
     <section className="adm-card flex flex-col gap-4">
       <div>
@@ -123,16 +125,14 @@ export function CatalogVideosPanel({
         <h3 className="mt-1 adm-heading-2">Vidéos de présentation</h3>
       </div>
 
-      <div className={`rounded-xl border p-3 text-sm ${videos.some((v) => v.storageClass === "temporary") ? "border-amber-300 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} role="note">
-        <p className="font-semibold">
-          {videos.some((v) => v.storageClass === "temporary") ? "Certaines vidéos sont hébergées temporairement (7 jours)." : "Vos vidéos sont conservées selon votre offre."}
-        </p>
+      <div className={`rounded-xl border p-3 text-sm ${hasRenewalIssue ? "border-amber-300 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`} role="note">
+        <p className="font-semibold">Vos vidéos sont conservées selon votre offre.</p>
         <p className="mt-1 text-xs leading-5">
-          Conservation : Discover 7 jours, Starter 30 jours, Pro 90 jours. Passé l&apos;échéance indiquée sur chaque vidéo, elle disparaît de votre catalogue et de votre
-          page d&apos;accueil, et aucune publication vidéo ne peut être programmée au-delà. Pour la prolonger, retéléversez simplement la vidéo.
-          {videos.some((v) => v.storageClass === "temporary")
-            ? " Une vidéo « temporaire » n'a pas obtenu de stockage permanent : sa durée est limitée à 7 jours quelle que soit votre offre."
-            : ""}
+          Conservation : Discover 7 jours, Starter 30 jours, Pro 90 jours. Nous renouvelons automatiquement l&apos;hébergement
+          pendant toute cette durée : vous n&apos;avez rien à faire. Passé l&apos;échéance, la vidéo disparaît de votre catalogue
+          et de votre page d&apos;accueil, et aucune publication vidéo ne peut être programmée au-delà. Pour la prolonger au-delà
+          de la durée de votre offre, retéléversez-la.
+          {hasRenewalIssue ? " Le renouvellement automatique d'au moins une vidéo a échoué récemment — nous réessayons ; si le problème persiste, retéléversez-la." : ""}
         </p>
       </div>
 

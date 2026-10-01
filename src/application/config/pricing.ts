@@ -18,8 +18,8 @@ export type PricingFeature = {
  */
 export const PRICING_FEATURES: PricingFeature[] = [
   { key: "site", label: "Site public professionnel", group: "Vitrine & catalogue", values: { free: true, starter: "Personnalisable", pro: "Personnalisable" } },
-  { key: "custom_domain", label: "Domaine personnalisé", group: "Vitrine & catalogue", values: { free: "Sous-domaine inclus", starter: true, pro: true } },
-  { key: "remove_branding", label: "Retirer « Site propulsé par Flexco »", group: "Vitrine & catalogue", values: { free: false, starter: false, pro: true } },
+  { key: "custom_domain", label: "Domaine personnalisé", group: "Vitrine & catalogue", values: { free: "Sur demande, hors forfait", starter: "Sur demande, hors forfait", pro: "Sur demande, hors forfait" } },
+  { key: "remove_branding", label: "Site sans badge « propulsé par Flexco »", group: "Vitrine & catalogue", values: { free: false, starter: true, pro: true } },
   { key: "catalog", label: "Catalogue", group: "Vitrine & catalogue", values: { free: "100 produits max", starter: "1 000 produits max", pro: "2 000 produits max" } },
   { key: "telegram_bots", label: "Bots Telegram", group: "Canaux", values: { free: "1", starter: "3", pro: "10" } },
   { key: "telegram_channels", label: "Canaux Telegram", group: "Canaux", values: { free: "1", starter: "3", pro: "12" } },
@@ -33,6 +33,7 @@ export const PRICING_FEATURES: PricingFeature[] = [
   { key: "tiktok", label: "Comptes TikTok", group: "Réseaux sociaux", values: { free: false, starter: false, pro: "2" } },
   { key: "facebook_comments", label: "Réponse automatique aux commentaires Facebook", group: "Réseaux sociaux", values: { free: false, starter: true, pro: true } },
   { key: "instagram_comments", label: "Réponse automatique aux commentaires Instagram", group: "Réseaux sociaux", values: { free: false, starter: false, pro: true } },
+  { key: "tiktok_comments", label: "Réponse automatique aux commentaires TikTok", group: "Réseaux sociaux", values: { free: false, starter: false, pro: true } },
   { key: "unified_comments", label: "Commentaires unifiés", group: "Réseaux sociaux", values: { free: false, starter: "Facebook", pro: "Facebook + Instagram" } },
   { key: "first_comment", label: "Premier commentaire automatique", group: "Réseaux sociaux", values: { free: false, starter: "Facebook", pro: "Facebook, Instagram, LinkedIn, TikTok" } },
   { key: "ai", label: "Crédits IA / mois", group: "Automatisation & communication", values: { free: "0", starter: "150", pro: "300" } },

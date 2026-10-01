@@ -69,6 +69,8 @@ export interface TelegramMessage {
   reply_to_message?: { message_id: number; from?: TelegramUser };
   /** Commandes / mentions repérées dans `text` — voir mapper.ts::isDirectedAtBot. */
   entities?: TelegramMessageEntity[];
+  /** Lot P — le groupe vient d'être converti en supergroupe : son identifiant change définitivement (core.telegram.org/bots/api#message). */
+  migrate_to_chat_id?: number;
 }
 
 /** Une "update" telle que livrée au webhook tenant. `update_id` n'est PAS globalement unique (propre à chaque bot tenant) — voir resolve-organization.ts/webhook-handler.ts pour la clé d'idempotence réellement utilisée. */

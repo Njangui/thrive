@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { requireCurrentOrganization } from "@/application/services/auth-service";
+import { getCurrentUserOrganizations, requireCurrentOrganization } from "@/application/services/auth-service";
 import { getUnreadNotificationCount } from "@/application/services/notification-service";
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
 import { getEnabledModules } from "@/application/services/module-service";
@@ -11,6 +11,7 @@ import { DashboardSidebar } from "./_components/dashboard-nav";
 import { DashboardTopbar } from "./_components/topbar";
 import { InstallAppBanner } from "./_components/install-app-banner";
 import { PromoTrialBanner } from "./_components/promo-trial-banner";
+import { OrgSwitcher } from "./_components/org-switcher";
 import { ROLE_LABELS } from "./_components/role-labels";
 import { DashboardHelp } from "./_components/dashboard-help";
 import { NotificationWatcher } from "./_components/notification-watcher";
@@ -37,11 +38,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!user) redirect("/login");
 
-  // V1 : un seul membership actif à la fois — pas de sélecteur
-  // multi-entreprise (simplification volontaire, section 62 : ne pas
-  // sur-engineer avant qu'un vrai besoin apparaisse). Redirige vers
+  // Entreprise active : cookie `flexco_active_org` si l'utilisateur en est
+  // membre, sinon sa plus ancienne appartenance. Un sélecteur n'apparaît que
+  // s'il a plusieurs entreprises (voir OrgSwitcher). Redirige vers
   // /onboarding si aucune organisation.
   const currentOrg = await requireCurrentOrganization();
+  const allOrgs = await getCurrentUserOrganizations();
 
   // Lot I, Partie 2 : redirige aussi vers /onboarding si l'organisation
   // existe mais n'a jamais terminé le wizard (onboarding_completed_at
@@ -101,6 +103,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           industry={organization.data?.industry ?? null}
           isPlatformAdmin={Boolean(platformAdmin)}
         />
+        <OrgSwitcher orgs={allOrgs} currentId={currentOrg.organizationId} />
         <PromoTrialBanner organizationId={currentOrg.organizationId} />
         <InstallAppBanner />
         <NotificationWatcher />

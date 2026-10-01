@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { requireMembership, requireCurrentOrganization } from "@/application/services/auth-service";
 import { getSiteMedia, updateSiteMedia } from "@/application/services/site-service";
 import { resolveImageFromFormData } from "@/application/services/media-service";
-import { listActiveTldPricing, listMyDomainRequests, requestDomain } from "@/application/services/domain-service";
 import {
   getLandingConfig,
   getOrganizationIndustry,
@@ -33,7 +32,6 @@ import { ImageUploadField } from "@/app/_components/image-upload-field";
 import { SubmitButton } from "@/app/_components/submit-button";
 import { ResetSiteButton } from "./reset-site-button";
 import { HighlightIcon } from "@/app/_components/storefront/storefront-icons";
-import { DomainSearchField } from "./domain-search-field";
 import { env } from "@/lib/env";
 import { canUseFeature } from "@/application/services/entitlements-service";
 import { AppError, ValidationError, QuotaExceededError } from "@/lib/errors";
@@ -153,29 +151,6 @@ async function updateSiteAction(formData: FormData) {
   }
 
   redirect("/dashboard/site?success=" + encodeURIComponent("Votre site a été mis à jour."));
-}
-
-/**
- * Lot G, Partie 3 — ajout délibéré non listé dans le cahier (qui ne
- * mentionne que /admin/domains) : sans point d'entrée tenant, aucune
- * ligne `domain_requests` ne pourrait jamais être créée. Voir
- * RAPPORT_LOT_G.md, section "Écarts assumés".
- */
-async function requestDomainAction(formData: FormData) {
-  "use server";
-  const organizationId = String(formData.get("organizationId") ?? "");
-  await requireSiteCustomization(organizationId);
-  const domainName = String(formData.get("domainName") ?? "");
-  const membership = await requireMembership(organizationId, ["owner", "admin"]);
-
-  try {
-    await requestDomain(organizationId, domainName, membership.userId);
-  } catch (error) {
-    const message = error instanceof AppError ? error.message : "Erreur lors de la demande de domaine";
-    redirect(`/dashboard/site?error=${encodeURIComponent(message)}`);
-  }
-
-  redirect("/dashboard/site?success=" + encodeURIComponent("Votre demande de domaine a été transmise."));
 }
 
 // ============================================================
@@ -503,14 +478,6 @@ async function deleteTestimonialAction(formData: FormData) {
   redirect("/dashboard/site?success=" + encodeURIComponent("Témoignage retiré."));
 }
 
-const DOMAIN_STATUS_LABEL: Record<string, string> = {
-  requested: "En attente de traitement",
-  processing: "En cours de traitement",
-  registered: "Enregistré",
-  failed: "Échoué",
-  cancelled: "Annulé",
-};
-
 export default async function SitePage({
   searchParams,
 }: {
@@ -536,10 +503,8 @@ export default async function SitePage({
       </div>
     );
   }
-  const [media, tldPricing, domainRequests, landingConfig, testimonials, industry] = await Promise.all([
+  const [media, landingConfig, testimonials, industry] = await Promise.all([
     getSiteMedia(organizationId),
-    listActiveTldPricing(),
-    listMyDomainRequests(organizationId),
     getLandingConfig(organizationId),
     listTestimonials(organizationId),
     getOrganizationIndustry(organizationId),
@@ -1132,40 +1097,13 @@ export default async function SitePage({
         <div>
           <h2 className="font-jakarta text-lg font-semibold">Domaine personnalisé</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Demandez un nom de domaine pour votre boutique — traité manuellement par notre équipe (aucun registrar
-            n&apos;est encore branché automatiquement).
+            Un nom de domaine à vous est un service à la demande, ouvert à toutes les offres (y compris Discover) —
+            géré depuis une page dédiée, indépendante de la personnalisation du site.
           </p>
         </div>
-
-        {tldPricing.length === 0 ? (
-          <p className="text-sm text-slate-500">Aucune extension n&apos;est proposée à la vente pour le moment.</p>
-        ) : (
-          <>
-            <form action={requestDomainAction} className="flex flex-col gap-2">
-              <input type="hidden" name="organizationId" value={organizationId} />
-              <DomainSearchField organizationId={organizationId} />
-              <p className="text-xs text-slate-500">
-                Extensions disponibles :{" "}
-                {tldPricing.map((t) => `${t.tld} (${t.soldPriceFcfa.toLocaleString("fr-FR")} FCFA)`).join(", ")}
-              </p>
-              <SubmitButton pendingLabel="Envoi...">Demander ce domaine</SubmitButton>
-            </form>
-
-            {domainRequests.length > 0 && (
-              <ul className="flex flex-col gap-2">
-                {domainRequests.map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex items-center justify-between rounded-2xl border border-navy-900/[0.06] bg-white shadow-[0_1px_2px_rgba(16,23,49,0.04)] px-4 py-3 text-sm"
-                  >
-                    <span className="font-medium text-navy-900">{r.domainName}</span>
-                    <span className="text-xs text-slate-500">{DOMAIN_STATUS_LABEL[r.status] ?? r.status}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
+        <a href="/dashboard/domain" className="adm-btn-primary w-fit">
+          Gérer mon domaine
+        </a>
       </div>
     </div>
   );

@@ -53,15 +53,17 @@ export class ZernioSocialClient {
   }
 
   /**
-   * VÉRIFIÉ (docs.zernio.com, guide « Media Uploads » + « Get upload URL »,
-   * sept. 2026) : `POST /v1/media/presign` (`filename`, `contentType`,
-   * `size` optionnel pour contrôler la limite de 5 Go) renvoie `uploadUrl`
-   * (URL Cloudflare R2 présignée, valable 1 h, où le NAVIGATEUR envoie le
-   * fichier en `PUT` avec le même `Content-Type`, sans en-tête
-   * Authorization), `publicUrl` (`media.zernio.com/temp/...`), `key` et
-   * `expiresIn`. « Uploads expire after 7 days » : stockage temporaire, à
-   * utiliser dans une publication programmée dans les 7 jours — voir
-   * catalog-video-service.ts.
+   * confirmé par le SDK officiel et le changelog — voir PLAN_LOT_P.md §0.1) :
+   * `POST /v1/media/presign` (`filename`, `contentType`, `size` optionnel
+   * pour contrôler la limite de 5 Go) renvoie `uploadUrl` (URL présignée,
+   * valable 1 h, où le NAVIGATEUR envoie le fichier en `PUT` avec le même
+   * `Content-Type`), `publicUrl` (`media.zernio.com/temp/...`), `key` et
+   * `expiresIn`. Stockage TEMPORAIRE, 7 jours : AUCUN paramètre "permanent"
+   * n'existe côté Zernio (vérifié doc + SDK + changelog) — la conservation
+   * 7/30/90 jours de l'offre est assurée par un RENOUVELLEMENT périodique
+   * (retéléversement vers un nouveau presign avant l'expiration), voir
+   * catalog-video-service.ts::renewExpiringZernioVideos. Les vidéos restent
+   * hébergées chez Zernio, jamais ailleurs — décision explicite.
    *
    * Les noms de champs de la requête ont changé entre deux versions de la
    * doc (`filename`/`contentType` aujourd'hui, `fileName`/`fileType`
@@ -72,8 +74,7 @@ export class ZernioSocialClient {
     fileName: string,
     contentType: string,
     sizeBytes?: number,
-    options: { permanent?: boolean } = {},
-  ): Promise<{ uploadUrl: string; publicUrl: string; key?: string; expiresIn?: number; permanent?: boolean }> {
+  ): Promise<{ uploadUrl: string; publicUrl: string; key?: string; expiresIn?: number }> {
     this.assertConfigured();
 
     const attempt = async (body: Record<string, string | number>) =>
@@ -83,14 +84,7 @@ export class ZernioSocialClient {
         body: JSON.stringify(body),
       });
 
-    // Lot O : `permanent: true` (stockage permanent au lieu du temporaire de 7 jours).
-    // PARAMÈTRE NON DOCUMENTÉ dans la référence publique de l'endpoint (nom de
-    // fichier, type MIME, taille) — d'où la tolérance : si Zernio le refuse
-    // (400/422), on retente sans, et c'est la clé RENVOYÉE (hors `temp/`) qui
-    // dit si le fichier est réellement permanent — voir detectVideoStorageClass.
-    const base = { filename: fileName, contentType, ...(sizeBytes ? { size: sizeBytes } : {}) };
-    let res = options.permanent ? await attempt({ ...base, permanent: 1 } as unknown as Record<string, string | number>) : await attempt(base);
-    if (options.permanent && (res.status === 400 || res.status === 422)) res = await attempt(base);
+    let res = await attempt({ filename: fileName, contentType, ...(sizeBytes ? { size: sizeBytes } : {}) });
     if (res.status === 400) res = await attempt({ fileName, fileType: contentType });
 
     if (!res.ok) {
@@ -98,12 +92,12 @@ export class ZernioSocialClient {
       throw new Error(`Zernio createMediaPresign failed (${res.status}): ${body}`);
     }
 
-    const data = (await res.json()) as { uploadUrl?: string; publicUrl?: string; fileUrl?: string; key?: string; expiresIn?: number; permanent?: boolean; isPermanent?: boolean };
+    const data = (await res.json()) as { uploadUrl?: string; publicUrl?: string; fileUrl?: string; key?: string; expiresIn?: number };
     const publicUrl = data.publicUrl ?? data.fileUrl;
     if (!data.uploadUrl || !publicUrl) {
       throw new Error("Réponse Zernio inattendue : uploadUrl/publicUrl manquant.");
     }
-    return { uploadUrl: data.uploadUrl, publicUrl, key: data.key, expiresIn: data.expiresIn, permanent: data.permanent ?? data.isPermanent };
+    return { uploadUrl: data.uploadUrl, publicUrl, key: data.key, expiresIn: data.expiresIn };
   }
 
   /** CONFIRMÉ (doc Discord "Edit & Delete", endpoint générique Posts API) : supprime un brouillon ou annule un post programmé. */

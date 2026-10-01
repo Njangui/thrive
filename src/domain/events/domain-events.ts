@@ -163,8 +163,10 @@ export interface CommentReceivedEvent extends DomainEventBase {
     platform?: string;
     externalCommentId: string;
     authorName?: string;
-    /** Lot O : identifiant plateforme de l'auteur (détection des commentaires du compte lui-même). */
+    /** Lot O : identifiant plateforme de l'auteur (détection des commentaires du compte lui-même — repli si Zernio n'envoie pas isOwnAccount). */
     authorExternalId?: string;
+    /** Lot P — confirmé par Zernio quand présent ; absent ≠ faux (voir isOwnComment). */
+    isOwnAccount?: boolean;
     content: string;
   };
 }

@@ -127,6 +127,8 @@ export interface ZernioInboxCommentAuthor {
   name?: string;
   username?: string;
   picture?: string;
+  /** Lot P — confirmé par Zernio quand présent ; absent ≠ faux (voir comment-auto-reply-service.ts::isOwnComment). */
+  isOwnAccount?: boolean;
 }
 
 export interface ZernioInboxComment {

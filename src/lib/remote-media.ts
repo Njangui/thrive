@@ -52,7 +52,7 @@ export async function downloadRemoteMedia(
   if (!response.ok) {
     throw new Error(
       isZernioMediaHost(url)
-        ? "La vidéo n'est plus disponible (elle a probablement expiré : les fichiers ne sont conservés que 7 jours en stockage temporaire). Téléversez-la à nouveau."
+        ? "La vidéo n'est plus disponible chez Zernio (elle a probablement expiré : Zernio ne conserve les fichiers que 7 jours). Téléversez-la à nouveau."
         : `Le média n'a pas pu être récupéré (${response.status}).`,
     );
   }

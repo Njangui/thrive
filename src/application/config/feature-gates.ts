@@ -14,7 +14,6 @@ export type GatedFeatureKey =
   | "orders"
   | "appointments"
   | "site_analytics"
-  | "custom_domain"
   | "remove_branding"
   | "automatic_messaging"
   | "contact_broadcasts";
@@ -58,17 +57,14 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeature> = {
     description: "Visites, sources de trafic et pages consultées sur votre site public.",
     minPlan: "starter",
   },
-  custom_domain: {
-    entitlementKey: "custom_domain",
-    label: "Domaine personnalisé",
-    description: "Votre propre nom de domaine pour votre site public.",
-    minPlan: "starter",
-  },
+  // Lot P : le domaine personnalisé n'est plus un verrou de plan — c'est un
+  // service à la demande, hors forfait, ouvert à tous (voir /dashboard/domain
+  // et domain-service.ts). Retiré de GatedFeatureKey en conséquence.
   remove_branding: {
     entitlementKey: "remove_branding",
     label: "Site sans badge Flexco",
     description: "Retire la mention « Site propulsé par Flexco » du bas de votre site.",
-    minPlan: "pro",
+    minPlan: "starter",
   },
   automatic_messaging: {
     entitlementKey: "automatic_messaging",

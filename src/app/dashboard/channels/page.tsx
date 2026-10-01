@@ -290,7 +290,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
     platform: section.platform,
     label: section.label,
     quota: socialQuotas[index]!,
-    accounts: socialAccounts.filter((account) => account.platform === section.platform).map((account) => ({ accountId: account.accountId, username: account.username })),
+    accounts: socialAccounts.filter((account) => account.platform === section.platform).map((account) => ({ accountId: account.accountId, username: account.username, needsReconnect: account.needsReconnect })),
   }));
   const totalConnected = socialAccounts.length + whatsappAccounts.length + youtubeAccounts.length + telegram.bots.length;
   void accounts;

@@ -183,6 +183,27 @@ export async function removeTelegramDestination(organizationId: string, destinat
  * (dans la limite du plan, sinon les administrateurs sont prévenus) ;
  * retrait → destination désactivée.
  */
+/**
+ * Lot P — Telegram convertit un groupe en supergroupe en changeant
+ * DÉFINITIVEMENT son identifiant (message de service `migrate_to_chat_id`
+ * sur l'ancien chat). Sans ce raccord, la destination pointerait sur un
+ * identifiant qui n'existe plus et toute publication échouerait ensuite
+ * sans explication claire.
+ */
+export async function migrateTelegramDestination(organizationId: string, botId: string, oldChatId: number, newChatId: number): Promise<boolean> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("telegram_destinations")
+    .update({ chat_id: String(newChatId), chat_type: "group", status: "active", error_message: null, last_checked_at: new Date().toISOString() })
+    .eq("organization_id", organizationId)
+    .eq("bot_id", botId)
+    .eq("chat_id", String(oldChatId))
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`Migration de la destination Telegram impossible: ${error.message}`);
+  return Boolean(data);
+}
+
 export async function handleBotMembershipUpdate(
   organizationId: string,
   botRowId: string,

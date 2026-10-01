@@ -295,4 +295,23 @@ comptes YouTube, dernier compte social) dans les nouvelles tables.
 - [ ] Zernio (dashboard webhooks) : événements `message.received` (WhatsApp, Messenger, Instagram), `comment.received`,
       `account.connected/disconnected`, `post.*` et `post.tiktok.url_resolved` si disponible pour le compte.
 - [ ] Aucune nouvelle variable d'environnement.
-- [ ] Domaine/badge : `custom_domain` (Starter+) et `remove_branding` (Pro) se pilotent depuis `/admin/plans`.
+- [ ] Domaine/badge : `custom_domain` (Starter+) et `remove_branding` (Pro) se pilotent depuis `/admin/plans`. *(Remplacé par le lot P ci-dessous : domaine hors forfait, badge visible seulement sur Discover.)*
+
+## Lot P — Vidéos renouvelées automatiquement chez Zernio, domaine hors forfait, badge Discover, TikTok Pro
+
+**AVANT de déployer** : lance `npm run verify:zernio -- --tiktok-account-id <id> --tiktok-post-id <id> --facebook-account-id <id> --facebook-post-id <id>`
+avec ta vraie clé `ZERNIO_API_KEY` (déjà dans `.env.local`) et des comptes de test. Sans arguments, seul le test du presign
+vidéo tourne ; les autres s'affichent `SKIP`. Corrige tout `FAIL` avant de continuer — voir `RAPPORT_LOT_P.md` §0.
+
+- [ ] Appliquer `0075_freemium_v3_domain_video_tiktok.sql` (après 0074). **Aucun bucket Supabase Storage créé** : les
+      vidéos restent hébergées chez Zernio, comme avant le lot O — décision explicite, voir `RAPPORT_LOT_P.md`.
+- [ ] Programmer `/api/cron/process-catalog-videos` (GET, `Authorization: Bearer <CRON_SECRET>`, **toutes les 4 à 6 heures**
+      — pas 1 fois par jour : c'est ce cron qui RETÉLÉVERSE chaque vidéo chez Zernio avant que sa fenêtre de 7 jours ne se
+      referme, pour honorer les 7/30/90 jours de l'offre). `maxDuration` fixé à 300 s dans le code : vérifie que ton plan
+      Vercel l'autorise (Hobby limite généralement les fonctions à 60 s) — sinon réduis `RENEWAL_BATCH_SIZE` et augmente la
+      fréquence du cron pour compenser.
+- [ ] **Risque non vérifié** : chaque renouvellement télécharge puis retéléverse le fichier ENTIER (jusqu'à 200 Mo) dans la
+      mémoire de la fonction. Teste avec une vraie vidéo proche de 200 Mo avant d'ouvrir au public — voir `RAPPORT_LOT_P.md` §3.
+- [ ] Domaine personnalisé : la page tenant a changé d'adresse (`/dashboard/site` → `/dashboard/domain`), ouverte à
+      **tous les plans**. Rien à configurer côté Vercel/DNS au déploiement — inchangé, toujours manuel par demande.
+- [ ] `/admin/domains` : nouveau bouton "Marquer payé" avant de pouvoir enregistrer une demande.

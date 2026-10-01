@@ -102,7 +102,8 @@ export async function getCurrentUserOrganizations(): Promise<
   const { data, error } = await supabase
     .from("memberships")
     .select("organization_id, role, organizations(name)")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
 
   if (error) {
     console.error("getCurrentUserOrganizations error:", error.message);
@@ -116,20 +117,49 @@ export async function getCurrentUserOrganizations(): Promise<
   }));
 }
 
+/** Cookie mémorisant l'entreprise choisie par un utilisateur qui en a plusieurs. */
+export const ACTIVE_ORG_COOKIE = "flexco_active_org";
+
 /**
- * Helper utilisé par toutes les pages `/dashboard/*` : évite de refaire le
- * `orgs[0] ?? ...` (avec `noUncheckedIndexedAccess`, un accès de tableau
- * est toujours `T | undefined`) dans chaque page. Redirige vers
- * l'onboarding si l'utilisateur n'a encore aucune organisation — filet de
- * sécurité, le layout dashboard le fait déjà normalement.
+ * Pure : l'entreprise préférée si l'utilisateur en est bien membre (le
+ * cookie ne peut JAMAIS donner accès à une entreprise dont on n'est pas
+ * membre : on ne choisit que parmi `orgs`, déjà filtrées par RLS), sinon la
+ * plus ancienne appartenance (ordre déterministe).
+ */
+export function pickCurrentOrganization<T extends { organizationId: string }>(orgs: T[], preferredId?: string | null): T | undefined {
+  return (preferredId ? orgs.find((o) => o.organizationId === preferredId) : undefined) ?? orgs[0];
+}
+
+async function readActiveOrgCookie(): Promise<string | null> {
+  try {
+    const { cookies } = await import("next/headers");
+    return (await cookies()).get(ACTIVE_ORG_COOKIE)?.value ?? null;
+  } catch {
+    return null; // hors contexte de requête
+  }
+}
+
+/** Entreprise courante de l'utilisateur, ou null s'il n'en a aucune. */
+export async function getCurrentOrganizationOrNull(): Promise<
+  { organizationId: string; organizationName: string; role: MemberRole } | null
+> {
+  const orgs = await getCurrentUserOrganizations();
+  return pickCurrentOrganization(orgs, await readActiveOrgCookie()) ?? null;
+}
+
+/**
+ * Helper utilisé par toutes les pages `/dashboard/*`. Avant : toujours la
+ * 1re appartenance, sans tri ni choix possible — un utilisateur membre de
+ * plusieurs entreprises (ex. une gratuite de test + une payante) voyait une
+ * entreprise arbitraire, donc parfois « Discover » alors que son entreprise
+ * payante était une autre. Redirige vers l'onboarding si aucune entreprise.
  */
 export async function requireCurrentOrganization(): Promise<{
   organizationId: string;
   organizationName: string;
   role: MemberRole;
 }> {
-  const orgs = await getCurrentUserOrganizations();
-  const org = orgs[0];
+  const org = await getCurrentOrganizationOrNull();
   if (!org) {
     redirect("/onboarding");
   }

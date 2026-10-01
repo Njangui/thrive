@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUserOrganizations } from "@/application/services/auth-service";
+import { getCurrentOrganizationOrNull } from "@/application/services/auth-service";
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
 import { listSignupEligibleCountries, type PublicCountry } from "@/application/services/country-service";
 import { OnboardingWizard } from "./onboarding-wizard";
@@ -23,8 +23,9 @@ import { OnboardingWizard } from "./onboarding-wizard";
  * jamais une liste écrite en dur dans le composant client.
  */
 export default async function OnboardingPage() {
-  const orgs = await getCurrentUserOrganizations();
-  const org = orgs[0];
+  // Même règle de choix que le dashboard (cookie puis plus ancienne appartenance) :
+  // sinon un utilisateur multi-entreprises pourrait boucler dashboard ↔ onboarding.
+  const org = await getCurrentOrganizationOrNull();
 
   // Lecture "safe" ICI : un souci ponctuel sur `countries` (migration
   // Country Engine, incident DB transitoire...) ne doit jamais empêcher un

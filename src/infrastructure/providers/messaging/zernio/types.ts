@@ -80,6 +80,8 @@ export interface ZernioInboxWebhookAccount {
 export interface ZernioInboxWebhookCommentAuthor {
   id?: string;
   name?: string;
+  /** Lot P — confirmé par Zernio (Facebook/Instagram/TikTok) : vrai si le commentaire vient du compte connecté lui-même. Absent ≠ faux — voir isOwnComment. */
+  isOwnAccount?: boolean;
 }
 
 export interface ZernioInboxWebhookComment {

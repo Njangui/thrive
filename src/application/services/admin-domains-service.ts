@@ -112,6 +112,7 @@ export interface DomainRequestListItem {
   domainName: string;
   tld: string;
   status: string;
+  paymentStatus: "unpaid" | "paid";
   supplierPriceFcfa: number;
   soldPriceFcfa: number;
   requestedAt: string;
@@ -124,7 +125,7 @@ export async function listDomainRequestsForAdmin(): Promise<DomainRequestListIte
   const { data, error } = await supabase
     .from("domain_requests")
     .select(
-      "id, organization_id, domain_name, tld, status, supplier_price_fcfa, sold_price_fcfa, requested_at, resolved_at, resolution_note, organizations(name)",
+      "id, organization_id, domain_name, tld, status, payment_status, supplier_price_fcfa, sold_price_fcfa, requested_at, resolved_at, resolution_note, organizations(name)",
     )
     .order("requested_at", { ascending: false });
 
@@ -137,6 +138,7 @@ export async function listDomainRequestsForAdmin(): Promise<DomainRequestListIte
     domainName: r.domain_name,
     tld: r.tld,
     status: r.status,
+    paymentStatus: (r.payment_status as "unpaid" | "paid" | null) ?? "unpaid",
     supplierPriceFcfa: r.supplier_price_fcfa,
     soldPriceFcfa: r.sold_price_fcfa,
     requestedAt: r.requested_at,
@@ -145,9 +147,40 @@ export async function listDomainRequestsForAdmin(): Promise<DomainRequestListIte
   }));
 }
 
+/** Lot P — encaissement géré hors application (Mobile Money, espèces…) : ce bouton enregistre juste le constat. */
+export async function setDomainRequestPaymentStatus(requestId: string, paymentStatus: "unpaid" | "paid", actorUserId: string): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const { data: before, error: beforeError } = await supabase.from("domain_requests").select("organization_id, domain_name, payment_status").eq("id", requestId).maybeSingle();
+  if (beforeError) throw new Error(`Erreur lecture domain_requests: ${beforeError.message}`);
+  if (!before) throw new NotFoundError("Demande de domaine introuvable.");
+
+  const { error } = await supabase.from("domain_requests").update({ payment_status: paymentStatus }).eq("id", requestId);
+  if (error) throw new Error(`Impossible de mettre à jour le paiement: ${error.message}`);
+
+  await writeAdminAuditLog({
+    actorUserId,
+    organizationId: before.organization_id,
+    action: "DOMAIN_REQUEST_PAYMENT_UPDATED",
+    entityType: "domain_request",
+    entityId: requestId,
+    beforeState: { paymentStatus: before.payment_status ?? "unpaid" },
+    afterState: { paymentStatus },
+  });
+}
+
 const FINAL_DOMAIN_REQUEST_STATUSES = new Set(["registered", "failed", "cancelled"]);
 
-/** Résolution manuelle d'une demande — seule façon dont une demande change de statut (voir cahier, aucun automatisme). */
+/**
+ * Résolution manuelle d'une demande — seule façon dont une demande change
+ * de statut (voir cahier, aucun automatisme).
+ *
+ * Lot P — deux garde-fous ajoutés : (1) impossible de marquer « enregistrée »
+ * sans paiement constaté (`payment_status = 'paid'`) ; (2) marquer
+ * « enregistrée » crée désormais RÉELLEMENT la ligne `tenant_domains`
+ * (jusqu'ici manuelle en SQL — voir RAPPORT_LOT_O.md §1). Le reste de la
+ * procédure (ajout du domaine dans Vercel, DNS transmis au client) reste
+ * manuel : voir docs/DEPLOYMENT.md.
+ */
 export async function resolveDomainRequest(
   requestId: string,
   newStatus: "processing" | "registered" | "failed" | "cancelled",
@@ -164,6 +197,10 @@ export async function resolveDomainRequest(
   if (beforeError) throw new Error(`Erreur lecture domain_requests: ${beforeError.message}`);
   if (!before) throw new NotFoundError("Demande de domaine introuvable.");
 
+  if (newStatus === "registered" && (before.payment_status ?? "unpaid") !== "paid") {
+    throw new ValidationError("Marquez d'abord le paiement comme « payé » avant d'enregistrer ce domaine.");
+  }
+
   const isFinal = FINAL_DOMAIN_REQUEST_STATUSES.has(newStatus);
 
   const { error } = await supabase
@@ -176,6 +213,15 @@ export async function resolveDomainRequest(
     .eq("id", requestId);
 
   if (error) throw new Error(`Impossible de mettre à jour la demande: ${error.message}`);
+
+  if (newStatus === "registered") {
+    const { error: tenantDomainError } = await supabase
+      .from("tenant_domains")
+      .upsert({ organization_id: before.organization_id, domain: before.domain_name, verified: true }, { onConflict: "domain" });
+    if (tenantDomainError) {
+      console.error(`resolveDomainRequest(${requestId}): création de tenant_domains impossible:`, tenantDomainError.message);
+    }
+  }
 
   await writeAdminAuditLog({
     actorUserId,

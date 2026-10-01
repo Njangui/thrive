@@ -35,8 +35,13 @@ export const KNOWN_ENTITLEMENT_KEYS = new Set([
   "facebook_messenger", "instagram_messages", "linkedin", "tiktok",
   // Freemium v2 (migration 0067) : verrous et quotas ajoutés au lot O.
   "telegram_channels", "tiktok_auto_comments", "orders", "appointments",
-  "site_analytics", "follow_ups", "custom_domain", "remove_branding",
+  "site_analytics", "follow_ups", "remove_branding",
   "video_retention_days",
+  // Lot P (migration 0075) : domaine perso retiré des plans (hors forfait,
+  // sur demande — voir domain-service.ts), numéros dédiés groupes WhatsApp
+  // (clé réservée : quota affiché dans /admin/plans, pas encore appliqué
+  // par phone-number-rental-service.ts — voir RAPPORT_LOT_P.md).
+  "whatsapp_group_numbers",
 ]);
 export type PlanKey = (typeof PLAN_KEYS)[number];
 

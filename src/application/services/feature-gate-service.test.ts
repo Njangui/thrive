@@ -23,8 +23,8 @@ describe("feature-gate-service", () => {
     await expect(assertGatedFeature("org-1", "orders")).rejects.toThrow(/Starter/);
   });
 
-  it("le badge retirable est réservé à Pro", () => {
-    expect(buildUpgradeMessage("remove_branding")).toMatch(/Pro/);
+  it("le badge n'est visible que sur Discover : retirable dès Starter", () => {
+    expect(buildUpgradeMessage("remove_branding")).toMatch(/Starter/);
   });
 
   it("assertGatedFeature ne lève rien quand la fonctionnalité est incluse", async () => {

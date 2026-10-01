@@ -15,9 +15,10 @@ import { AppError } from "@/lib/errors";
  * Server Actions du panneau « Vidéos » (fiche produit / service).
  *
  * Le fichier vidéo ne passe JAMAIS par ces actions : Vercel refuse tout
- * corps de requête > 4,5 Mo. L'action 1 renvoie une URL présignée Zernio, le
- * navigateur y envoie le fichier directement, l'action 2 enregistre le
- * résultat (voir catalog-videos-panel.tsx).
+ * corps de requête > 4,5 Mo. L'action 1 renvoie une URL d'envoi SIGNÉE
+ * Zernio, le navigateur y envoie le fichier directement, l'action 2
+ * enregistre le résultat (voir catalog-videos-panel.tsx et
+ * catalog-video-service.ts — les vidéos restent hébergées chez Zernio).
  *
  * Résultats renvoyés plutôt que levés : une exception serveur arrive
  * côté client avec un message masqué en production.
@@ -34,8 +35,7 @@ async function authorize(): Promise<string> {
 function toFailure(error: unknown): { ok: false; error: string } {
   if (error instanceof AppError) return { ok: false, error: error.message };
   console.error("[catalog-videos] action échouée:", error);
-  const detail = error instanceof Error && /ZERNIO_API_KEY/.test(error.message) ? " (hébergement vidéo non configuré)" : "";
-  return { ok: false, error: `Opération impossible pour le moment${detail}. Réessayez dans un instant.` };
+  return { ok: false, error: "Opération impossible pour le moment. Réessayez dans un instant." };
 }
 
 export async function requestVideoUploadAction(input: {
@@ -44,8 +44,8 @@ export async function requestVideoUploadAction(input: {
   sizeBytes: number;
 }): Promise<VideoActionResult<VideoUploadTicket>> {
   try {
-    await authorize();
-    return { ok: true, data: await requestVideoUploadTicket(input.fileName, input.contentType, input.sizeBytes) };
+    const organizationId = await authorize();
+    return { ok: true, data: await requestVideoUploadTicket(organizationId, input.fileName, input.contentType, input.sizeBytes) };
   } catch (error) {
     return toFailure(error);
   }

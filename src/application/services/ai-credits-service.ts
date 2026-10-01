@@ -68,13 +68,14 @@ export async function syncPromoCredits(organizationId: string): Promise<void> {
     }
 
     if (bonus > 0 || data.included_credits === -1) return;
-    const realPlan = await getOrganizationRealPlanKey(organizationId);
-    const [proLimit, realLimit] = await Promise.all([
-      getEntitlementLimit("pro", "ai_credits"),
-      getEntitlementLimit(realPlan, "ai_credits"),
-    ]);
-    if (proLimit < 0 || realLimit < 0) return;
-    const grant = proLimit - realLimit;
+    // Le bonus se calcule contre le SOLDE réellement en base, pas contre la
+    // grille du plan : le solde est un instantané (voir 0011) qui peut
+    // différer de la grille (limite modifiée depuis Super Admin après la
+    // création du compte — constaté en production : grille « gratuit = 300 »
+    // mais soldes gratuits à 0). On amène donc le solde au niveau Pro.
+    const proLimit = await getEntitlementLimit("pro", "ai_credits");
+    if (proLimit < 0) return;
+    const grant = proLimit - data.included_credits;
     if (grant <= 0) return;
     await supabase
       .from("ai_credit_balances")
@@ -281,10 +282,20 @@ export async function resetCreditBalanceForPlan(organizationId: string, planKey:
   const includedCredits = await getEntitlementLimit(planKey, "ai_credits");
 
   const supabase = getSupabaseServiceClient();
-  const { error } = await supabase.from("ai_credit_balances").upsert(
-    { organization_id: organizationId, included_credits: includedCredits, used_credits: 0 },
+  // Un changement de palier repart d'un solde neuf : le bonus de l'essai Pro
+  // (`promo_bonus_credits`) est donc remis à 0, sinon il serait retiré une
+  // 2e fois à la fin de l'essai. Repli sans cette colonne si la migration
+  // 0073 n'est pas encore appliquée : le paiement ne doit jamais casser.
+  let { error } = await supabase.from("ai_credit_balances").upsert(
+    { organization_id: organizationId, included_credits: includedCredits, used_credits: 0, promo_bonus_credits: 0 },
     { onConflict: "organization_id" },
   );
+  if (error && /promo_bonus_credits/.test(error.message)) {
+    ({ error } = await supabase.from("ai_credit_balances").upsert(
+      { organization_id: organizationId, included_credits: includedCredits, used_credits: 0 },
+      { onConflict: "organization_id" },
+    ));
+  }
 
   if (error) {
     throw new Error(`Impossible de réinitialiser le solde de crédits IA (changement de palier): ${error.message}`);

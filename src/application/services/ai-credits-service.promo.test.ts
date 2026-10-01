@@ -48,6 +48,11 @@ describe("syncPromoCredits", () => {
     await syncPromoCredits("o");
     expect(updates).toHaveLength(0);
   });
+  it("solde gratuit à 0 alors que la grille du plan gratuit dit 300 (cas constaté en prod) : on amène le solde à 300", async () => {
+    active = true; realPlan = "free"; balance = { included_credits: 0, promo_bonus_credits: 0 };
+    await syncPromoCredits("o");
+    expect(updates[0]?.patch).toEqual({ included_credits: 300, promo_bonus_credits: 300 });
+  });
   it("Pro payant : rien à accorder", async () => {
     active = true; realPlan = "pro"; balance = { included_credits: 300, promo_bonus_credits: 0 };
     await syncPromoCredits("o");

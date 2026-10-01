@@ -15,7 +15,8 @@
     "seed:demo": "tsx scripts/seed-demo.ts",
     "telegram:setup": "node scripts/configure-telegram-admin-webhook.mjs",
     "telegram:discover-chat": "node scripts/discover-telegram-admin-chat.mjs",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "verify:zernio": "tsx scripts/verify-zernio-capabilities.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

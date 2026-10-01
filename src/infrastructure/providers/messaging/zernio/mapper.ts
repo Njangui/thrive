@@ -178,6 +178,7 @@ export function mapZernioEventToDomainEvent(
           externalCommentId: raw.comment.id,
           authorName: raw.comment.from?.name,
           authorExternalId: raw.comment.from?.id,
+          ...(raw.comment.from?.isOwnAccount !== undefined ? { isOwnAccount: raw.comment.from.isOwnAccount } : {}),
           content: raw.comment.message,
         },
       };

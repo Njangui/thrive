@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
-import { getCurrentUserOrganizations } from "@/application/services/auth-service";
+import { getCurrentOrganizationOrNull } from "@/application/services/auth-service";
 import { getLatestUnreadNotification, getUnreadNotificationCount } from "@/application/services/notification-service";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export async function GET() {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401, headers: NO_STORE });
   }
 
-  const org = (await getCurrentUserOrganizations())[0];
+  const org = await getCurrentOrganizationOrNull();
   if (!org) {
     return NextResponse.json({ count: 0, latest: null }, { headers: NO_STORE });
   }

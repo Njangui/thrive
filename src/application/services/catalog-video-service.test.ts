@@ -1,24 +1,33 @@
 import { describe, it, expect } from "vitest";
 import {
   computeVideoExpiry,
+  computeCatalogVideoExpiry,
+  computeHostExpiry,
   isVideoExpired,
-  isZernioMediaUrl,
   validateVideoFile,
   assertVideoAvailableForPublication,
   VIDEO_RETENTION_DAYS,
   MAX_VIDEO_BYTES,
   PUBLICATION_SAFETY_MARGIN_MS,
+  RENEWAL_MARGIN_MS,
   telegramVideoLimitMessage,
   TELEGRAM_UPLOAD_MAX_BYTES,
 } from "./catalog-video-service";
 
 const DAY = 24 * 60 * 60 * 1000;
 
-describe("rétention Zernio de 7 jours", () => {
-  it("l'échéance est exactement 7 jours après l'envoi", () => {
-    const uploaded = new Date("2026-09-19T10:00:00Z");
+describe("rétention — promesse de l'offre (7/30/90 jours) vs fenêtre réelle Zernio (7 jours fixes)", () => {
+  it("computeHostExpiry / computeVideoExpiry : exactement 7 jours, la contrainte réelle de Zernio", () => {
+    const from = new Date("2026-09-19T10:00:00Z");
     expect(VIDEO_RETENTION_DAYS).toBe(7);
-    expect(computeVideoExpiry(uploaded).toISOString()).toBe("2026-09-26T10:00:00.000Z");
+    expect(computeHostExpiry(from).toISOString()).toBe("2026-09-26T10:00:00.000Z");
+    expect(computeVideoExpiry(from).toISOString()).toBe(computeHostExpiry(from).toISOString());
+  });
+
+  it("computeCatalogVideoExpiry : ajoute exactement N jours (7, 30 ou 90 selon l'offre) — c'est la PROMESSE, distincte de la fenêtre Zernio", () => {
+    const uploaded = new Date("2026-09-21T10:00:00Z");
+    expect(computeCatalogVideoExpiry(uploaded, 30).toISOString()).toBe("2026-10-21T10:00:00.000Z");
+    expect(computeCatalogVideoExpiry(uploaded, 90).toISOString()).toBe("2026-12-20T10:00:00.000Z");
   });
 
   it("isVideoExpired : vrai à l'échéance exacte et après, faux avant", () => {
@@ -29,37 +38,46 @@ describe("rétention Zernio de 7 jours", () => {
   });
 });
 
-describe("assertVideoAvailableForPublication — interdit de programmer au-delà des 7 jours Zernio", () => {
+describe("assertVideoAvailableForPublication — vérifie la promesse de l'offre ET la fenêtre Zernio réelle", () => {
   const now = new Date("2026-09-19T10:00:00Z");
-  const video = { title: "Démo", expiresAt: new Date(now.getTime() + 7 * DAY) };
+  // Vidéo Starter (30 jours promis), renouvelée récemment (fenêtre Zernio fraîche).
+  const video = { title: "Démo", expiresAt: new Date(now.getTime() + 30 * DAY), hostExpiresAt: new Date(now.getTime() + 5 * DAY), retentionDays: 30 };
 
-  it("accepte une diffusion immédiate et une programmation avant l'échéance", () => {
+  it("accepte une diffusion immédiate et une programmation avant les DEUX échéances", () => {
     expect(() => assertVideoAvailableForPublication(video, now, now)).not.toThrow();
     expect(() => assertVideoAvailableForPublication(video, new Date(now.getTime() + 3 * DAY), now)).not.toThrow();
   });
 
-  it("refuse une programmation après l'échéance, avec un message qui donne la date limite", () => {
-    expect(() => assertVideoAvailableForPublication(video, new Date(now.getTime() + 8 * DAY), now)).toThrow(/n'est conservée que jusqu'au/);
+  it("refuse une programmation après la fenêtre Zernio, MÊME SI l'offre promet encore plus longtemps", () => {
+    // La promesse (30 j) est loin d'être atteinte, mais la fenêtre Zernio (5 j) ferme avant.
+    expect(() => assertVideoAvailableForPublication(video, new Date(now.getTime() + 6 * DAY), now)).toThrow(/disponible que jusqu'au/);
   });
 
-  it("refuse aussi dans la marge de sécurité juste avant l'échéance", () => {
-    const tooClose = new Date(video.expiresAt.getTime() - PUBLICATION_SAFETY_MARGIN_MS + 1000);
-    expect(() => assertVideoAvailableForPublication(video, tooClose, now)).toThrow();
+  it("refuse toute publication si le renouvellement a déjà échoué et que la fenêtre Zernio est close (fichier confirmé disparu)", () => {
+    const stale = { title: "Ancienne", expiresAt: new Date(now.getTime() + 20 * DAY), hostExpiresAt: new Date(now.getTime() - 1000) };
+    expect(() => assertVideoAvailableForPublication(stale, now, now)).toThrow(/n'est plus disponible chez Zernio/);
   });
 
-  it("refuse toute publication d'une vidéo déjà expirée, même immédiate", () => {
+  it("refuse toute publication d'une vidéo dont la promesse d'offre est déjà passée", () => {
     const expired = { title: "Ancienne", expiresAt: new Date(now.getTime() - 1000) };
     expect(() => assertVideoAvailableForPublication(expired, now, now)).toThrow(/a expiré/);
   });
+
+  it("refuse dans la marge de sécurité juste avant l'échéance la plus proche des deux", () => {
+    const tooClose = { title: "Démo", expiresAt: new Date(now.getTime() + 30 * DAY), hostExpiresAt: new Date(now.getTime() + DAY) };
+    const justInsideMargin = new Date(tooClose.hostExpiresAt.getTime() - PUBLICATION_SAFETY_MARGIN_MS + 1000);
+    expect(() => assertVideoAvailableForPublication(tooClose, justInsideMargin, now)).toThrow();
+  });
+
+  it("sans hostExpiresAt connu (URL Zernio hors catalogue) : seule la promesse d'offre compte", () => {
+    expect(() => assertVideoAvailableForPublication({ title: "X", expiresAt: new Date(now.getTime() + 3 * DAY) }, new Date(now.getTime() + 2 * DAY), now)).not.toThrow();
+  });
 });
 
-describe("isZernioMediaUrl", () => {
-  it("n'accepte que https://media.zernio.com", () => {
-    expect(isZernioMediaUrl("https://media.zernio.com/temp/abc.mp4")).toBe(true);
-    expect(isZernioMediaUrl("http://media.zernio.com/temp/abc.mp4")).toBe(false);
-    expect(isZernioMediaUrl("https://media.zernio.com.evil.example/a.mp4")).toBe(false);
-    expect(isZernioMediaUrl("https://evil.example/media.zernio.com/a.mp4")).toBe(false);
-    expect(isZernioMediaUrl("pas une url")).toBe(false);
+describe("marge de renouvellement", () => {
+  it("36 h : assez large pour absorber plusieurs échecs avant la fermeture réelle de la fenêtre de 7 jours", () => {
+    expect(RENEWAL_MARGIN_MS).toBe(36 * 60 * 60 * 1000);
+    expect(RENEWAL_MARGIN_MS).toBeLessThan(VIDEO_RETENTION_DAYS * DAY);
   });
 });
 

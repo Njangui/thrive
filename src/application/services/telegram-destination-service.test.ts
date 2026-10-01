@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { canBotPostIn, classifyTelegramChat, normalizeTelegramChatRef } from "./telegram-destination-service";
 
 describe("classifyTelegramChat", () => {
@@ -37,5 +37,55 @@ describe("normalizeTelegramChatRef", () => {
     expect(() => normalizeTelegramChatRef("  ")).toThrow();
     expect(() => normalizeTelegramChatRef("@ab")).toThrow(/invalide/);
     expect(() => normalizeTelegramChatRef("ma boutique")).toThrow(/invalide/);
+  });
+});
+
+describe("migrateTelegramDestination — groupe converti en supergroupe (identifiant Telegram changé définitivement)", () => {
+  const updateCalls: { payload: unknown; eqs: [string, unknown][] }[] = [];
+
+  beforeEach(() => {
+    vi.resetModules();
+    updateCalls.length = 0;
+  });
+
+  async function loadWithMock(found: boolean) {
+    vi.doMock("@/infrastructure/supabase/server-client", () => ({
+      getSupabaseServiceClient: () => ({
+        from: () => {
+          const eqs: [string, unknown][] = [];
+          const builder = {
+            update: (payload: unknown) => {
+              updateCalls.push({ payload, eqs });
+              return builder;
+            },
+            eq: (column: string, value: unknown) => {
+              eqs.push([column, value]);
+              return builder;
+            },
+            select: () => builder,
+            maybeSingle: () => Promise.resolve({ data: found ? { id: "dest-1" } : null, error: null }),
+          };
+          return builder;
+        },
+      }),
+    }));
+    return import("./telegram-destination-service");
+  }
+
+  it("met à jour chat_id vers le nouvel identifiant, remet la destination active", async () => {
+    const { migrateTelegramDestination } = await loadWithMock(true);
+    const migrated = await migrateTelegramDestination("org-1", "bot-1", -1001111, -1002222);
+    expect(migrated).toBe(true);
+    expect(updateCalls[0]?.payload).toMatchObject({ chat_id: "-1002222", chat_type: "group", status: "active", error_message: null });
+    expect(updateCalls[0]?.eqs).toEqual([
+      ["organization_id", "org-1"],
+      ["bot_id", "bot-1"],
+      ["chat_id", "-1001111"],
+    ]);
+  });
+
+  it("aucune destination correspondante (jamais enregistrée) : ne lève pas, renvoie false", async () => {
+    const { migrateTelegramDestination } = await loadWithMock(false);
+    expect(await migrateTelegramDestination("org-1", "bot-1", -1001111, -1002222)).toBe(false);
   });
 });

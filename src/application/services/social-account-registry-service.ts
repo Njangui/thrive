@@ -30,6 +30,8 @@ export interface SocialAccountRecord {
   status: SocialAccountStatus;
   autoReplyComments: boolean;
   autoReplyMessages: boolean;
+  /** Lot P — reconnexion requise (permission refusée détectée automatiquement, voir comment-auto-reply-service.ts). */
+  needsReconnect: boolean;
 }
 
 interface SocialAccountRow {
@@ -42,9 +44,10 @@ interface SocialAccountRow {
   status: SocialAccountStatus;
   auto_reply_comments: boolean;
   auto_reply_messages: boolean;
+  needs_reconnect: boolean;
 }
 
-const SELECT_COLUMNS = "id, organization_id, platform, account_id, profile_id, username, status, auto_reply_comments, auto_reply_messages";
+const SELECT_COLUMNS = "id, organization_id, platform, account_id, profile_id, username, status, auto_reply_comments, auto_reply_messages, needs_reconnect";
 
 function toRecord(row: SocialAccountRow): SocialAccountRecord {
   return {
@@ -57,6 +60,7 @@ function toRecord(row: SocialAccountRow): SocialAccountRecord {
     status: row.status,
     autoReplyComments: row.auto_reply_comments,
     autoReplyMessages: row.auto_reply_messages,
+    needsReconnect: Boolean(row.needs_reconnect),
   };
 }
 
@@ -113,6 +117,7 @@ export async function upsertSocialAccount(input: {
       profile_id: input.profileId,
       username: input.username ?? null,
       status: "connected",
+      needs_reconnect: false,
     },
     { onConflict: "account_id" },
   );
@@ -147,6 +152,21 @@ export async function disconnectSocialAccount(organizationId: string, accountId:
     .select("id");
   if (error) throw new Error(`Déconnexion du compte impossible : ${error.message}`);
   if (!data || data.length === 0) throw new NotFoundError("Compte introuvable pour cette organisation.");
+}
+
+/**
+ * Lot P — signale qu'un compte doit être RECONNECTÉ (permission refusée,
+ * plateforme non supportée pour ce compte) : désactive la réponse
+ * automatique aux commentaires en même temps, pour ne pas retenter en
+ * boucle sur chaque nouveau commentaire tant que le commerçant n'a pas
+ * reconnecté le compte depuis Canaux.
+ */
+export async function markSocialAccountNeedsReconnect(accountId: string, needsReconnect: boolean): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+  const patch: Record<string, boolean> = { needs_reconnect: needsReconnect };
+  if (needsReconnect) patch.auto_reply_comments = false;
+  const { error } = await supabase.from("social_accounts").update(patch).eq("account_id", accountId);
+  if (error) console.error(`markSocialAccountNeedsReconnect(${accountId}) error:`, error.message);
 }
 
 export async function updateSocialAccountAutoReply(

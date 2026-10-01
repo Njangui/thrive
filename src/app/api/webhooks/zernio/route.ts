@@ -325,6 +325,7 @@ export async function POST(request: Request) {
             externalCommentId: domainEvent.payload.externalCommentId,
             authorExternalId: domainEvent.payload.authorExternalId,
             authorName: domainEvent.payload.authorName,
+            isOwnAccount: domainEvent.payload.isOwnAccount,
             content: domainEvent.payload.content,
           }).catch((error) => console.error("Zernio webhook: réponse automatique au commentaire impossible:", error));
         }

@@ -6,6 +6,7 @@ import {
   upsertTldPricing,
   listDomainRequestsForAdmin,
   resolveDomainRequest,
+  setDomainRequestPaymentStatus,
 } from "@/application/services/admin-domains-service";
 import { AppError } from "@/lib/errors";
 
@@ -44,6 +45,22 @@ async function resolveDomainRequestAction(formData: FormData) {
   }
 
   redirect("/admin/domains?success=" + encodeURIComponent("Demande mise à jour."));
+}
+
+async function setPaymentStatusAction(formData: FormData) {
+  "use server";
+  const admin = await requirePlatformAdmin();
+  const requestId = String(formData.get("requestId") ?? "");
+  const paymentStatus = String(formData.get("paymentStatus") ?? "") as "unpaid" | "paid";
+
+  try {
+    await setDomainRequestPaymentStatus(requestId, paymentStatus, admin.userId);
+  } catch (error) {
+    const message = error instanceof AppError ? error.message : "Erreur lors de la mise à jour du paiement";
+    redirect(`/admin/domains?error=${encodeURIComponent(message)}`);
+  }
+
+  redirect("/admin/domains?success=" + encodeURIComponent("Paiement mis à jour."));
 }
 
 const REQUEST_STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -201,6 +218,33 @@ export default async function AdminDomainsPage({
                     <span className={`rounded-full px-2 py-0.5 text-xs ${statusInfo.className}`}>{statusInfo.label}</span>
                   </div>
                   {r.resolutionNote && <p className="mt-2 text-xs text-slate-500">Note : {r.resolutionNote}</p>}
+
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${r.paymentStatus === "paid" ? "bg-success-50 text-success-700" : "bg-navy-900/[0.04] text-slate-500"}`}>
+                      {r.paymentStatus === "paid" ? "Payé" : "Non payé"}
+                    </span>
+                    {r.paymentStatus !== "paid" && (
+                      <form action={setPaymentStatusAction}>
+                        <input type="hidden" name="requestId" value={r.id} />
+                        <input type="hidden" name="paymentStatus" value="paid" />
+                        <button type="submit" className="text-xs font-medium text-violet-700 hover:underline">
+                          Marquer payé
+                        </button>
+                      </form>
+                    )}
+                    {r.paymentStatus === "paid" && !isFinal && (
+                      <form action={setPaymentStatusAction}>
+                        <input type="hidden" name="requestId" value={r.id} />
+                        <input type="hidden" name="paymentStatus" value="unpaid" />
+                        <button type="submit" className="text-xs text-slate-400 hover:underline">
+                          Annuler
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                  {r.status !== "registered" && r.paymentStatus !== "paid" && (
+                    <p className="mt-1 text-[11px] text-amber-700">Le paiement doit être marqué « payé » avant de pouvoir enregistrer ce domaine.</p>
+                  )}
 
                   {!isFinal && (
                     <form action={resolveDomainRequestAction} className="mt-3 flex flex-wrap items-end gap-2">

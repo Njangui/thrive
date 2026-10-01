@@ -78,7 +78,7 @@ export const DASHBOARD_NAV_GROUPS: {
       { href: "/dashboard/channels", label: "Canaux", icon: IconPlug, module: "whatsapp" },
       { href: "/dashboard/comments", label: "Commentaires", icon: IconComment, module: "marketing" },
       { href: "/dashboard/groups", label: "Groupes WhatsApp", icon: IconGroupChat, module: "whatsapp" },
-      { href: "/dashboard/broadcasts", label: "Diffusions aux contacts", icon: IconMegaphone, module: "whatsapp" },
+      { href: "/dashboard/broadcasts", label: "Diffusions", icon: IconMegaphone, module: "whatsapp" },
       { href: "/dashboard/marketing", label: "Publications", icon: IconMegaphone, module: "marketing" },
       { href: "/dashboard/analytics", label: "Analytics réseaux", icon: IconGlobe, module: "marketing" },
       { href: "/dashboard/analytics/landing", label: "Analytics vitrine", icon: IconGlobe },
@@ -89,6 +89,7 @@ export const DASHBOARD_NAV_GROUPS: {
     items: [
       { href: "/dashboard/business", label: "Fiche entreprise", icon: IconBuilding },
       { href: "/dashboard/site", label: "Mon site", icon: IconGlobe, module: "landing" },
+      { href: "/dashboard/domain", label: "Domaine personnalisé", icon: IconGlobe },
       { href: "/dashboard/ai", label: "Assistant IA", icon: IconBot, module: "ai" },
       { href: "/dashboard/finance", label: "Finance", icon: IconBanknote, module: "finance" },
       { href: "/dashboard/faq", label: "FAQ", icon: IconHelp, module: "faq" },

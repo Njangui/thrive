@@ -8,7 +8,7 @@ import {
 import { mapTelegramUpdateToDomainEvent } from "@/infrastructure/providers/messaging/telegram/mapper";
 import { resolveOrganizationIdByTelegramWebhookToken } from "@/infrastructure/providers/messaging/telegram/resolve-organization";
 import { handleInboundMessage } from "@/application/services/conversation-service";
-import { handleBotMembershipUpdate } from "@/application/services/telegram-destination-service";
+import { handleBotMembershipUpdate, migrateTelegramDestination } from "@/application/services/telegram-destination-service";
 import { processInboundAutoReply } from "@/application/services/inbound-auto-reply-service";
 import { getMessagingProvider, getStorageProvider } from "@/infrastructure/providers/registry";
 import { buildTenantObjectPath, type MediaType } from "@/application/services/media-service";
@@ -70,6 +70,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
 
   try {
+    // Lot P : groupe converti en supergroupe — l'identifiant change
+    // définitivement, avant tout autre traitement de cet update.
+    if (update.message?.migrate_to_chat_id) {
+      const migrated = await migrateTelegramDestination(organizationId, botId, update.message.chat.id, update.message.migrate_to_chat_id);
+      console.info(`Telegram tenant webhook: migration de groupe ${update.message.chat.id} → ${update.message.migrate_to_chat_id} (org ${organizationId}) : ${migrated ? "destination mise à jour" : "aucune destination correspondante"}`);
+      await markWebhookEvent(externalEventId, "processed");
+      return NextResponse.json({ ok: true });
+    }
+
     // Lot O : le bot vient d'être ajouté / retiré d'un canal ou d'un groupe →
     // enregistrement (ou désactivation) automatique de la destination.
     if (update.my_chat_member) {

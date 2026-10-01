@@ -17,7 +17,7 @@ export interface Quota {
 export interface SocialPlatformSection {
   platform: string;
   label: string;
-  accounts: { accountId: string; username: string | null }[];
+  accounts: { accountId: string; username: string | null; needsReconnect: boolean }[];
   quota: Quota;
 }
 
@@ -78,21 +78,30 @@ export function MultiAccountSections({ organizationId, social, youtube, telegram
               {section.accounts.length > 0 ? (
                 <ul className="space-y-2">
                   {section.accounts.map((account) => (
-                    <li key={account.accountId} className="flex items-center justify-between gap-2 rounded-xl bg-[#F8FAFC] px-3 py-2 text-sm">
-                      <span className="min-w-0 truncate">{account.username ? `@${account.username.replace(/^@/, "")}` : "Compte connecté"}</span>
-                      <div className="flex shrink-0 items-center gap-3">
-                        <form action={actions.connectSocial}>
-                          {org}
-                          <input type="hidden" name="platform" value={section.platform} />
-                          <input type="hidden" name="reconnectAccountId" value={account.accountId} />
-                          <SubmitButton pendingLabel="Ouverture…" className="text-xs font-medium text-violet-700 hover:underline disabled:opacity-60">Reconnecter</SubmitButton>
-                        </form>
-                        <form action={actions.disconnectSocial}>
-                          {org}
-                          <input type="hidden" name="accountId" value={account.accountId} />
-                          <SubmitButton pendingLabel="…" className="text-xs font-medium text-red-600 hover:underline disabled:opacity-60">Déconnecter</SubmitButton>
-                        </form>
+                    <li key={account.accountId} className="flex flex-col gap-1 rounded-xl bg-[#F8FAFC] px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">{account.username ? `@${account.username.replace(/^@/, "")}` : "Compte connecté"}</span>
+                        <div className="flex shrink-0 items-center gap-3">
+                          <form action={actions.connectSocial}>
+                            {org}
+                            <input type="hidden" name="platform" value={section.platform} />
+                            <input type="hidden" name="reconnectAccountId" value={account.accountId} />
+                            <SubmitButton pendingLabel="Ouverture…" className={`text-xs font-medium hover:underline disabled:opacity-60 ${account.needsReconnect ? "text-amber-700" : "text-violet-700"}`}>
+                              Reconnecter
+                            </SubmitButton>
+                          </form>
+                          <form action={actions.disconnectSocial}>
+                            {org}
+                            <input type="hidden" name="accountId" value={account.accountId} />
+                            <SubmitButton pendingLabel="…" className="text-xs font-medium text-red-600 hover:underline disabled:opacity-60">Déconnecter</SubmitButton>
+                          </form>
+                        </div>
                       </div>
+                      {account.needsReconnect ? (
+                        <p className="text-[11px] text-amber-700">
+                          Reconnexion requise : les réponses automatiques aux commentaires sont en pause sur ce compte.
+                        </p>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -125,11 +134,19 @@ export function MultiAccountSections({ organizationId, social, youtube, telegram
             {youtube.accounts.map((account) => (
               <li key={account.id} className="flex items-center justify-between gap-3 rounded-xl bg-[#F8FAFC] px-3 py-2 text-sm">
                 <span className="min-w-0 truncate font-medium">{account.title ?? account.username ?? account.channelId}</span>
-                <form action={actions.disconnectYouTube}>
-                  {org}
-                  <input type="hidden" name="accountId" value={account.id} />
-                  <SubmitButton pendingLabel="…" className="text-xs font-medium text-red-600 hover:underline disabled:opacity-60">Déconnecter</SubmitButton>
-                </form>
+                <span className="flex items-center gap-3">
+                  <form action={actions.connectYouTube}>
+                    {org}
+                    <SubmitButton pendingLabel="Ouverture…" className="text-xs font-medium text-violet-700 hover:underline disabled:opacity-60">
+                      Reconnecter
+                    </SubmitButton>
+                  </form>
+                  <form action={actions.disconnectYouTube}>
+                    {org}
+                    <input type="hidden" name="accountId" value={account.id} />
+                    <SubmitButton pendingLabel="…" className="text-xs font-medium text-red-600 hover:underline disabled:opacity-60">Déconnecter</SubmitButton>
+                  </form>
+                </span>
               </li>
             ))}
           </ul>

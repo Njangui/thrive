@@ -1,7 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { ValidationError } from "@/lib/errors";
 import { getDomainProvider } from "@/infrastructure/providers/registry";
-import { assertGatedFeature } from "./feature-gate-service";
 import { notifyOrgAdmins } from "./notification-service";
 import { notifyPlatformAdminTelegram } from "./telegram-admin-notification-service";
 
@@ -122,14 +121,21 @@ export async function checkDomainAvailability(nameWithoutTld: string): Promise<D
   }
 }
 
-/** Passe par DomainProvider.register() (ManualDomainAdapter) — jamais un insert direct ici, même discipline "port only" que le reste du projet. */
+/**
+ * Passe par DomainProvider.register() (ManualDomainAdapter) — jamais un
+ * insert direct ici, même discipline "port only" que le reste du projet.
+ *
+ * Lot P — le domaine personnalisé n'est PLUS inclus dans aucun forfait :
+ * c'est un service à la demande, ouvert à TOUS les plans (y compris
+ * Discover), acheté et configuré manuellement (voir docs/DEPLOYMENT.md).
+ * Aucun `assertGatedFeature` ici en conséquence — seule l'appartenance à
+ * l'organisation (vérifiée par l'appelant) protège cette action.
+ */
 export async function requestDomain(
   organizationId: string,
   domainName: string,
   actorUserId: string,
 ): Promise<{ requestId: string }> {
-  // Lot O : domaine personnalisé = Starter+ (garde serveur, pas seulement l'UI).
-  await assertGatedFeature(organizationId, "custom_domain");
   const normalized = domainName.trim().toLowerCase();
   if (!DOMAIN_NAME_PATTERN.test(normalized)) {
     throw new ValidationError('Nom de domaine invalide (ex: "boutique-fatou.cm").');
