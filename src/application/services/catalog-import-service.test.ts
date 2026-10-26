@@ -105,3 +105,19 @@ describe("parseSpecifications (import CSV — informations complémentaires)", (
     expect(parseSpecifications(undefined)).toEqual([]);
   });
 });
+
+describe("URLs d'image : http(s) uniquement (audit CAT1, Q27)", () => {
+  it("écarte javascript:, data:, file: et les URLs trop longues", () => {
+    const raw = ["javascript:alert(1)", "data:text/html;base64,AAA", "file:///etc/passwd", "ftp://a.test/x.jpg", "https://ok.test/a.jpg", "http://ok.test/b.jpg", `https://a.test/${"x".repeat(2100)}`].join("|");
+    expect(parseImageUrls(raw)).toEqual(["https://ok.test/a.jpg", "http://ok.test/b.jpg"]);
+  });
+});
+
+describe("plafonds d'import (audit CAT2, Q27)", () => {
+  it("refuse un fichier > 5 Mo et > 20 000 lignes avant tout traitement", async () => {
+    const { importProductsFromCsv, MAX_IMPORT_ROWS } = await import("./catalog-import-service");
+    await expect(importProductsFromCsv("o", "name,price\n" + "a".repeat(5 * 1024 * 1024 + 1))).rejects.toThrow(/5 Mo/);
+    const rows = "name,price\n" + Array.from({ length: MAX_IMPORT_ROWS + 1 }, () => "a,1").join("\n");
+    await expect(importProductsFromCsv("o", rows)).rejects.toThrow(/Trop de lignes/);
+  });
+});

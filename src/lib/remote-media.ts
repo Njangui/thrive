@@ -12,6 +12,8 @@
 /** Limite d'envoi Telegram par téléversement direct (Bot API) : 50 Mo. Par URL, ce serait 20 Mo seulement. */
 export const TELEGRAM_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
+import { isProjectSupabaseHost } from "./supabase-host";
+
 const ZERNIO_MEDIA_HOST = "media.zernio.com";
 
 function parseHttps(url: string): URL | null {
@@ -27,11 +29,11 @@ export function isZernioMediaHost(url: string): boolean {
   return parseHttps(url)?.hostname === ZERNIO_MEDIA_HOST;
 }
 
-/** Hôtes dont on accepte de relire un fichier : le stockage temporaire Zernio et le Storage Supabase du projet. */
+/** Hôtes dont on accepte de relire un fichier : le stockage temporaire Zernio et le Storage de NOTRE projet Supabase (audit SEC2). */
 export function isAllowedRemoteMediaHost(url: string): boolean {
   const hostname = parseHttps(url)?.hostname;
   if (!hostname) return false;
-  return hostname === ZERNIO_MEDIA_HOST || hostname.endsWith(".supabase.co");
+  return hostname === ZERNIO_MEDIA_HOST || isProjectSupabaseHost(hostname);
 }
 
 export function fileNameFromUrl(url: string, fallback = "fichier"): string {
@@ -45,9 +47,16 @@ export async function downloadRemoteMedia(
 ): Promise<{ data: Uint8Array; contentType: string | null }> {
   if (!isAllowedRemoteMediaHost(url)) throw new Error("Adresse de média non autorisée.");
 
-  const response = await fetch(url, { redirect: "follow" });
-  // Une redirection ne doit jamais nous mener hors de la liste blanche.
-  if (!isAllowedRemoteMediaHost(response.url || url)) throw new Error("Adresse de média non autorisée.");
+  // Redirections suivies À LA MAIN (audit SEC2) : chaque saut est vérifié AVANT d'être requêté, 3 sauts maximum.
+  let target = url;
+  let response = await fetch(target, { redirect: "manual" });
+  for (let hops = 0; response.status >= 300 && response.status < 400; hops++) {
+    const location = response.headers.get("location");
+    if (!location || hops >= 3) throw new Error("Adresse de média non autorisée.");
+    target = new URL(location, target).toString();
+    if (!isAllowedRemoteMediaHost(target)) throw new Error("Adresse de média non autorisée.");
+    response = await fetch(target, { redirect: "manual" });
+  }
 
   if (!response.ok) {
     throw new Error(

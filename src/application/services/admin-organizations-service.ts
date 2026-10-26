@@ -102,7 +102,7 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
       .order("last_message_at", { ascending: false })
       .limit(RECENT_ACTIVITY_SAMPLE_SIZE),
     supabase.from("organization_subscriptions").select("organization_id, plan_key, status, trial_end, current_period_end"),
-    supabase.from("ai_credit_balances").select("organization_id, included_credits, used_credits"),
+    supabase.from("ai_credit_balances").select("organization_id, included_credits, used_credits, addon_credits"),
     supabase.from("plan_entitlements").select("plan_key, limit_value").eq("entitlement_key", "ai_credits"),
   ]);
 
@@ -150,16 +150,18 @@ export async function listOrganizationsForAdmin(): Promise<AdminOrganizationList
     let creditStatus: CreditStatus;
     if (balanceRow) {
       const included = balanceRow.included_credits;
+      const addon = balanceRow.addon_credits ?? 0;
       creditStatus = {
         organizationId: o.id,
         includedCredits: included,
+        addonCredits: addon,
         usedCredits: balanceRow.used_credits,
-        remainingCredits: included === -1 ? -1 : Math.max(included - balanceRow.used_credits, 0),
+        remainingCredits: included === -1 ? -1 : Math.max(included + addon - balanceRow.used_credits, 0),
       };
     } else {
       // Même repli que getCreditStatus() : pas de solde = limite du plan, 0 consommé.
       const included = aiCreditsLimitByPlan.get(planKey) ?? -1;
-      creditStatus = { organizationId: o.id, includedCredits: included, usedCredits: 0, remainingCredits: included };
+      creditStatus = { organizationId: o.id, includedCredits: included, addonCredits: 0, usedCredits: 0, remainingCredits: included };
     }
 
     return {

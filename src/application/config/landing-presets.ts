@@ -24,7 +24,7 @@ import { STOREFRONT_BLUEPRINTS, resolveStorefrontSector, type StorefrontSector }
  *     sans ses services ni sa prise de rendez-vous. Le test correspondant
  *     est mis à jour dans le même commit.
  */
-export const LANDING_PRESET_KEYS = ["boutique", "restaurant", "salon", "services", "immobilier", "default"] as const;
+export const LANDING_PRESET_KEYS = ["boutique", "restaurant", "salon", "services", "immobilier", "sante", "education", "default"] as const;
 export type LandingPresetKey = (typeof LANDING_PRESET_KEYS)[number];
 
 /** Correspondance preset (vocabulaire métier FR, visible dans /dashboard/site) <-> secteur technique (`organizations.industry`). */
@@ -34,6 +34,8 @@ export const PRESET_TO_SECTOR: Record<LandingPresetKey, StorefrontSector> = {
   salon: "beauty",
   services: "professional_services",
   immobilier: "real_estate",
+  sante: "health",
+  education: "education",
   default: "",
 };
 
@@ -43,6 +45,8 @@ export const SECTOR_TO_PRESET: Record<StorefrontSector, LandingPresetKey> = {
   beauty: "salon",
   professional_services: "services",
   real_estate: "immobilier",
+  health: "sante",
+  education: "education",
   "": "default",
 };
 
@@ -53,6 +57,8 @@ export const LANDING_PRESET_LABELS: Record<LandingPresetKey, string> = {
   salon: "Salon / beauté",
   services: "Services professionnels",
   immobilier: "Immobilier",
+  sante: "Santé & médecine",
+  education: "Éducation & formation",
   default: "Générique",
 };
 
@@ -62,6 +68,8 @@ export const LANDING_PRESET_DESCRIPTIONS: Record<LandingPresetKey, string> = {
   salon: "Prestations, réalisations, équipe et prise de rendez-vous.",
   services: "Offres, références clients et demande de rendez-vous.",
   immobilier: "Types de biens, annonces disponibles et conseillers.",
+  sante: "Consultations, équipe soignante, prise de rendez-vous et accès.",
+  education: "Formations, admission, équipe pédagogique, visites et campus.",
   default: "Une structure passe-partout pour toute activité.",
 };
 
@@ -71,6 +79,8 @@ export const LANDING_PRESETS: Record<LandingPresetKey, LandingSectionType[]> = {
   salon: STOREFRONT_BLUEPRINTS.beauty.sections,
   services: STOREFRONT_BLUEPRINTS.professional_services.sections,
   immobilier: STOREFRONT_BLUEPRINTS.real_estate.sections,
+  sante: STOREFRONT_BLUEPRINTS.health.sections,
+  education: STOREFRONT_BLUEPRINTS.education.sections,
   default: STOREFRONT_BLUEPRINTS[""].sections,
 };
 

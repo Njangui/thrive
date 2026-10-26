@@ -34,7 +34,7 @@ function isLeadStatus(value: string): value is LeadStatus {
 async function updateLeadStatusAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
-  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
 
   const leadId = String(formData.get("leadId") ?? "");
   const status = String(formData.get("status") ?? "");
@@ -55,7 +55,7 @@ async function updateLeadStatusAction(formData: FormData) {
 async function saveContactNotesAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
-  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
   const contactId = String(formData.get("contactId") ?? "");
   const notes = String(formData.get("notes") ?? "");
   const currentQuery = String(formData.get("currentQuery") ?? "");

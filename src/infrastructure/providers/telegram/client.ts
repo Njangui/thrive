@@ -1,5 +1,6 @@
 import type {
   TelegramApiResponse,
+  TelegramFile,
   TelegramMessage,
   TelegramSendMessageParams,
   TelegramUser,
@@ -50,8 +51,30 @@ export class TelegramClient {
     return this.call<TelegramMessage>("sendMessage", params as unknown as Record<string, unknown>);
   }
 
-  async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<true> {
-    return this.call<true>("answerCallbackQuery", { callback_query_id: callbackQueryId, text });
+  async answerCallbackQuery(callbackQueryId: string, text?: string, showAlert = false): Promise<true> {
+    return this.call<true>("answerCallbackQuery", { callback_query_id: callbackQueryId, text, ...(showAlert ? { show_alert: true } : {}) });
+  }
+
+  /** Supprime un message (C2 : efface le PIN saisi dans le chat, best-effort côté appelant). */
+  async deleteMessage(chatId: number | string, messageId: number): Promise<true> {
+    return this.call<true>("deleteMessage", { chat_id: chatId, message_id: messageId });
+  }
+
+  /** Remplace le texte d'un message (C2 : fige une carte d'approbation après décision ; sans clavier = boutons retirés). */
+  async editMessageText(params: { chat_id: number | string; message_id: number; text: string; reply_markup?: TelegramSendMessageParams["reply_markup"] }): Promise<unknown> {
+    return this.call<unknown>("editMessageText", params as unknown as Record<string, unknown>);
+  }
+
+  /** Métadonnées d'un fichier reçu (C2 : vocaux). `file_path` sert ensuite à `downloadFile`. */
+  async getFile(fileId: string): Promise<TelegramFile> {
+    return this.call<TelegramFile>("getFile", { file_id: fileId });
+  }
+
+  /** Télécharge un fichier reçu (limite Bot API : 20 Mo ; l'appelant plafonne bien en dessous). */
+  async downloadFile(filePath: string): Promise<{ data: Uint8Array; contentType: string | null }> {
+    const response = await fetch(`https://api.telegram.org/file/bot${this.botToken}/${filePath}`);
+    if (!response.ok) throw new Error(`Téléchargement du fichier Telegram impossible (${response.status}).`);
+    return { data: new Uint8Array(await response.arrayBuffer()), contentType: response.headers.get("content-type") };
   }
 
   /** Vérifie que le token est valide — utilisé par le script d'installation du webhook (docs/TELEGRAM_INTEGRATION.md), jamais appelé en production. */

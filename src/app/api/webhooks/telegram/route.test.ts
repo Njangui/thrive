@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const m = vi.hoisted(() => ({
   handlePlatformBotMessage: vi.fn(),
+  handleBackofficeMessage: vi.fn(),
+  handleBackofficeCallback: vi.fn(),
   insertEvent: vi.fn(),
   updates: [] as Array<Record<string, unknown>>,
 }));
@@ -33,6 +35,7 @@ vi.mock("@/infrastructure/providers/telegram/webhook-handler", () => ({
   parseTelegramUpdate: (raw: string) => JSON.parse(raw),
 }));
 vi.mock("@/application/services/telegram-bot-service", () => ({ handlePlatformBotMessage: m.handlePlatformBotMessage }));
+vi.mock("@/application/services/telegram-backoffice-service", () => ({ handleBackofficeMessage: m.handleBackofficeMessage, handleBackofficeCallback: m.handleBackofficeCallback }));
 
 import { POST } from "./route";
 
@@ -60,6 +63,8 @@ beforeEach(() => {
   m.updates.length = 0;
   m.insertEvent.mockResolvedValue({ error: null });
   m.handlePlatformBotMessage.mockResolvedValue(undefined);
+  m.handleBackofficeMessage.mockResolvedValue(false);
+  m.handleBackofficeCallback.mockResolvedValue(true);
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -118,5 +123,35 @@ describe("Webhook Telegram — bot plateforme (URL fixe)", () => {
     expect(res.status).toBe(200);
     expect(m.handlePlatformBotMessage).not.toHaveBeenCalled();
     expect(m.updates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("C2 : message reconnu par le back-office → le flux affilié n'est PAS appelé", async () => {
+    m.handleBackofficeMessage.mockResolvedValue(true);
+    const evt = update({ text: "mes commandes ?" });
+    expect((await deliver(evt)).status).toBe(200);
+    expect(m.handleBackofficeMessage).toHaveBeenCalledWith(evt.message);
+    expect(m.handlePlatformBotMessage).not.toHaveBeenCalled();
+  });
+
+  it("C2 : message non reconnu par le back-office → flux affilié inchangé", async () => {
+    const evt = update({ text: "/mystats" });
+    await deliver(evt);
+    expect(m.handlePlatformBotMessage).toHaveBeenCalledWith(evt.message);
+  });
+
+  it("C2 : callback_query (bouton) → traité par le back-office, jamais par le flux affilié", async () => {
+    counter += 1;
+    const evt = { update_id: 100000 + counter, callback_query: { id: "cb", from: { id: 1, is_bot: false, first_name: "x" }, data: "ap:y:abc" } };
+    expect((await deliver(evt)).status).toBe(200);
+    expect(m.handleBackofficeCallback).toHaveBeenCalledWith(evt.callback_query);
+    expect(m.handlePlatformBotMessage).not.toHaveBeenCalled();
+    expect(m.updates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("C2 : une erreur du back-office est journalisée (statut failed) mais Telegram reçoit 200", async () => {
+    m.handleBackofficeMessage.mockRejectedValue(new Error("boom"));
+    const res = await deliver(update({ text: "salut" }));
+    expect(res.status).toBe(200);
+    expect(m.updates.at(-1)).toMatchObject({ status: "failed" });
   });
 });

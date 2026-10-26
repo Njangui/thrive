@@ -1,4 +1,6 @@
 import type {
+  AIChatRequest,
+  AIChatResponse,
   AIClassifyRequest,
   AIClassifyResponse,
   AIProvider,
@@ -6,6 +8,7 @@ import type {
   AITextRequest,
   AITextResponse,
 } from "@/domain/ports/ai-provider";
+import { openAICompatibleChat } from "./openai-compatible-chat";
 
 /**
  * Adapter OpenAI — non activé par défaut dans le MVP (section 8 : présent
@@ -20,6 +23,11 @@ export class OpenAIAdapter implements AIProvider {
     private readonly model: string,
     private readonly baseUrl = "https://api.openai.com/v1",
   ) {}
+
+  /** Conversation à outils (runtime d'agents). */
+  chat(request: AIChatRequest): Promise<AIChatResponse> {
+    return openAICompatibleChat({ label: "OpenAI", baseUrl: this.baseUrl, apiKey: this.apiKey, model: this.model, request });
+  }
 
   async generateText(request: AITextRequest): Promise<AITextResponse> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {

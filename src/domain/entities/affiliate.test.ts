@@ -139,3 +139,19 @@ describe("canRequestPayout", () => {
     expect(canRequestPayout(0, 10000)).toBe(false);
   });
 });
+
+import { normalizeEmailIdentity, normalizePhoneIdentity, selfReferralSignals } from "./affiliate";
+describe("Q24 : auto-parrainage par second compte", () => {
+  it("normalise e-mails (alias +, points Gmail) et téléphones", () => {
+    expect(normalizeEmailIdentity("Jean.Dupont+promo@gmail.com")).toBe("jeandupont@gmail.com");
+    expect(normalizeEmailIdentity("a@googlemail.com")).toBe("a@gmail.com");
+    expect(normalizeEmailIdentity("a.b@societe.cm")).toBe("a.b@societe.cm");
+    expect(normalizePhoneIdentity("+237 6 55 12 34 56")).toBe("55123456");
+    expect(normalizePhoneIdentity("123")).toBeNull();
+  });
+  it("détecte les signaux et reste silencieux sinon", () => {
+    expect(selfReferralSignals({ userId: "a", email: "x.y@gmail.com", phone: "655123456" }, { userId: "b", email: "xy+2@gmail.com", phone: "+237655123456" })).toEqual(["email", "phone"]);
+    expect(selfReferralSignals({ userId: "a" }, { userId: "a" })).toEqual(["user_id"]);
+    expect(selfReferralSignals({ userId: "a", email: "p@q.cm" }, { userId: "b", email: "z@q.cm" })).toEqual([]);
+  });
+});

@@ -26,10 +26,46 @@ const NOINDEX_SOURCES = [
   "/reset-password",
 ];
 
+/**
+ * Domaine public des médias Cloudflare R2 (C4), lu depuis R2_PUBLIC_BASE_URL.
+ * INDISPENSABLE avant STORAGE_PROVIDER=r2 : sans lui, `next/image` refuse le
+ * domaine ET le CSP `img-src` / `media-src` bloque les fichiers — toutes les
+ * images enverraient une erreur. Lu à la construction : la variable doit donc
+ * exister AU BUILD (Vercel : variables d'environnement du projet), pas
+ * seulement à l'exécution. Absente ou invalide : aucun changement.
+ */
+function r2MediaOrigin() {
+  const raw = process.env.R2_PUBLIC_BASE_URL;
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+const R2_MEDIA = r2MediaOrigin();
+
+/** Hôte du projet Supabase (audit QA3/SEC1) : plus de `*.supabase.co` — les images et la CSP se limitent à NOTRE projet. */
+function supabaseHost() {
+  try {
+    const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+    return url.protocol === "https:" ? url.hostname : null;
+  } catch {
+    return null;
+  }
+}
+const SUPABASE_HOST = supabaseHost();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Ne pas annoncer « X-Powered-By: Next.js » à chaque réponse.
   poweredByHeader: false,
+  // Lecture des classeurs Excel (import de catalogue, C4) : paquet volumineux, chargé tel quel par Node plutôt qu'empaqueté.
+  serverExternalPackages: ["exceljs"],
+  // Même hôte que `images.remotePatterns`, rendu lisible côté navigateur et
+  // serveur par `isOptimizableImageUrl` (src/lib/optimizable-image.ts).
+  env: R2_MEDIA ? { NEXT_PUBLIC_R2_MEDIA_HOST: R2_MEDIA.hostname } : {},
   // NOTE (Phase 2 - Custom Domains, section 23):
   // Le routing tenant-aware par sous-domaine / domaine custom est géré dans
   // src/proxy.ts (ex-middleware.ts, renommé par Next.js 16), pas ici. Ne rien
@@ -52,8 +88,9 @@ const nextConfig = {
     // qu'aux images placeholder de `scripts/seed-demo.ts` — à retirer une
     // fois la démo remplacée par de vraies photos produit en production.
     remotePatterns: [
-      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+      ...(SUPABASE_HOST ? [{ protocol: "https", hostname: SUPABASE_HOST, pathname: "/storage/v1/object/public/**" }] : []),
       { protocol: "https", hostname: "picsum.photos" },
+      ...(R2_MEDIA ? [{ protocol: "https", hostname: R2_MEDIA.hostname }] : []),
     ],
   },
   // Headers de sécurité — absents jusqu'ici (voir COMPARAISON_MASTER_PROMPT.md,
@@ -72,35 +109,21 @@ const nextConfig = {
   // réelle de la surface XSS (bloque tout script/style chargé depuis un
   // domaine tiers non listé), pas une protection parfaite.
   async headers() {
+    // CSP statique (copie de src/lib/csp.ts::buildCsp, test de non-divergence : src/lib/csp.test.ts).
+    // En mode nonce (CSP_NONCE=true) la CSP est posée par src/proxy.ts : on ne l'émet pas ici.
+    const sb = SUPABASE_HOST ? ` https://${SUPABASE_HOST}` : "";
+    const r2 = R2_MEDIA ? ` ${R2_MEDIA.origin}` : "";
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https://*.supabase.co https://picsum.photos",
+      `img-src 'self' data:${sb} https://picsum.photos${r2}`,
       "font-src 'self'",
-      // `connect-src` doit inclure Supabase : le client navigateur
-      // (browser-client.ts) appelle directement `https://<projet>.supabase.co`
-      // (Auth + REST) depuis le front — un domaine différent de l'origine
-      // de l'app. Sans cette entrée, CSP bloque silencieusement CHAQUE appel
-      // fetch vers Supabase émis depuis le navigateur (login, signup, reset
-      // password...), qui échoue côté JS avec `TypeError: Failed to fetch` —
-      // pas une erreur réseau, un blocage CSP. `wss://*.supabase.co` non
-      // ajouté : Supabase Realtime (websocket) n'est utilisé nulle part dans
-      // le projet actuellement — à ajouter si un futur lot l'introduit.
-      //
-      // Vidéos catalogue (Zernio) : le navigateur envoie le fichier
-      // DIRECTEMENT vers l'URL présignée renvoyée par Zernio (un `PUT`
-      // `fetch`/XHR — d'où `connect-src`), sans repasser par une fonction
-      // Vercel (limite de 4,5 Mo par requête, incompatible avec une
-      // vidéo). Hôtes VÉRIFIÉS dans la doc Zernio (guide « Media Uploads »):
-      // l'URL présignée pointe vers `<bucket>.r2.cloudflarestorage.com`
-      // (Cloudflare R2) et l'URL publique vers `media.zernio.com`.
-      "connect-src 'self' https://*.supabase.co https://media.zernio.com https://*.r2.cloudflarestorage.com",
-      // Lecture des vidéos catalogue (Zernio), des messages vocaux/audios
-      // (Supabase Storage) et de l'aperçu d'un vocal en cours d'envoi
-      // (`blob:`). Sans cette directive, `default-src 'self'` bloque
-      // tout <video>/<audio> externe.
-      "media-src 'self' blob: https://*.supabase.co https://media.zernio.com",
+      // `connect-src` : le navigateur appelle directement Supabase (Auth + REST) et envoie les vidéos
+      // catalogue vers Zernio/R2 (URL présignée) — hôtes vérifiés dans la doc Zernio (« Media Uploads »).
+      `connect-src 'self'${sb} https://media.zernio.com https://*.r2.cloudflarestorage.com`,
+      // Lecture des vidéos catalogue, des vocaux et de l'aperçu d'un vocal en cours d'envoi (`blob:`).
+      `media-src 'self' blob:${sb} https://media.zernio.com${r2}`,
       "form-action 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
@@ -111,7 +134,7 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: csp },
+          ...(process.env.CSP_NONCE === "true" ? [] : [{ key: "Content-Security-Policy", value: csp }]),
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

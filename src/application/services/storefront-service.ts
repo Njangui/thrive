@@ -3,6 +3,9 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import type { TenantContext } from "@/infrastructure/tenant/resolve-request-tenant";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getLandingConfig, type LandingConfig } from "./landing-config-service";
+import { resolveEffectiveLandingConfig, resolveEffectiveNavigation } from "./site-published-config";
+import { applyPublishedNavigation, applyPublishedSiteToLandingConfig } from "./site-storefront-bridge";
+import type { SiteSnapshot } from "@/domain/entities/site";
 import { isPromotionCurrentlyOn } from "./catalog-service";
 import { hasFeature } from "./entitlements-service";
 import {
@@ -72,7 +75,8 @@ export interface StorefrontCapabilities {
 }
 
 export interface StorefrontNavEntry {
-  key: StorefrontRouteKey;
+  /** Clé de route du produit, ou `page-<id>` / `link-<n>` pour une entrée de menu définie dans une version publiée du site. */
+  key: string;
   label: string;
   href: string;
 }
@@ -99,6 +103,7 @@ export interface StorefrontSite {
   announcement: string | null;
   heroLayout: HeroLayout;
   heroMediaUrl: string | null;
+  heroMediaAlt?: string | null;
   accent: { primary: string; secondary: string };
   whatsappHref: string | null;
   /** Année de création de l'organisation — utilisée par le pied de page et les données structurées. */
@@ -490,11 +495,35 @@ export function resolveHeroMedia(config: LandingConfig, tenant: TenantContext): 
  * pied de page appellent tous `getStorefrontSite`, ce qui ne déclenche
  * qu'un seul chargement.
  */
-export const getStorefrontSite = cache(async function getStorefrontSite(
-  tenant: TenantContext,
-): Promise<StorefrontSite> {
+export const getStorefrontSite = cache(function getStorefrontSite(tenant: TenantContext): Promise<StorefrontSite> {
+  return buildStorefrontSite(tenant, {
+    // Une version publiée du site (C4) surcharge la config ; sans version publiée : config inchangée.
+    config: (base) => resolveEffectiveLandingConfig(tenant.organizationId, base),
+    nav: (base) => resolveEffectiveNavigation(tenant.organizationId, base),
+  });
+});
+
+/**
+ * Même modèle de site, mais construit avec le BROUILLON du site (C4) au lieu de la
+ * version publiée. Pour l'aperçu privé du dashboard uniquement : non mémoïsé, et
+ * l'appelant doit avoir vérifié l'appartenance de l'utilisateur au tenant.
+ */
+export function getStorefrontPreviewSite(tenant: TenantContext, draft: SiteSnapshot): Promise<StorefrontSite> {
+  return buildStorefrontSite(tenant, {
+    config: async (base) => applyPublishedSiteToLandingConfig(base, draft).config,
+    nav: async (base) => applyPublishedNavigation(base, draft),
+  });
+}
+
+/** Ce qui peut surcharger la config et le menu d'un tenant (version publiée, ou brouillon en aperçu). */
+interface SiteOverlay {
+  config: (base: LandingConfig) => Promise<LandingConfig>;
+  nav: (base: StorefrontNavEntry[]) => Promise<StorefrontNavEntry[]>;
+}
+
+async function buildStorefrontSite(tenant: TenantContext, overlay: SiteOverlay): Promise<StorefrontSite> {
   const [config, capabilities] = await Promise.all([
-    getLandingConfig(tenant.organizationId, tenant.industry),
+    getLandingConfig(tenant.organizationId, tenant.industry).then((base) => overlay.config(base)),
     getStorefrontCapabilities(tenant),
   ]);
 
@@ -521,13 +550,16 @@ export const getStorefrontSite = cache(async function getStorefrontSite(
     presetKey: SECTOR_TO_PRESET[sector],
     enabledSections,
     capabilities,
-    nav: buildStorefrontNav(enabledSections, blueprint, capabilities, tenant),
+    // Entrées de menu du site (publié ou brouillon) AJOUTÉES au menu du produit ; aucune = menu construit comme avant.
+    nav: await overlay.nav(buildStorefrontNav(enabledSections, blueprint, capabilities, tenant)),
     highlights: resolveStorefrontHighlights(config, blueprint, capabilities),
     paymentMethods: config.paymentMethods ?? [],
     stats,
     announcement,
     heroLayout: resolveHeroLayout(config, tenant),
     heroMediaUrl: resolveHeroMedia(config, tenant),
+    // L'alt décrit l'image du hero choisie dans la config ; une bannière de repli de l'organisation reste décorative.
+    heroMediaAlt: config.heroMediaUrl ? config.heroMediaAlt ?? null : null,
     accent: {
       // Couleur du commerçant si choisie, sinon la palette par défaut de
       // son SECTEUR — jamais la même teinte pour tout le monde.
@@ -539,4 +571,4 @@ export const getStorefrontSite = cache(async function getStorefrontSite(
       : null,
     foundedYear,
   };
-});
+}

@@ -8,10 +8,7 @@ const ROLE_LABELS: Record<MemberRole, string> = {
   owner: "Propriétaire",
   admin: "Administrateur·rice",
   manager: "Responsable",
-  sales: "Vente",
-  cashier: "Caisse",
   employee: "Membre de l'équipe",
-  accountant: "Comptabilité",
 };
 
 function initials(label: string): string {

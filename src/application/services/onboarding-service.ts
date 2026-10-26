@@ -3,8 +3,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { MODULE_KEYS, INDUSTRY_MODULE_PRESETS, type ModuleKey } from "@/application/config/modules";
 import { seedDefaultExpenseCategories } from "./finance-service";
-import { createFreemiumSubscription } from "./plans-repository";
-import { initializeCreditBalance } from "./ai-credits-service";
+import { isReservedSlug } from "@/domain/reserved-slugs";
 import { validateCountryForSignup } from "./country-service";
 import { attributeReferral, attributeReferralByPromoCode, validatePromoCode } from "./affiliate-service";
 import { seedDefaultCategories } from "./catalog-service";
@@ -81,37 +80,6 @@ export async function createOrganization(
   }
 
   const supabase = getSupabaseServiceClient();
-  const slug = await generateUniqueSlug(input.name);
-
-  const { data: org, error: orgError } = await supabase
-    .from("organizations")
-    .insert({
-      name: input.name.trim(),
-      slug,
-      industry: input.industry ?? null,
-      currency: currencyCode,
-      country_code: countryCode,
-      // Lot I, Partie 2 (onboarding reprenable) : l'étape 1 (celle-ci) vient
-      // d'être complétée avec succès, donc onboarding_step=1 dès la
-      // création — jamais 0 (0 = "jamais commencé", faux pour une
-      // organisation qui vient d'être créée). Les étapes suivantes du
-      // wizard avancent cette valeur via updateOnboardingStep ci-dessous.
-      onboarding_step: 1,
-    })
-    .select("id")
-    .single();
-
-  if (orgError || !org) {
-    throw new Error(`Impossible de créer l'organisation: ${orgError?.message}`);
-  }
-
-  const { error: membershipError } = await supabase
-    .from("memberships")
-    .insert({ organization_id: org.id, user_id: user.id, role: "owner" });
-
-  if (membershipError) {
-    throw new Error(`Impossible de créer le membership propriétaire: ${membershipError.message}`);
-  }
 
   // Modules par défaut : preset industrie si connu, sinon le socle minimal
   // (crm + catalog + landing + whatsapp + faq + ai + finance) — jamais
@@ -120,42 +88,59 @@ export async function createOrganization(
   const defaultModules: ModuleKey[] =
     (input.industry ? INDUSTRY_MODULE_PRESETS[input.industry] : undefined) ??
     (["crm", "catalog", "landing", "whatsapp", "faq", "ai", "finance"] as ModuleKey[]);
+  const modulesPayload = MODULE_KEYS.map((module) => ({ module, enabled: defaultModules.includes(module) }));
 
-  await supabase.from("tenant_modules").insert(
-    MODULE_KEYS.map((module) => ({
-      organization_id: org.id,
-      module,
-      enabled: defaultModules.includes(module),
-    })),
-  );
+  // Correctif d'audit C8/Q6 : organisation, propriétaire, modules, config IA (désactivée par défaut), abonnement
+  // gratuit et solde de crédits sont créés dans UNE transaction SQL (0193, `create_organization_atomic`) — une
+  // erreur à mi-parcours ne laisse plus d'entreprise à moitié créée — qui applique aussi la limite par
+  // utilisateur (1 entreprise gratuite à la fois, 5 au maximum).
+  let orgId: string | null = null;
+  for (let attempt = 0; attempt < 5 && !orgId; attempt++) {
+    const slug = await generateUniqueSlug(input.name, attempt > 0);
+    const { data, error } = await supabase.rpc("create_organization_atomic", {
+      p_user: user.id,
+      p_name: input.name.trim(),
+      p_slug: slug,
+      p_industry: input.industry ?? null,
+      p_currency: currencyCode,
+      p_country: countryCode,
+      p_modules: modulesPayload,
+    });
+    if (!error && data) {
+      orgId = data as string;
+      break;
+    }
+    const message = error?.message ?? "";
+    if (message.includes("organization_limit_free")) {
+      throw new ValidationError("Vous avez déjà une entreprise sur l'offre gratuite. Passez-la sur un forfait payant avant d'en créer une autre.");
+    }
+    if (message.includes("organization_limit_total")) {
+      throw new ValidationError("Vous avez atteint le nombre maximum d'entreprises (5). Contactez le support pour en créer davantage.");
+    }
+    // Slug déjà pris entre la vérification et l'insertion (course) ou réservé : on retente avec un autre.
+    if (error?.code === "23505" || error?.code === "23514") continue;
+    throw new Error(`Impossible de créer l'organisation: ${message}`);
+  }
+  if (!orgId) throw new Error("Impossible de générer un nom d'adresse unique — réessayez avec un autre nom.");
+  const org = { id: orgId };
 
-  // IA désactivée par défaut (`enabled: false`) tant que le commerçant n'a
-  // pas explicitement configuré/validé un provider — section 67 doc 2 : le
-  // produit doit fonctionner même si l'IA est indisponible/non configurée.
-  await supabase.from("ai_config").insert({
-    organization_id: org.id,
-    provider: "mistral",
-    model: "mistral-small-latest",
-    enabled: false,
-  });
-
-  await seedDefaultExpenseCategories(org.id);
-
-  // Mode freemium (période d'essai retirée sur demande explicite) :
-  // plan "free" permanent dès l'onboarding, actif immédiatement, aucune
-  // échéance. Les crédits IA inclus sont résolus depuis ce plan
-  // (plan_entitlements, clé 'ai_credits') — createFreemiumSubscription
-  // doit s'exécuter avant initializeCreditBalance pour que la
-  // résolution du plan soit correcte.
-  await createFreemiumSubscription(org.id);
-  await initializeCreditBalance(org.id);
+  // Seeds non critiques : l'entreprise est déjà utilisable ; un échec ici est journalisé, jamais bloquant.
+  try {
+    await seedDefaultExpenseCategories(org.id);
+  } catch (error) {
+    console.error(`createOrganization(${org.id}): catégories de dépenses non créées:`, error);
+  }
 
   // Catégories produit/service par défaut (section design, sept. 2026 —
   // "les catégories doivent être sélectionnées selon le secteur d'activité,
   // pas retapées à chaque produit") — même moment que le seed des modules
   // ci-dessus, distinct de `seedDefaultExpenseCategories` (dépenses de
   // comptabilité, table différente). Voir catalog-service.ts::seedDefaultCategories.
-  await seedDefaultCategories(org.id, input.industry ?? null);
+  try {
+    await seedDefaultCategories(org.id, input.industry ?? null);
+  } catch (error) {
+    console.error(`createOrganization(${org.id}): catégories par défaut non créées:`, error);
+  }
 
   // Programme d'affiliation (0044 + 0052) — best-effort par contrat de
   // fonction (voir affiliate-service.ts) : jamais lu via next/headers ici
@@ -245,7 +230,7 @@ export async function getOnboardingStatus(organizationId: string): Promise<Onboa
   return { step: data.onboarding_step ?? 0, completedAt: data.onboarding_completed_at };
 }
 
-async function generateUniqueSlug(name: string): Promise<string> {
+async function generateUniqueSlug(name: string, forceSuffix = false): Promise<string> {
   const supabase = getSupabaseServiceClient();
   const base = name
     .normalize("NFD")
@@ -255,14 +240,16 @@ async function generateUniqueSlug(name: string): Promise<string> {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
+  // Décision Q29 : un nom qui donnerait un sous-domaine réservé (« admin », « mail »…) reçoit toujours un suffixe.
   let candidate = base || "entreprise";
+  if (forceSuffix || isReservedSlug(candidate)) candidate = `${candidate}-${Math.random().toString(36).slice(2, 6)}`;
   let attempt = 0;
 
   while (attempt < 20) {
     const { data } = await supabase.from("organizations").select("id").eq("slug", candidate).maybeSingle();
-    if (!data) return candidate;
+    if (!data && !isReservedSlug(candidate)) return candidate;
     attempt += 1;
-    candidate = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    candidate = `${base || "entreprise"}-${Math.random().toString(36).slice(2, 6)}`;
   }
 
   throw new Error("Impossible de générer un slug unique — réessayez avec un autre nom.");

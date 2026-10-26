@@ -1,6 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { resolveCurrencyForCountry } from "./country-service";
-import { getActivePromo } from "./promo-trial-core";
+import { effectivePlanKey } from "./subscription-state";
 
 /**
  * Lot B — accès bas niveau aux tables `plans` / `plan_entitlements` /
@@ -74,7 +74,7 @@ function isPlanKey(value: unknown): value is PlanKey {
 
 /**
  * Plan RÉEL d'une organisation (celui de sa ligne `organization_subscriptions`),
- * sans tenir compte d'un éventuel essai Pro offert. Sert à la facturation,
+ * sans tenir compte de l'état de paiement. Sert à la facturation,
  * aux statistiques et à tout ce qui doit refléter ce que le client a
  * réellement souscrit. Retourne toujours une valeur exploitable : "free" si
  * aucune ligne n'existe (tenant créé avant ce lot) ou en cas d'erreur de
@@ -99,17 +99,30 @@ export async function getOrganizationRealPlanKey(organizationId: string): Promis
 }
 
 /**
- * Plan EFFECTIF : celui qui gouverne les droits (entitlements, crédits IA,
- * pages verrouillées). Vaut « pro » pour tout le monde tant qu'un essai Pro
- * offert est en cours (voir promo-trial-core.ts), sinon le plan réel. La
- * fin de l'essai est une simple comparaison de dates : dès que la date de
- * fin passe, chaque compte retrouve son vrai plan, sans traitement.
+ * Plan EFFECTIF : celui qui gouverne les droits (entitlements, crédits IA, pages verrouillées).
+ * C'est le plan souscrit, SAUF si l'abonnement a perdu ses droits : impayé ou essai terminé depuis
+ * plus de 3 jours, ou résiliation arrivée à terme (voir subscription-state.ts) → « free ».
+ * Le plan RÉEL (getOrganizationRealPlanKey) reste celui de la facturation.
  */
 export async function getOrganizationPlanKey(organizationId: string): Promise<PlanKey> {
-  const real = await getOrganizationRealPlanKey(organizationId);
-  if (real === "pro") return real;
-  const promo = await getActivePromo();
-  return promo ? "pro" : real;
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("organization_subscriptions")
+    .select("plan_key, status, current_period_end, trial_end")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`getOrganizationPlanKey(${organizationId}) erreur de lecture, plan "free" par défaut:`, error.message);
+    return "free";
+  }
+  if (!data || !isPlanKey(data.plan_key)) return "free";
+  return effectivePlanKey({
+    planKey: data.plan_key,
+    status: String(data.status),
+    currentPeriodEnd: (data.current_period_end as string | null) ?? null,
+    trialEnd: (data.trial_end as string | null) ?? null,
+  });
 }
 
 /**
@@ -208,10 +221,10 @@ export async function switchToFreePlan(organizationId: string): Promise<void> {
 }
 
 /**
- * Lit la limite configurée pour (plan, clé). Retourne -1 ("illimité")
- * si aucune ligne n'est configurée — traiter l'absence de configuration
- * comme un blocage casserait les tenants de démo créés avant ce lot
- * (critère d'acceptation Lot B, section "Enforcement").
+ * Lit la limite configurée pour (plan, clé). Refus par défaut (décision Q10, audit P-droits) :
+ * une clé sans ligne configurée ou une lecture en erreur vaut 0 (bloqué), JAMAIS « illimité » —
+ * une faute de frappe ou une migration oubliée ne doit pas offrir une fonctionnalité gratuitement.
+ * Une clé hors du catalogue connu est en plus signalée dans les logs pour être corrigée.
  */
 export async function getEntitlementLimit(planKey: PlanKey, entitlementKey: string): Promise<number> {
   const supabase = getSupabaseServiceClient();
@@ -223,13 +236,15 @@ export async function getEntitlementLimit(planKey: PlanKey, entitlementKey: stri
     .maybeSingle();
 
   if (error) {
-    console.error(
-      `getEntitlementLimit(${planKey}, ${entitlementKey}) erreur de lecture, "0 pour clé connue / illimité pour clé inconnue":`,
-      error.message,
-    );
-    return KNOWN_ENTITLEMENT_KEYS.has(entitlementKey) ? 0 : -1;
+    console.error(`getEntitlementLimit(${planKey}, ${entitlementKey}) erreur de lecture — refus par défaut (0):`, error.message);
+    return 0;
   }
-  if (!data) return KNOWN_ENTITLEMENT_KEYS.has(entitlementKey) ? 0 : -1;
+  if (!data) {
+    if (!KNOWN_ENTITLEMENT_KEYS.has(entitlementKey)) {
+      console.error(`getEntitlementLimit: clé de droit inconnue « ${entitlementKey} » (plan ${planKey}) — refus par défaut (0).`);
+    }
+    return 0;
+  }
   return data.limit_value;
 }
 

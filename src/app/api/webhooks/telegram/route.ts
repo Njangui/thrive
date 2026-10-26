@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { hashPayload, parseTelegramUpdate, verifyTelegramSecretToken } from "@/infrastructure/providers/telegram/webhook-handler";
 import { handlePlatformBotMessage } from "@/application/services/telegram-bot-service";
+import { handleBackofficeCallback, handleBackofficeMessage } from "@/application/services/telegram-backoffice-service";
+
+// Un tour d'agent (back-office) s'exécute dans la requête du webhook.
+export const maxDuration = 60;
 
 /**
  * CORRECTIF (build V22) : ce fichier contenait par erreur une copie du
@@ -31,6 +36,12 @@ import { handlePlatformBotMessage } from "@/application/services/telegram-bot-se
  * webhooks du projet (Zernio, Telegram tenant).
  */
 export async function POST(request: Request) {
+  // Audit W2 : limitation de débit par IP (repli ouvert si Upstash absent ou en panne, voir rate-limit.ts).
+  const clientIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const retryAfter = await checkRateLimit("webhook", clientIp);
+  if (retryAfter !== null) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
+  }
   const rawBody = await request.text();
   // CONFIRMÉ (core.telegram.org/bots/api#setwebhook) : header
   // `X-Telegram-Bot-Api-Secret-Token`, comparaison directe (pas de HMAC) —
@@ -42,7 +53,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid secret" }, { status: 401 });
   }
 
-  const update = parseTelegramUpdate(rawBody);
+  // Audit W3 : JSON invalide APRÈS authentification = 400 (pas une 500 qui provoquerait des relivraisons).
+  let update: ReturnType<typeof parseTelegramUpdate>;
+  try {
+    update = parseTelegramUpdate(rawBody);
+  } catch {
+    return NextResponse.json({ error: "invalid payload" }, { status: 400 });
+  }
   // Un seul bot pour toute la plateforme (contrairement au canal tenant, où
   // plusieurs bots coexistent) : `update_id` seul suffit comme clé
   // d'idempotence, CONFIRMÉ strictement croissant par bot (voir types.ts).
@@ -70,7 +87,13 @@ export async function POST(request: Request) {
 
   try {
     if (update.message) {
-      await handlePlatformBotMessage(update.message);
+      // C2 : le back-office (membres liés) passe en premier ; s'il ne reconnaît pas
+      // le message (jeton affilié, commande affilié, groupe…), le flux affilié
+      // existant le traite à l'identique — aucune régression.
+      const handled = await handleBackofficeMessage(update.message);
+      if (!handled) await handlePlatformBotMessage(update.message);
+    } else if (update.callback_query) {
+      await handleBackofficeCallback(update.callback_query);
     }
     await markWebhookEvent(externalEventId, "processed");
   } catch (processingError) {

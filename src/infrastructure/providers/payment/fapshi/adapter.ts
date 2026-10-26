@@ -81,6 +81,7 @@ export class FapshiAdapter implements PaymentProvider {
     return {
       providerReference: transaction.transId,
       status: mapStatus(transaction.status),
+      amount: typeof transaction.amount === "number" ? transaction.amount : undefined,
       rawPayload: transaction as unknown as Record<string, unknown>,
     };
   }

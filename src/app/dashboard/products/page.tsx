@@ -4,6 +4,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { resolvePrimaryImageUrl } from "@/application/services/catalog-service";
 import { listCategories } from "@/application/services/catalog-service";
 import { CsvImportForm } from "./csv-import-form";
+import { SmartImportForm } from "./smart-import-form";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Brouillon",
@@ -177,6 +178,7 @@ export default async function ProductsPage({
         </div>
       </div>
 
+      <SmartImportForm organizationId={organizationId} />
       <CsvImportForm organizationId={organizationId} />
     </div>
   );

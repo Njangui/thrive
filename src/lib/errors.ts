@@ -27,6 +27,14 @@ export class AuthorizationError extends AppError {
   }
 }
 
+/** Entreprise suspendue par la plateforme (décision Q3) : tout est bloqué — tableau de bord, IA, envois, publications. */
+export class OrganizationSuspendedError extends AuthorizationError {
+  constructor() {
+    super("Votre entreprise est suspendue. Contactez le support Flexco pour la réactiver.");
+    this.name = "OrganizationSuspendedError";
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(message: string) {
     super(message, 400, "validation");

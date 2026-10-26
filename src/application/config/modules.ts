@@ -110,4 +110,6 @@ export const INDUSTRY_MODULE_PRESETS: Record<string, ModuleKey[]> = {
   real_estate: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "finance", "marketing"],
   retail: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "orders", "inventory", "finance", "marketing"],
   professional_services: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "appointments", "finance", "marketing"],
+  health: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "appointments", "finance", "marketing"],
+  education: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "appointments", "finance", "marketing"],
 };

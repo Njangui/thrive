@@ -1,4 +1,6 @@
 import type {
+  AIChatRequest,
+  AIChatResponse,
   AIClassifyRequest,
   AIClassifyResponse,
   AIProvider,
@@ -21,6 +23,63 @@ export class ClaudeAdapter implements AIProvider {
     private readonly model: string,
     private readonly baseUrl = "https://api.anthropic.com/v1",
   ) {}
+
+  /** Conversation à outils (Messages API : tool_use / tool_result). */
+  async chat(request: AIChatRequest): Promise<AIChatResponse> {
+    const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [];
+    for (const message of request.messages) {
+      if (message.role === "user") {
+        messages.push({ role: "user", content: message.content });
+      } else if (message.role === "assistant") {
+        const blocks: unknown[] = [];
+        if (message.content) blocks.push({ type: "text", text: message.content });
+        for (const call of message.toolCalls ?? []) {
+          blocks.push({ type: "tool_use", id: call.id, name: call.name, input: call.arguments ?? {} });
+        }
+        messages.push({ role: "assistant", content: blocks });
+      } else {
+        // Les résultats d'outils consécutifs doivent tenir dans UN seul message « user ».
+        const block = { type: "tool_result", tool_use_id: message.toolCallId, content: message.content };
+        const last = messages[messages.length - 1];
+        if (last && last.role === "user" && Array.isArray(last.content) && (last.content as Array<{ type: string }>)[0]?.type === "tool_result") {
+          (last.content as unknown[]).push(block);
+        } else {
+          messages.push({ role: "user", content: [block] });
+        }
+      }
+    }
+
+    const res = await fetch(`${this.baseUrl}/messages`, {
+      method: "POST",
+      headers: { "x-api-key": this.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: request.maxTokens ?? 1024,
+        temperature: request.temperature ?? 0.2,
+        system: request.systemPrompt,
+        messages,
+        ...(request.tools?.length
+          ? { tools: request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) }
+          : {}),
+      }),
+    });
+    if (!res.ok) throw new Error(`Claude chat failed (${res.status}): ${await res.text()}`);
+
+    const data = await res.json();
+    const blocks = (data.content ?? []) as Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>;
+    const toolCalls = blocks
+      .filter((block) => block.type === "tool_use")
+      .map((block) => ({ id: block.id ?? "", name: block.name ?? "", arguments: block.input ?? {} }));
+    const stop = data.stop_reason as string | undefined;
+    return {
+      text: blocks.filter((block) => block.type === "text").map((block) => block.text ?? "").join("\n"),
+      toolCalls,
+      finishReason: toolCalls.length ? "tool_calls" : stop === "end_turn" ? "stop" : stop === "max_tokens" ? "length" : "other",
+      provider: this.providerName,
+      model: this.model,
+      usage: data.usage ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens } : undefined,
+    };
+  }
 
   async generateText(request: AITextRequest): Promise<AITextResponse> {
     const res = await fetch(`${this.baseUrl}/messages`, {

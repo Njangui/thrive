@@ -5,6 +5,9 @@ import type {
   ZernioAccount,
   ZernioListWhatsAppGroupsResponse,
   ZernioWhatsAppGroup,
+  ZernioCreateWhatsAppTemplate,
+  ZernioWhatsAppTemplate,
+  ZernioStartTemplateConversation,
 } from "./types";
 
 /**
@@ -152,5 +155,51 @@ export class ZernioClient {
     }
 
     return groups;
+  }
+
+  // --- Modèles WhatsApp (C2 étape 5) — endpoints CONFIRMÉS (docs.zernio.com/platforms/whatsapp/templates, oct. 2026) ---
+
+  /** Crée un modèle, soumis à la revue Meta (statut initial PENDING). */
+  async createWhatsAppTemplate(input: ZernioCreateWhatsAppTemplate): Promise<ZernioWhatsAppTemplate> {
+    this.assertConfigured();
+    const res = await fetch(`${this.baseUrl}/whatsapp/templates`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(`Zernio createWhatsAppTemplate failed (${res.status}): ${await res.text().catch(() => "")}`);
+    const json = (await res.json()) as { template?: ZernioWhatsAppTemplate };
+    if (!json.template) throw new Error("Zernio createWhatsAppTemplate: réponse sans `template`.");
+    return json.template;
+  }
+
+  /** Liste les modèles du compte (filtrable par nom/langue/statut). */
+  async listWhatsAppTemplates(accountId: string, filter: { name?: string; language?: string; status?: string } = {}): Promise<ZernioWhatsAppTemplate[]> {
+    this.assertConfigured();
+    const params = new URLSearchParams({ accountId });
+    for (const [k, v] of Object.entries(filter)) if (v) params.set(k, v);
+    const res = await this.fetchWithRetry(`${this.baseUrl}/whatsapp/templates?${params.toString()}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) throw new Error(`Zernio listWhatsAppTemplates failed (${res.status}): ${await res.text().catch(() => "")}`);
+    const json = (await res.json()) as { templates?: ZernioWhatsAppTemplate[] };
+    return json.templates ?? [];
+  }
+
+  /**
+   * Démarre (ou rouvre) une conversation par un MODÈLE approuvé : seul moyen confirmé d'écrire à un
+   * numéro hors fenêtre de 24 h. `participantId` = chiffres sans « + ».
+   */
+  async startConversationWithTemplate(input: ZernioStartTemplateConversation): Promise<{ messageId?: string; conversationId?: string }> {
+    this.assertConfigured();
+    const res = await fetch(`${this.baseUrl}/inbox/conversations`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(`Zernio startConversationWithTemplate failed (${res.status}): ${await res.text().catch(() => "")}`);
+    const json = (await res.json()) as { data?: { messageId?: string; conversationId?: string } };
+    return json.data ?? {};
   }
 }

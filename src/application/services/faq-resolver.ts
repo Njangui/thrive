@@ -1,7 +1,13 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { checkFaqTemplate } from "./faq-template";
+
+const REVIEW_INTERVAL_DAYS = 90;
+const reviewDate = () => new Date(Date.now() + REVIEW_INTERVAL_DAYS * 86_400_000).toISOString().slice(0, 10);
 
 export interface FaqMatch {
+  /** Identifiant de la FAQ (pour compter ses usages et les crédits économisés). */
+  id?: string;
   question: string;
   answer: string;
 }
@@ -33,7 +39,7 @@ export async function matchFaq(organizationId: string, message: string): Promise
 
   const { data: faqs, error } = await supabase
     .from("faqs")
-    .select("question, answer, keywords")
+    .select("id, question, answer, keywords")
     .eq("organization_id", organizationId)
     .eq("is_active", true);
 
@@ -46,7 +52,7 @@ export async function matchFaq(organizationId: string, message: string): Promise
   const messageTokens = normalizedMessage.split(" ").filter(Boolean);
   if (messageTokens.length === 0) return null;
 
-  let best: { faq: { question: string; answer: string }; hits: number; longest: number } | null = null;
+  let best: { faq: { id?: string; question: string; answer: string }; hits: number; longest: number } | null = null;
 
   for (const faq of faqs ?? []) {
     const keywords = ((faq.keywords ?? []) as string[]).map((k) => normalize(String(k))).filter(Boolean);
@@ -59,23 +65,23 @@ export async function matchFaq(organizationId: string, message: string): Promise
       }
     }
     if (hits > 0 && (!best || hits > best.hits || (hits === best.hits && longest > best.longest))) {
-      best = { faq: { question: faq.question, answer: faq.answer }, hits, longest };
+      best = { faq: { id: faq.id, question: faq.question, answer: faq.answer }, hits, longest };
     }
   }
-  if (best) return { question: best.faq.question, answer: best.faq.answer };
+  if (best) return { id: best.faq.id, question: best.faq.question, answer: best.faq.answer };
 
   // Filet de sécurité : la question elle-même, quand aucun mot-clé ne colle.
-  let bestByQuestion: { faq: { question: string; answer: string }; ratio: number } | null = null;
+  let bestByQuestion: { faq: { id?: string; question: string; answer: string }; ratio: number } | null = null;
   for (const faq of faqs ?? []) {
     const questionTokens = significantTokens(normalize(faq.question ?? ""));
     if (questionTokens.length < 2) continue;
     const matched = questionTokens.filter((qt) => messageTokens.some((mt) => wordsMatch(qt, mt))).length;
     const ratio = matched / questionTokens.length;
     if (matched >= 2 && ratio >= 0.6 && (!bestByQuestion || ratio > bestByQuestion.ratio)) {
-      bestByQuestion = { faq: { question: faq.question, answer: faq.answer }, ratio };
+      bestByQuestion = { faq: { id: faq.id, question: faq.question, answer: faq.answer }, ratio };
     }
   }
-  return bestByQuestion ? { question: bestByQuestion.faq.question, answer: bestByQuestion.faq.answer } : null;
+  return bestByQuestion ? { id: bestByQuestion.faq.id, question: bestByQuestion.faq.question, answer: bestByQuestion.faq.answer } : null;
 }
 
 const STOP_WORDS = new Set([
@@ -87,24 +93,9 @@ function significantTokens(normalizedText: string): string[] {
   return normalizedText.split(" ").filter((t) => t.length >= 3 && !STOP_WORDS.has(t));
 }
 
-/**
- * Deux mots (déjà normalisés) se correspondent s'ils sont identiques ou
- * partagent un radical. Prudent volontairement : un mot court (≤ 5
- * lettres) doit être le DÉBUT de l'autre (heure/heures, tarif/tarifs) —
- * jamais un simple préfixe commun, sinon « livre » (l'objet) déclencherait
- * une FAQ « livraison ». Pour les mots plus longs, un radical commun d'au
- * moins 4 lettres couvrant l'essentiel du plus court suffit
- * (livraison/livrez/livrer).
- */
-export function wordsMatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  const minLen = Math.min(a.length, b.length);
-  if (minLen < 3) return false;
-  if (minLen <= 5) return a.startsWith(b) || b.startsWith(a);
-  let common = 0;
-  while (common < minLen && a[common] === b[common]) common += 1;
-  return common >= Math.max(4, minLen - 2);
-}
+// `wordsMatch` vit dans faq-word-match.ts (pur) ; ré-exporté ici pour les appelants existants.
+export { wordsMatch } from "./faq-word-match";
+import { wordsMatch } from "./faq-word-match";
 
 function keywordMatches(keyword: string, normalizedMessage: string, messageTokens: string[]): boolean {
   // Ancien comportement conservé pour les mots-clés assez longs (un radical
@@ -182,12 +173,16 @@ export interface CreateFaqInput {
  * laisser un commerçant croire qu'elle est active alors qu'elle est
  * fonctionnellement invisible du router.
  */
-export async function createFaq(input: CreateFaqInput): Promise<{ faqId: string }> {
+export async function createFaq(input: CreateFaqInput): Promise<{ faqId: string; warnings?: string[] }> {
   if (!input.question.trim()) throw new ValidationError("La question est requise.");
   if (!input.answer.trim()) throw new ValidationError("La réponse est requise.");
   if (input.keywords.length === 0) {
     throw new ValidationError("Au moins un mot-clé est requis pour que cette FAQ puisse être détectée.");
   }
+
+  // Variable inconnue = erreur (le client verrait « {xyz} ») ; montant en dur = simple avertissement.
+  const template = checkFaqTemplate(input.answer);
+  if (template.errors.length > 0) throw new ValidationError(`Réponse invalide : ${template.errors.join(" ; ")}`);
 
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
@@ -198,12 +193,13 @@ export async function createFaq(input: CreateFaqInput): Promise<{ faqId: string 
       answer: input.answer,
       keywords: input.keywords,
       is_active: true,
+      review_at: reviewDate(),
     })
     .select("id")
     .single();
 
   if (error || !data) throw new Error(`Impossible de créer la FAQ: ${error?.message}`);
-  return { faqId: data.id };
+  return { faqId: data.id, ...(template.warnings.length > 0 ? { warnings: template.warnings } : {}) };
 }
 
 export interface UpdateFaqInput {
@@ -221,7 +217,10 @@ export async function updateFaq(organizationId: string, faqId: string, input: Up
   }
   if (input.answer !== undefined) {
     if (!input.answer.trim()) throw new ValidationError("La réponse est requise.");
+    const template = checkFaqTemplate(input.answer);
+    if (template.errors.length > 0) throw new ValidationError(`Réponse invalide : ${template.errors.join(" ; ")}`);
     patch.answer = input.answer;
+    patch.review_at = reviewDate(); // réponse modifiée : la prochaine relecture repart de zéro
   }
   if (input.keywords !== undefined) patch.keywords = input.keywords;
   if (input.isActive !== undefined) patch.is_active = input.isActive;

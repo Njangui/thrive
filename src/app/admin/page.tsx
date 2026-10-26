@@ -18,6 +18,8 @@ function formatUsd(value: number): string {
 
 const PAYMENT_STATUS: Record<string, { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
   pending: { label: "En attente", tone: "warning" },
+  processing: { label: "Traitement en cours", tone: "warning" },
+  effect_failed: { label: "Encaissé, effet à rejouer", tone: "danger" },
   completed: { label: "Payé", tone: "success" },
   failed: { label: "Échoué", tone: "danger" },
   refunded: { label: "Remboursé", tone: "neutral" },

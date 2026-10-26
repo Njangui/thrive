@@ -5,6 +5,9 @@ import { hasFeature } from "./entitlements-service";
 import { resolveMessagingPolicy } from "./messaging-policy-service";
 import { getSocialAccountByAccountId, markSocialAccountNeedsReconnect } from "./social-account-registry-service";
 import { notifyOrgAdmins } from "./notification-service";
+import { classifyComment, planPostRouting, planPreRouting } from "./comment-assistant";
+import { createLeadFromComment, findPostProduct, loadCommentSettings } from "./comment-moderation-service";
+import { loadVoiceAndLibrary } from "./message-library-service";
 
 /**
  * Réponse automatique aux commentaires Facebook / Instagram / TikTok,
@@ -29,6 +32,8 @@ export const COMMENT_AUTO_REPLY_ENTITLEMENT: Record<string, string> = {
 
 /** Un commentaire public reste court : un pavé de texte sous une publication est contre-productif. */
 export const MAX_PUBLIC_REPLY_LENGTH = 900;
+/** Réponses fabriquées par le code (courtes par construction) : plafond de sécurité. */
+const PUBLIC_REPLY_HARD_LIMIT = 400;
 /** Garde-fous anti-boucle / anti-spam. */
 export const MAX_AUTO_REPLIES_PER_ACCOUNT_PER_10_MIN = 30;
 export const MAX_AUTO_REPLIES_PER_AUTHOR_PER_DAY = 3;
@@ -154,28 +159,75 @@ export async function processCommentAutoReply(input: CommentAutoReplyInput): Pro
   if ((recentByAuthor.count ?? 0) >= MAX_AUTO_REPLIES_PER_AUTHOR_PER_DAY) return "skipped";
 
   try {
+    // C3 (livrable G) — règles d'abord : spam, compliment, intention d'achat, prix d'un produit de la publication.
+    // Tout ce qui suit est « jamais d'exception, sinon comportement d'avant » : réglages de repli, voix par défaut.
+    const settings = await loadCommentSettings(organizationId);
+    const { library } = await loadVoiceAndLibrary(organizationId);
+    const classification = classifyComment(input.content);
+    const wantsProduct = classification.kind === "strong_intent" || classification.kind === "price_or_availability";
+    const product = wantsProduct && settings.usePostProduct ? await findPostProduct(organizationId, input.providerPostId) : null;
+    const pre = planPreRouting({ classification, settings, product, platform: input.platform, library });
+
+    if (pre.type === "ignore_spam") {
+      // Jamais de réponse (ni IA, ni crédit). Masqué seulement si le commerçant l'a activé et que le réseau le permet.
+      if (pre.hide) {
+        try {
+          const provider = await getSocialPublishingProvider(organizationId);
+          await provider.hideComment(input.providerPostId, input.accountId, input.externalCommentId);
+          await markComment(input.commentId, organizationId, { status: "hidden", moderation_status: "spam_hidden", needs_human: false });
+        } catch (hideError) {
+          await markComment(input.commentId, organizationId, { moderation_status: "spam", auto_reply_error: `Masquage impossible : ${(hideError instanceof Error ? hideError.message : String(hideError)).slice(0, 400)}` });
+        }
+      } else {
+        await markComment(input.commentId, organizationId, { moderation_status: pre.moderation });
+      }
+      return "skipped";
+    }
+    if (pre.type === "ignore_praise") {
+      await markComment(input.commentId, organizationId, { auto_reply_intent: "praise_ignored" });
+      return "skipped";
+    }
+
+    const leadId = pre.createLead ? await createLeadFromComment(organizationId, { platform: input.platform, accountId: input.accountId, authorExternalId: input.authorExternalId, authorName: input.authorName }) : null;
+    const resolved: Record<string, unknown> = { ...(product ? { product_id: product.id } : {}), ...(leadId ? { lead_id: leadId } : {}) };
+
+    if (pre.type === "reply") {
+      const reply = clampPublicReply(pre.text, PUBLIC_REPLY_HARD_LIMIT);
+      const provider = await getSocialPublishingProvider(organizationId);
+      await provider.replyToComment(input.providerPostId, input.accountId, input.externalCommentId, reply);
+      await markComment(input.commentId, organizationId, { ...resolved, status: "replied", reply_content: reply, replied_at: new Date().toISOString(), reply_sender: "ai", auto_reply_intent: pre.intent, needs_human: false, auto_reply_error: null });
+      return "replied";
+    }
+
     // Aucun historique de conversation : un commentaire est traité seul (conversationId = null).
     const routing = await routeMessage(organizationId, null, input.content, { allowAI: policy.allowAI });
+    const post = planPostRouting({ routing, settings, library });
 
-    if (routing.handoffReason) {
-      await escalateComment(input, routing.handoffReason);
+    if (post.type === "escalate") {
+      if (post.publicAck) {
+        // Plainte : accusé de réception public (opt-in) PUIS escalade ; un échec d'envoi n'empêche jamais l'escalade.
+        try {
+          const provider = await getSocialPublishingProvider(organizationId);
+          await provider.replyToComment(input.providerPostId, input.accountId, input.externalCommentId, post.publicAck);
+          await markComment(input.commentId, organizationId, { ...resolved, status: "replied", reply_content: post.publicAck, replied_at: new Date().toISOString(), reply_sender: "ai", auto_reply_intent: "comment_complaint_ack" });
+        } catch (ackError) {
+          console.warn(`processCommentAutoReply(${input.commentId}): accusé public impossible:`, ackError instanceof Error ? ackError.message : ackError);
+        }
+      }
+      await escalateComment(input, routing.handoffReason ?? (policy.allowAI ? "unknown_information" : "semi_automatic"));
       return "escalated";
     }
-    if (!routing.replyText) {
-      // Aucune correspondance (FAQ / infos / catalogue) et pas d'IA : à traiter à la main.
-      await escalateComment(input, policy.allowAI ? "unknown_information" : "semi_automatic");
-      return "escalated";
-    }
 
-    const reply = clampPublicReply(routing.replyText);
+    const reply = clampPublicReply(post.text);
     const provider = await getSocialPublishingProvider(organizationId);
     await provider.replyToComment(input.providerPostId, input.accountId, input.externalCommentId, reply);
     await markComment(input.commentId, organizationId, {
+      ...resolved,
       status: "replied",
       reply_content: reply,
       replied_at: new Date().toISOString(),
       reply_sender: "ai",
-      auto_reply_intent: routing.intent,
+      auto_reply_intent: post.shortened ? "comment_dm_invite" : routing.intent,
       needs_human: false,
       auto_reply_error: null,
     });

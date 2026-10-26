@@ -7,8 +7,5 @@ export const ROLE_LABELS: Record<MemberRole, string> = {
   owner: "Propriétaire",
   admin: "Administrateur",
   manager: "Manager",
-  sales: "Vente",
-  cashier: "Caisse",
-  employee: "Employé",
-  accountant: "Comptable",
+  employee: "Membre",
 };

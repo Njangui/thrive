@@ -1,7 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { KNOWN_ENTITLEMENT_KEYS, PLAN_KEYS, getOrganizationPlanKey, getOrganizationRealPlanKey, type PlanKey } from "./plans-repository";
 import { isFeatureEnabled } from "./entitlements-service";
-import { getPromoPhase, getPromoTrial, type PromoPhase } from "./promo-trial-service";
 
 /**
  * Diagnostic d'accès (Super Admin) : pourquoi une fonctionnalité est
@@ -43,18 +42,14 @@ export function explainAccess(input: {
   hasSubscriptionRow: boolean;
   realPlan: PlanKey;
   effectivePlan: PlanKey;
-  phase: PromoPhase;
 }): string {
   if (!input.hasSubscriptionRow) {
     return "Aucune ligne d'abonnement : l'application traite ce compte comme Discover (gratuit). Si le client a payé, le paiement n'a pas été appliqué (voir les derniers paiements).";
   }
   if (input.effectivePlan !== input.realPlan) {
-    return `Plan réel « ${input.realPlan} », mais essai Pro offert en cours : les droits sont ceux de Pro.`;
+    return `Plan souscrit « ${input.realPlan} », mais l'abonnement n'est plus à jour (impayé ou terminé depuis plus de 3 jours) : les droits appliqués sont ceux du plan « ${input.effectivePlan} ».`;
   }
-  if (input.phase === "active" && input.realPlan === "pro") {
-    return "Plan Pro payant : l'essai n'y change rien.";
-  }
-  return `Les droits appliqués sont ceux du plan « ${input.realPlan} »${input.phase === "active" ? "" : " (aucun essai Pro actif à cet instant)"}.`;
+  return `Les droits appliqués sont ceux du plan « ${input.realPlan} ».`;
 }
 
 export interface OrganizationDiagnostic {
@@ -63,7 +58,6 @@ export interface OrganizationDiagnostic {
   subscription: { plan_key: string; status: string; trial_end: string | null; current_period_end: string | null } | null;
   realPlan: PlanKey;
   effectivePlan: PlanKey;
-  promoPhase: PromoPhase;
   explanation: string;
   features: { key: string; enabled: boolean; limit: number }[];
   limitsInDb: { plan_key: string; entitlement_key: string; limit_value: number }[];
@@ -90,11 +84,10 @@ export async function runDiagnostic(query: string): Promise<DiagnosticResult> {
   const only = matches.length === 1 ? matches[0] : undefined;
   if (!only) return { matches, detail: null, missingEntitlements };
 
-  const [{ data: sub }, realPlan, effectivePlan, promo, payments] = await Promise.all([
+  const [{ data: sub }, realPlan, effectivePlan, payments] = await Promise.all([
     supabase.from("organization_subscriptions").select("plan_key, status, trial_end, current_period_end").eq("organization_id", only.id).maybeSingle(),
     getOrganizationRealPlanKey(only.id),
     getOrganizationPlanKey(only.id),
-    getPromoTrial(),
     supabase
       .from("subscription_payments")
       .select("plan_key, status, amount_fcfa, created_at, payment_type")
@@ -102,8 +95,7 @@ export async function runDiagnostic(query: string): Promise<DiagnosticResult> {
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
-  const phase = getPromoPhase(promo);
-  const planSet = [...new Set([realPlan, effectivePlan, "pro"])];
+  const planSet = [...new Set([realPlan, effectivePlan])];
   const [{ data: limits }, features] = await Promise.all([
     supabase.from("plan_entitlements").select("plan_key, entitlement_key, limit_value").in("plan_key", planSet).in("entitlement_key", [...DIAGNOSTIC_FEATURES]),
     Promise.all(DIAGNOSTIC_FEATURES.map(async (key) => ({ key: key as string, ...(await isFeatureEnabled(only.id, key)) }))),
@@ -118,8 +110,7 @@ export async function runDiagnostic(query: string): Promise<DiagnosticResult> {
       subscription: (sub as OrganizationDiagnostic["subscription"]) ?? null,
       realPlan,
       effectivePlan,
-      promoPhase: phase,
-      explanation: explainAccess({ hasSubscriptionRow: Boolean(sub), realPlan, effectivePlan, phase }),
+      explanation: explainAccess({ hasSubscriptionRow: Boolean(sub), realPlan, effectivePlan }),
       features,
       limitsInDb: (limits ?? []) as OrganizationDiagnostic["limitsInDb"],
       payments: (payments.data ?? []) as OrganizationDiagnostic["payments"],

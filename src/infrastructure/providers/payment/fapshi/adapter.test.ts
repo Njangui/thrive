@@ -59,7 +59,7 @@ describe("FapshiAdapter.verifyPayment / getPaymentStatus", () => {
     const result = await adapter.verifyPayment("FAP-1");
 
     expect(client.paymentStatus).toHaveBeenCalledWith("FAP-1");
-    expect(result).toEqual({ providerReference: "FAP-1", status: expected, rawPayload: transaction });
+    expect(result).toEqual({ providerReference: "FAP-1", status: expected, amount: 15000, rawPayload: transaction });
   });
 
   it("getPaymentStatus lit le même endpoint que verifyPayment", async () => {

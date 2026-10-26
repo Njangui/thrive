@@ -11,6 +11,7 @@ import {
   exceedsClickVelocity,
   isConversionEligible,
   isSelfReferral,
+  selfReferralSignals,
   isValidReferralCode,
   summarizeBalance,
   IP_VELOCITY_WINDOW_MINUTES,
@@ -407,19 +408,33 @@ export async function attributeReferral(
     const supabase = getSupabaseServiceClient();
     const { data: affiliate, error: affiliateError } = await supabase
       .from("affiliates")
-      .select("id, user_id, status")
+      .select("id, user_id, status, contact_email, phone")
       .eq("id", payload.affiliateId)
       .maybeSingle();
 
     if (affiliateError || !affiliate || affiliate.status !== "active") return;
 
-    if (isSelfReferral(affiliate.user_id, newOrganizationOwnerUserId)) {
+    // Q24 : identifiant, e-mail normalisé ou téléphone identiques => auto-parrainage (second compte compris).
+    let ownerEmail: string | null = null;
+    let ownerPhone: string | null = null;
+    try {
+      const { data: ownerData } = await supabase.auth.admin.getUserById(newOrganizationOwnerUserId);
+      ownerEmail = ownerData?.user?.email ?? null;
+      ownerPhone = ownerData?.user?.phone ?? null;
+    } catch {
+      // identité du propriétaire illisible : seul le contrôle par identifiant s'applique
+    }
+    const selfSignals = selfReferralSignals(
+      { userId: affiliate.user_id, email: (affiliate as { contact_email?: string | null }).contact_email, phone: (affiliate as { phone?: string | null }).phone },
+      { userId: newOrganizationOwnerUserId, email: ownerEmail, phone: ownerPhone },
+    );
+    if (selfSignals.length > 0) {
       await supabase.from("affiliate_fraud_flags").insert({
         affiliate_id: affiliate.id,
         click_id: payload.clickId,
         flag_type: "self_referral",
         severity: "high",
-        details: { organizationId },
+        details: { organizationId, signals: selfSignals },
       });
       await notifyPlatformAdminTelegram("AFFILIATE_FRAUD_DETECTED", {
         organizationId,

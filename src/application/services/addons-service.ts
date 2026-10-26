@@ -3,7 +3,7 @@ import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-clien
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { getPaymentProvider } from "@/infrastructure/providers/registry";
 import { notifyOrgAdmins } from "./notification-service";
-import { grantCredits } from "./ai-credits-service";
+import { initializeCreditBalance } from "./ai-credits-service";
 
 /**
  * Lot G, Partie 2 — Add-ons. Un achat d'add-on suit exactement le même
@@ -215,55 +215,26 @@ export async function confirmAddonPurchase(payment: {
 }): Promise<void> {
   const supabase = getSupabaseServiceClient();
 
-  const { data: addon, error: addonError } = await supabase
-    .from("addons")
-    .select("*")
-    .eq("key", payment.addonKey)
-    .maybeSingle();
+  // Correctif d'audit P9/P10/P11 : quantité, crédits et passage du paiement à `completed` se font
+  // dans UNE transaction SQL (0189_credits_payments_atomic.sql). Un échec n'applique RIEN ;
+  // un rejeu sur un paiement déjà acté est sans effet (« already »).
+  await initializeCreditBalance(payment.organizationId); // la ligne de solde doit exister avant l'ajout (sans effet sinon)
 
-  if (addonError || !addon) {
-    throw new Error(`confirmAddonPurchase: add-on "${payment.addonKey}" introuvable (${addonError?.message ?? "aucune ligne"})`);
+  const { data, error } = await supabase.rpc("apply_addon_purchase", { p_payment_id: payment.id });
+
+  if (error) {
+    throw new Error(`confirmAddonPurchase: échec application de l'achat (${payment.addonKey}): ${error.message}`);
   }
 
-  const { data: existing, error: existingError } = await supabase
-    .from("organization_addons")
-    .select("quantity, total_increment_granted")
-    .eq("organization_id", payment.organizationId)
-    .eq("addon_key", payment.addonKey)
-    .maybeSingle();
-
-  if (existingError) {
-    throw new Error(`confirmAddonPurchase: erreur lecture organization_addons: ${existingError.message}`);
-  }
-
-  const newQuantity = (existing?.quantity ?? 0) + payment.addonQuantity;
-  const bonusFromThisPurchase = payment.addonQuantity * addon.increment_value;
-  const newTotalIncrementGranted = (existing?.total_increment_granted ?? 0) + bonusFromThisPurchase;
-
-  const { error: upsertError } = await supabase.from("organization_addons").upsert(
-    {
-      organization_id: payment.organizationId,
-      addon_key: payment.addonKey,
-      quantity: newQuantity,
-      total_increment_granted: newTotalIncrementGranted,
-      subscription_payment_id: payment.id,
-      purchased_at: new Date().toISOString(),
-    },
-    { onConflict: "organization_id,addon_key" },
-  );
-
-  if (upsertError) {
-    throw new Error(`confirmAddonPurchase: échec incrémentation organization_addons: ${upsertError.message}`);
-  }
-
-  if (addon.entitlement_key === "ai_credits") {
-    await grantCredits(payment.organizationId, bonusFromThisPurchase, "addon_purchase");
+  const result = (data ?? {}) as { status?: string; name?: string };
+  if (result.status !== "applied") {
+    return; // déjà appliqué ou ignoré : ne pas notifier deux fois
   }
 
   await notifyOrgAdmins({
     organizationId: payment.organizationId,
     title: "Add-on activé.",
-    body: `${addon.name} × ${payment.addonQuantity} a été ajouté à votre compte.`,
+    body: `${result.name ?? payment.addonKey} × ${payment.addonQuantity} a été ajouté à votre compte.`,
     relatedEntityType: "organization_addon",
     relatedEntityId: payment.id,
     priority: "normal",

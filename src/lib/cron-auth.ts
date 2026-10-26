@@ -14,7 +14,15 @@
  * section 100) pour que toute future route `/api/cron/*` hérite
  * automatiquement de la même garde.
  */
+import { timingSafeEqual } from "node:crypto";
 import { env } from "./env";
+
+/** Comparaison à temps constant (évite de deviner le secret par mesure de durée). */
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
 
 export interface CronAuthResult {
   authorized: boolean;
@@ -27,7 +35,7 @@ export interface CronAuthResult {
 export function verifyCronAuth(request: Request): CronAuthResult {
   if (env.CRON_SECRET) {
     const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+    if (!authHeader || !safeEqual(authHeader, `Bearer ${env.CRON_SECRET}`)) {
       return { authorized: false, status: 401, body: { error: "unauthorized" } };
     }
     return { authorized: true, status: 200, body: { error: "" } };

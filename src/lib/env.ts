@@ -20,9 +20,17 @@ const EnvSchema = z.object({
   // YouTube natif : OAuth Google, indépendant des connecteurs sociaux tiers.
   YOUTUBE_CLIENT_ID: z.string().optional(),
   YOUTUBE_CLIENT_SECRET: z.string().optional(),
-  YOUTUBE_OAUTH_STATE_SECRET: z.string().optional(),
+  YOUTUBE_OAUTH_STATE_SECRET: z.string().min(32).optional(),
 
-  AI_PROVIDER_DEFAULT: z.enum(["mistral", "claude", "openai"]).default("mistral"),
+  AI_PROVIDER_DEFAULT: z.enum(["mistral", "claude", "openai", "gemini"]).default("mistral"),
+  // Routage par tâche : simple → Mistral Small, complexe → Gemini (voir domain/ai-routing.ts).
+  AI_ROUTING_ENABLED: z.enum(["true", "false"]).default("true"),
+  GEMINI_API_KEY: z.string().optional(),
+  // gemini-2.5-flash : identifiant officiel (ai.google.dev/gemini-api/docs/models). Google indique que
+  // l'accès à la série 2.5 est réservé aux comptes qui l'ont déjà utilisée : si votre clé est refusée,
+  // changez cette variable pour le modèle Flash recommandé dans votre console Google AI Studio.
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  MISTRAL_MODEL_SIMPLE: z.string().default("mistral-small-latest"),
   MISTRAL_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
@@ -44,9 +52,10 @@ const EnvSchema = z.object({
   // comme NotchPay), configuré une seule fois côté dashboard Fapshi et
   // jamais relisible ensuite. Voir payment/fapshi/webhook-handler.ts.
   FAPSHI_WEBHOOK_SECRET: z.string().optional(),
-  // sandbox.fapshi.com pour les tests, live.fapshi.com par défaut — voir
-  // docs.fapshi.com (section "The Environment").
-  FAPSHI_BASE_URL: z.string().url().default("https://live.fapshi.com"),
+  // OBLIGATOIRE pour payer (plus de valeur par défaut — correctif d'audit : un oubli sur un environnement
+  // de test ne doit jamais viser le service RÉEL). sandbox.fapshi.com pour les tests (aucun vrai argent),
+  // live.fapshi.com en production — voir docs.fapshi.com (section "The Environment").
+  FAPSHI_BASE_URL: z.string().url().optional(),
 
   // Lot N, Partie 2 — OpenProvider (registrar de domaines, voir
   // RAPPORT_LOT_G.md pour l'évaluation initiale et RAPPORT_LOT_N.md pour
@@ -85,6 +94,9 @@ const EnvSchema = z.object({
   // tant qu'aucun domaine n'est vérifié dans le compte Resend, seule
   // l'adresse resend.dev fonctionne, et UNIQUEMENT vers l'email du
   // titulaire du compte — pas vers un vrai destinataire d'invitation.
+  // Brevo : prioritaire sur Resend quand renseigné (offre gratuite 300 emails/jour).
+  // EMAIL_FROM_ADDRESS doit être un expéditeur VALIDÉ dans le compte Brevo.
+  BREVO_API_KEY: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM_ADDRESS: z.string().default("Flexco <onboarding@resend.dev>"),
 
@@ -118,10 +130,26 @@ const EnvSchema = z.object({
   // `https://t.me/<username>?start=<token>` affichés dans
   // /affiliate/dashboard/telegram.
   TELEGRAM_BOT_USERNAME: z.string().optional(),
+  // C2 : poivre serveur mélangé au PIN avant hachage (StepUp). Optionnel mais FORTEMENT
+  // recommandé en production (voir docs/agents/c2-identite-stepup.md). Lu aussi via
+  // process.env par l'adaptateur StepUp pour rester utilisable hors du chargement d'env.
+  STEP_UP_PIN_PEPPER: z.string().min(16).optional(),
   // Identifiant du chat/groupe Telegram recevant les alertes de
   // l'opérateur plateforme (peut être négatif pour un groupe/supergroupe
   // Telegram — d'où `string`, jamais coercé en `number`).
   TELEGRAM_ADMIN_CHAT_ID: z.string().optional(),
+
+  // --- C4 — Médias sur Cloudflare R2 (docs/DEPLOYMENT.md). Optionnelles :
+  // tant que STORAGE_PROVIDER vaut "supabase" (défaut), rien ne change.
+  // Passer à "r2" exige les cinq variables R2_* (vérifié au premier appel
+  // de getStorageProvider, avec une erreur explicite).
+  STORAGE_PROVIDER: z.enum(["supabase", "r2"]).default("supabase"),
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  // Domaine public du bucket, sans slash final (ex. https://media.exemple.com).
+  R2_PUBLIC_BASE_URL: z.string().url().optional(),
 });
 
 function loadEnv() {

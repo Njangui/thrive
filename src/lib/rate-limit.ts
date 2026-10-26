@@ -46,11 +46,30 @@ function warnNotConfigured() {
   );
 }
 
+/**
+ * Q33 : `RATE_LIMIT_REQUIRED=true` (drapeau explicite, défaut : désactivé) refuse les requêtes limitées
+ * lorsqu'Upstash n'est pas configuré, au lieu de laisser passer silencieusement. Les webhooks restent
+ * ouverts : ils sont authentifiés par signature et un refus ferait perdre des paiements.
+ * Panne Redis (audit RL2) : repli OUVERT + alerte dans les logs, jamais une erreur 500.
+ */
+export function isRateLimitRequired(): boolean {
+  return process.env.RATE_LIMIT_REQUIRED === "true";
+}
+
+let lastAlertAt = 0;
+const ALERT_EVERY_MS = 5 * 60 * 1000;
+export function reportRateLimitFailure(context: string, error?: unknown) {
+  const now = Date.now();
+  if (now - lastAlertAt < ALERT_EVERY_MS) return;
+  lastAlertAt = now;
+  console.error(`[ALERTE rate-limit] ${context}`, error instanceof Error ? error.message : (error ?? ""));
+}
+
 const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
 
-/** 10 requêtes / 10s par IP — webhooks provider (Zernio/Fapshi signent/authentifient leurs requêtes, mais un minimum de défense en profondeur reste utile contre un flood). */
+/** 60 requêtes / 10s par IP (audit RL3 : 10 refusait des rafales légitimes) — webhooks provider (Zernio/Fapshi signent/authentifient leurs requêtes, mais un minimum de défense en profondeur reste utile contre un flood). */
 const webhookLimiter = redis
-  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(10, "10 s"), prefix: "ratelimit:webhook" })
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(60, "10 s"), prefix: "ratelimit:webhook" })
   : null;
 
 /** 5 tentatives / 60s par IP — protection basique contre le bruteforce sur la connexion. */
@@ -99,7 +118,47 @@ const publicAnalyticsLimiter = redis
   ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(120, "60 s"), prefix: "ratelimit:public_analytics" })
   : null;
 
-export type RateLimitKind = "webhook" | "auth" | "waitlist" | "affiliate_click" | "booking" | "public_analytics";
+/**
+ * 20 messages / 60s par UTILISATEUR (pas par IP : plusieurs employés derrière la
+ * même box 4G ne doivent pas se bloquer) — chat propriétaire (C2). Chaque
+ * message peut déclencher des appels de modèle payants : protection de coût.
+ */
+const assistantLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(20, "60 s"), prefix: "ratelimit:assistant" })
+  : null;
+
+/** 10 envois de fichiers / 60s par utilisateur — pièces jointes du chat (C2). */
+const assistantUploadLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(10, "60 s"), prefix: "ratelimit:assistant_upload" })
+  : null;
+
+/**
+ * 5 tentatives / 60s par identifiant Telegram — liaison `/start CODE` du bot
+ * back-office (C2). Le code fait 50 bits et expire en 10 min : ce plafond rend
+ * la devinette en ligne hors de portée, et protège aussi contre le flood.
+ */
+const channelLinkLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(5, "60 s"), prefix: "ratelimit:channel_link" })
+  : null;
+
+/** 30 messages / 60s par numéro WhatsApp — garde-fou anti-flood du back-office WhatsApp avant tout accès base. */
+const whatsappBackofficeLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(30, "60 s"), prefix: "ratelimit:whatsapp_backoffice" })
+  : null;
+
+/** 10 transcriptions vocales / 60s par utilisateur — chaque vocal est un appel facturé chez le fournisseur de transcription (C2, livrable F). */
+const voiceTranscriptionLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(10, "60 s"), prefix: "ratelimit:voice_transcription" })
+  : null;
+
+/** 40 mises à jour / 60s par identifiant Telegram — garde-fou anti-flood du bot back-office avant tout accès base. */
+const telegramBackofficeLimiter = redis
+  ? new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(40, "60 s"), prefix: "ratelimit:telegram_backoffice" })
+  : null;
+
+export type RateLimitKind =
+  | "webhook" | "auth" | "waitlist" | "affiliate_click" | "booking" | "public_analytics"
+  | "assistant" | "assistant_upload" | "channel_link" | "telegram_backoffice" | "whatsapp_backoffice" | "voice_transcription";
 
 /**
  * Retourne `null` quand la requête est autorisée à continuer (soit
@@ -119,13 +178,34 @@ export async function checkRateLimit(kind: RateLimitKind, identifier: string): P
             ? bookingLimiter
             : kind === "public_analytics"
               ? publicAnalyticsLimiter
-              : authLimiter;
+              : kind === "assistant"
+                ? assistantLimiter
+                : kind === "assistant_upload"
+                  ? assistantUploadLimiter
+                  : kind === "channel_link"
+                    ? channelLinkLimiter
+                    : kind === "telegram_backoffice"
+                      ? telegramBackofficeLimiter
+                      : kind === "whatsapp_backoffice"
+                        ? whatsappBackofficeLimiter
+                        : kind === "voice_transcription"
+                          ? voiceTranscriptionLimiter
+                          : authLimiter;
   if (!limiter) {
+    if (isRateLimitRequired() && kind !== "webhook") {
+      reportRateLimitFailure("RATE_LIMIT_REQUIRED=true mais Upstash n'est pas configuré : requêtes limitées refusées.");
+      return 60;
+    }
     warnNotConfigured();
     return null;
   }
 
-  const { success, reset } = await limiter.limit(identifier);
-  if (success) return null;
-  return Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+  try {
+    const { success, reset } = await limiter.limit(identifier);
+    if (success) return null;
+    return Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+  } catch (error) {
+    reportRateLimitFailure(`Upstash indisponible (${kind}) : repli ouvert.`, error);
+    return null;
+  }
 }

@@ -1,6 +1,7 @@
 import { getTenantPublicOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import { STOREFRONT_PATHS } from "@/application/config/storefront-routes";
 import { matchFaq } from "./faq-resolver";
+import { recordFaqHit, recordQuestionForLearning, resolveFaqAnswerVariables } from "./faq-learning-service";
 import { detectBusinessInfoTopic, resolveBusinessInfo } from "./business-info-resolver";
 import { getActiveProducts, searchProductsByName, formatProductDiscoveryMessage, type CatalogProductSummary } from "./catalog-service";
 import {
@@ -10,20 +11,30 @@ import {
   formatServiceListMessage,
   type ServiceSummary,
 } from "./service-catalog-service";
-import { generateAIReply } from "./ai-response-service";
+import { runAssistantTurn } from "./assistant-turn-service";
+import { formatCategoryListReply, formatProductListReply, formatProductSearchReply } from "./product-reply-format";
+import { loadVoiceAndLibrary } from "./message-library-service";
+import { answerDeliveryQuestion, detectDeliveryQuestion } from "./delivery-rules";
+import { loadDeliveryRules } from "./delivery-rules-service";
+import { renderGreeting, type MessageLibrary } from "./message-library";
 import { shouldEscalate } from "./handoff-service";
 import { rememberMentionedProducts, getRecentlyMentionedProducts } from "./conversation-memory-service";
 import { getMessagingOrgContext, type MessagingOrgContext } from "./messaging-context-service";
 import {
-  buildGreetingReply,
   detectCatalogBrowse,
   detectGreetingWord,
   detectSmallTalk,
-  extractSearchTerms,
-  GOODBYE_REPLY,
-  THANKS_REPLY,
   type CatalogTarget,
 } from "./message-intents";
+import {
+  browseProducts,
+  searchProducts,
+  listProductCategories,
+  type AssistantProductHit,
+  type ProductCategoryEntry,
+  type ProductSearchOutcome,
+} from "./product-search-service";
+import { detectCategoryListRequest, hasPriceFilter, parseProductQuery, type ParsedProductQuery } from "./product-query-parser";
 import type { HandoffReason } from "@/domain/entities/conversation";
 
 export type ConversationIntent =
@@ -82,6 +93,9 @@ export interface RouteMessageOptions {
  * on l'ignore et on passe à l'étape suivante. Avant, la première exception
  * remontait jusqu'au webhook et le client restait sans réponse.
  */
+/** Intentions dont les questions répétées peuvent devenir une FAQ (jamais produit, commande, réclamation, humain). */
+const LEARNABLE_INTENTS = new Set(["delivery_payment", "business_info", "smalltalk", "other"]);
+
 async function safeStep<T>(label: string, organizationId: string, fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await fn();
@@ -115,6 +129,9 @@ export async function routeMessage(
   // fois, et seulement quand une étape en a besoin.
   let contextPromise: Promise<MessagingOrgContext> | null = null;
   const getContext = () => (contextPromise ??= getMessagingOrgContext(organizationId));
+  // Voix de marque et messages du commerçant : chargés une seule fois, à la demande, sans jamais échouer.
+  let voicePromise: ReturnType<typeof loadVoiceAndLibrary> | undefined;
+  const getVoice = () => (voicePromise ??= loadVoiceAndLibrary(organizationId));
 
   // 1. Escalade explicite (plainte, remboursement) — avant toute autre logique.
   const escalationReason = shouldEscalate(message);
@@ -125,19 +142,29 @@ export async function routeMessage(
 
   // 2. FAQ — jamais d'appel LLM si une correspondance existe (section 18).
   const faqMatch = await safeStep("faq", organizationId, () => matchFaq(organizationId, message), null);
-  if (faqMatch) return answer("faq", faqMatch.answer);
+  if (faqMatch) {
+    // Variables dynamiques ({price:…}, {hours}…) lues MAINTENANT ; valeur introuvable → cette FAQ n'est pas
+    // utilisée (jamais de réponse périmée) et la chaîne continue.
+    const resolved = await safeStep("faq_variables", organizationId, () => resolveFaqAnswerVariables(organizationId, faqMatch.answer), null);
+    if (resolved !== null) {
+      // Un tour d'IA évité : compté pour le compteur de crédits économisés (ne lève jamais).
+      if (faqMatch.id) await recordFaqHit(organizationId, faqMatch.id);
+      return answer("faq", resolved);
+    }
+  }
 
   // 3. Politesses (bonjour / merci / au revoir) — jamais l'IA, jamais une escalade.
   // Pas sur un commentaire public : un accueil complet sous une publication n'a pas de sens.
   if (!isPublicComment) {
     const smallTalk = detectSmallTalk(message);
-    if (smallTalk === "thanks") return answer("small_talk", THANKS_REPLY);
-    if (smallTalk === "goodbye") return answer("small_talk", GOODBYE_REPLY);
-    if (smallTalk === "greeting") {
+    if (smallTalk) {
+      const { library } = await getVoice();
+      if (smallTalk === "thanks") return answer("small_talk", library.render("thanks"));
+      if (smallTalk === "goodbye") return answer("small_talk", library.render("goodbye"));
       const context = await getContext();
       return answer(
         "small_talk",
-        buildGreetingReply({
+        renderGreeting(library, {
           greetingWord: detectGreetingWord(message),
           businessName: context.name,
           itemLabelPlural: context.itemLabelPlural,
@@ -149,6 +176,33 @@ export async function routeMessage(
     }
   }
 
+  // 3ter. Livraison, retrait, paiement à la livraison (C3) — règles DÉTERMINISTES du commerçant, lues en base
+  // (zones, frais, gratuité, délais : jamais figés ni inventés). Réponse seulement si elle est entièrement connue ;
+  // sinon la chaîne continue (jamais de oui/non sur ce qui n'est pas renseigné).
+  if (detectDeliveryQuestion(message).any) {
+    const rules = await safeStep("livraison", organizationId, () => loadDeliveryRules(organizationId), null);
+    if (rules?.configured) {
+      const { library } = await getVoice();
+      const deliveryAnswer = answerDeliveryQuestion(message, rules, library);
+      if (deliveryAnswer) return answer("business_info", deliveryAnswer);
+    }
+  }
+
+  // 3bis. Parcours par catégorie (C3) — « quelles catégories avez-vous ? ».
+  // Liste calculée en base (jamais inventée) ; si le tenant n'a aucune catégorie
+  // utile, on continue la chaîne normale.
+  if (detectCategoryListRequest(message)) {
+    const categories = await safeStep("categories", organizationId, () => listProductCategories(organizationId), [] as ProductCategoryEntry[]);
+    if (categories.length > 0) {
+      const [origin, context, { library }] = await Promise.all([getTenantPublicOrigin(organizationId), getContext(), getVoice()]);
+      return answer("product_discovery", formatCategoryListReply(categories, `${origin}${STOREFRONT_PATHS.catalog}`, context.itemLabelPlural, library));
+    }
+  }
+
+  // Compréhension déterministe de la demande (budget + mots significatifs) :
+  // pure, sans I/O, partagée par les étapes 4 et 5.
+  const parsedQuery = parseProductQuery(message);
+
   // 4. PRODUCT_DISCOVERY — demande de présenter le catalogue (section 15),
   // dans le vocabulaire du secteur du tenant (biens, propriétés, plats…).
   // Pré-test tous secteurs : évite de lire le contexte du tenant pour un
@@ -157,7 +211,7 @@ export async function routeMessage(
     const context = await getContext();
     const browse = detectCatalogBrowse(message, context.sector);
     if (browse) {
-      const presented = await safeStep("catalogue", organizationId, () => presentCatalog(organizationId, conversationId, browse.order, context), null);
+      const presented = await safeStep("catalogue", organizationId, async () => presentCatalog(organizationId, conversationId, browse.order, context, parsedQuery, (await getVoice()).library), null);
       if (presented) {
         log(presented.intent, false, null);
         return presented;
@@ -169,12 +223,18 @@ export async function routeMessage(
   // significatifs du message (sans mots vides, sans verbes de demande, sans
   // noms génériques de catalogue). Recherches lancées EN PARALLÈLE : avant,
   // une requête par mot, l'une après l'autre.
-  const terms = extractSearchTerms(message);
+  const terms = parsedQuery.terms;
   if (terms.length > 0) {
-    const products = await findProductMatches(organizationId, terms);
+    const outcome = await searchWithLegacyFallback(organizationId, parsedQuery);
+    const products = outcome.products;
     if (products.length > 0) {
-      const [origin, context] = await Promise.all([getTenantPublicOrigin(organizationId), getContext()]);
-      const reply = formatProductDiscoveryMessage(products, origin, `${origin}${STOREFRONT_PATHS.catalog}`, { itemLabelPlural: context.itemLabelPlural });
+      const [origin, context, { library }] = await Promise.all([getTenantPublicOrigin(organizationId), getContext(), getVoice()]);
+      const catalogUrl = `${origin}${STOREFRONT_PATHS.catalog}`;
+      // Budget donné ET appliqué : message qui dit honnêtement s'il n'y a rien dans la fourchette.
+      const reply =
+        outcome.priceApplied && hasPriceFilter(parsedQuery)
+          ? formatProductSearchReply(products, { publicBaseUrl: origin, catalogUrl, itemLabelPlural: context.itemLabelPlural, priceRequest: parsedQuery, relaxed: outcome.relaxed, library })
+          : formatProductListReply(products, { publicBaseUrl: origin, catalogUrl, itemLabelPlural: context.itemLabelPlural, library });
       // Lot D : mémorise les résultats montrés pour qu'une référence comme
       // "celle à 25 000" soit compréhensible par l'IA au tour suivant.
       if (conversationId) await rememberMentionedProducts(organizationId, conversationId, products.map((p) => p.id));
@@ -216,9 +276,29 @@ export async function routeMessage(
     // et les injecte dans le contexte IA (nom/prix/description uniquement,
     // jamais l'historique complet des messages).
     const recentProducts = conversationId ? await getRecentlyMentionedProducts(organizationId, conversationId) : [];
-    const aiReply = await generateAIReply(organizationId, message, recentProducts);
-    log("ai", true, null);
-    return { intent: "ai", replyText: aiReply.text, aiInvoked: true, handoffReason: null, replyImageUrl: null };
+    const [origin, context, { voice, library }] = await Promise.all([getTenantPublicOrigin(organizationId), getContext(), getVoice()]);
+    // C3 (étape 2) : garde anti-injection, compréhension structurée, faits depuis
+    // la base, rédaction, contrôle qualité — voir assistant-turn-service.ts.
+    const turn = await runAssistantTurn({
+      organizationId,
+      conversationId,
+      message,
+      recentProducts,
+      parsed: parsedQuery,
+      origin,
+      catalogUrl: `${origin}${STOREFRONT_PATHS.catalog}`,
+      context,
+      voice,
+      library,
+    });
+    if (conversationId && turn.productIds.length > 0) await rememberMentionedProducts(organizationId, conversationId, turn.productIds);
+    // FAQ qui apprend : une question générale qui revient (hors produit, commande, réclamation) est comptée ;
+    // au-delà du seuil hebdomadaire, une FAQ est PROPOSÉE au propriétaire. Désactivé par défaut (opt-in).
+    if ((turn.outcome === "llm_reply" || turn.outcome === "verify") && turn.productIds.length === 0 && turn.intent && LEARNABLE_INTENTS.has(turn.intent)) {
+      await recordQuestionForLearning(organizationId, { question: message, resolution: turn.outcome === "verify" ? "verify" : "ai", replyText: turn.replyText, catalogUrl: `${origin}${STOREFRONT_PATHS.catalog}` });
+    }
+    log("ai", turn.aiInvoked, turn.handoffReason);
+    return { intent: "ai", replyText: turn.replyText, aiInvoked: turn.aiInvoked, handoffReason: turn.handoffReason, replyImageUrl: turn.imageUrl };
   } catch (aiError) {
     console.warn(`[orchestrator] IA indisponible pour org ${organizationId}:`, aiError);
     log("ai", true, "ai_unavailable");
@@ -236,18 +316,25 @@ async function presentCatalog(
   conversationId: string | null,
   order: CatalogTarget[],
   context: MessagingOrgContext,
+  parsedQuery: ParsedProductQuery,
+  library: MessageLibrary,
 ): Promise<OrchestrationResult | null> {
   const origin = await getTenantPublicOrigin(organizationId);
+  const catalogUrl = `${origin}${STOREFRONT_PATHS.catalog}`;
   for (const target of order) {
     if (target === "products") {
-      const products = await safeStep("catalogue_produits", organizationId, () => getActiveProducts(organizationId, DISCOVERY_LIMIT), [] as CatalogProductSummary[]);
-      if (products.length === 0) continue;
+      const outcome = await safeStep("catalogue_produits", organizationId, () => browseWithLegacyFallback(organizationId, parsedQuery), null);
+      const products = outcome?.products ?? [];
+      if (!outcome || products.length === 0) continue;
       // Lot D : mémorise les produits montrés pour qu'une référence comme
       // "celle à 25 000" soit compréhensible par l'IA au tour suivant.
       if (conversationId) await rememberMentionedProducts(organizationId, conversationId, products.map((p) => p.id));
       return {
         intent: "product_discovery",
-        replyText: formatProductDiscoveryMessage(products, origin, `${origin}${STOREFRONT_PATHS.catalog}`, { itemLabelPlural: context.itemLabelPlural }),
+        replyText:
+          outcome.priceApplied && hasPriceFilter(parsedQuery)
+            ? formatProductSearchReply(products, { publicBaseUrl: origin, catalogUrl, itemLabelPlural: context.itemLabelPlural, priceRequest: parsedQuery, relaxed: outcome.relaxed, library })
+            : formatProductListReply(products, { publicBaseUrl: origin, catalogUrl, itemLabelPlural: context.itemLabelPlural, library }),
         aiInvoked: false,
         handoffReason: null,
         replyImageUrl: products[0]?.imageUrl ?? null,
@@ -273,6 +360,37 @@ async function presentCatalog(
     handoffReason: null,
     replyImageUrl: null,
   };
+}
+
+/** Résultat de recherche + indication que le filtre de prix a réellement été appliqué par la base. */
+type ResolvedSearch = ProductSearchOutcome & { priceApplied: boolean };
+
+function legacyToHits(products: CatalogProductSummary[]): AssistantProductHit[] {
+  return products.map((p) => ({ ...p, compareAtPrice: null, isPromo: false, score: 0 }));
+}
+
+/**
+ * Recherche classée (0140). Si la fonction SQL n'est pas encore déployée (ou
+ * échoue), on retombe sur l'ancienne recherche par nom : jamais de client sans
+ * réponse pendant un déploiement. Dans ce cas le prix n'est PAS filtré, donc
+ * `priceApplied = false` et le message ne prétend rien sur le budget.
+ */
+async function searchWithLegacyFallback(organizationId: string, query: ParsedProductQuery): Promise<ResolvedSearch> {
+  try {
+    return { ...(await searchProducts(organizationId, query, { limit: SEARCH_RESULT_LIMIT })), priceApplied: true };
+  } catch (error) {
+    console.warn(`[orchestrator] recherche classée indisponible (org ${organizationId}), repli sur la recherche par nom:`, error);
+    return { products: legacyToHits(await findProductMatches(organizationId, query.terms)), relaxed: false, priceApplied: false };
+  }
+}
+
+async function browseWithLegacyFallback(organizationId: string, query: ParsedProductQuery): Promise<ResolvedSearch> {
+  try {
+    return { ...(await browseProducts(organizationId, query, { limit: DISCOVERY_LIMIT })), priceApplied: true };
+  } catch (error) {
+    console.warn(`[orchestrator] catalogue classé indisponible (org ${organizationId}), repli sur les derniers produits:`, error);
+    return { products: legacyToHits(await getActiveProducts(organizationId, DISCOVERY_LIMIT)), relaxed: false, priceApplied: false };
+  }
 }
 
 /** Recherche par nom pour chaque mot, en parallèle ; les produits touchés par le plus de mots passent devant. */

@@ -1,7 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { ValidationError } from "@/lib/errors";
 import { getOrganizationPlanKey, getOrganizationRealPlanKey, getEntitlementLimit, type PlanKey } from "./plans-repository";
-import { getActivePromo } from "./promo-trial-core";
 
 /**
  * ⚠️ Ce fichier n'existait PAS dans le code source fourni pour ce lot,
@@ -27,64 +26,11 @@ export interface CreditStatus {
   organizationId: string;
   /** -1 = illimité. Snapshot pris à l'initialisation (voir ai_credit_balances). */
   includedCredits: number;
+  /** Crédits achetés (add-ons), conservés au changement de plan. */
+  addonCredits: number;
   usedCredits: number;
   /** -1 = illimité. */
   remainingCredits: number;
-}
-
-/**
- * Essai Pro offert : les crédits IA sont un snapshot en base, donc le plan
- * « effectif » Pro ne suffit pas. Pendant l'essai on ajoute la différence
- * (crédits Pro − crédits du plan réel) et on la mémorise dans
- * `promo_bonus_credits` ; dès que l'essai n'est plus actif on la retire.
- * Les deux sens sont des mises à jour conditionnelles (`promo_bonus_credits`
- * = valeur lue) : deux appels concurrents ne peuvent pas appliquer le
- * bonus deux fois. Ne lève jamais : au pire le bonus arrive à l'appel
- * suivant. Le balayage de fin (`revertAllPromoCredits`) rattrape les
- * comptes inactifs.
- */
-export async function syncPromoCredits(organizationId: string): Promise<void> {
-  try {
-    const supabase = getSupabaseServiceClient();
-    const { data } = await supabase
-      .from("ai_credit_balances")
-      .select("included_credits, promo_bonus_credits")
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-    if (!data) return;
-
-    const bonus = (data.promo_bonus_credits as number | null) ?? 0;
-    const promo = await getActivePromo();
-
-    if (!promo) {
-      if (bonus > 0) {
-        await supabase
-          .from("ai_credit_balances")
-          .update({ included_credits: Math.max(0, data.included_credits - bonus), promo_bonus_credits: 0 })
-          .eq("organization_id", organizationId)
-          .eq("promo_bonus_credits", bonus);
-      }
-      return;
-    }
-
-    if (bonus > 0 || data.included_credits === -1) return;
-    // Le bonus se calcule contre le SOLDE réellement en base, pas contre la
-    // grille du plan : le solde est un instantané (voir 0011) qui peut
-    // différer de la grille (limite modifiée depuis Super Admin après la
-    // création du compte — constaté en production : grille « gratuit = 300 »
-    // mais soldes gratuits à 0). On amène donc le solde au niveau Pro.
-    const proLimit = await getEntitlementLimit("pro", "ai_credits");
-    if (proLimit < 0) return;
-    const grant = proLimit - data.included_credits;
-    if (grant <= 0) return;
-    await supabase
-      .from("ai_credit_balances")
-      .update({ included_credits: data.included_credits + grant, promo_bonus_credits: grant })
-      .eq("organization_id", organizationId)
-      .eq("promo_bonus_credits", 0);
-  } catch (error) {
-    console.error(`syncPromoCredits(${organizationId}) ignoré:`, error);
-  }
 }
 
 /**
@@ -95,11 +41,10 @@ export async function syncPromoCredits(organizationId: string): Promise<void> {
  * bloquerait l'IA à tort.
  */
 export async function getCreditStatus(organizationId: string): Promise<CreditStatus> {
-  await syncPromoCredits(organizationId);
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("ai_credit_balances")
-    .select("included_credits, used_credits")
+    .select("included_credits, used_credits, addon_credits")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -110,16 +55,19 @@ export async function getCreditStatus(organizationId: string): Promise<CreditSta
   if (!data) {
     const planKey = await getOrganizationPlanKey(organizationId);
     const includedCredits = await getEntitlementLimit(planKey, "ai_credits");
-    return { organizationId, includedCredits, usedCredits: 0, remainingCredits: includedCredits };
+    return { organizationId, includedCredits, addonCredits: 0, usedCredits: 0, remainingCredits: includedCredits };
   }
 
   const includedCredits = data.included_credits;
   const usedCredits = data.used_credits;
+  const addonCredits = data.addon_credits ?? 0;
   return {
     organizationId,
     includedCredits,
+    addonCredits,
     usedCredits,
-    remainingCredits: includedCredits === -1 ? -1 : Math.max(includedCredits - usedCredits, 0),
+    // disponible = crédits du plan + crédits achetés − consommés (migration 0189)
+    remainingCredits: includedCredits === -1 ? -1 : Math.max(includedCredits + addonCredits - usedCredits, 0),
   };
 }
 
@@ -148,7 +96,6 @@ export async function consumeCredit(
     throw new ValidationError("Le nombre de crédits consommés doit être positif");
   }
 
-  await syncPromoCredits(organizationId);
   const supabase = getSupabaseServiceClient();
 
   let { data, error } = await supabase.rpc("consume_ai_credit", {
@@ -282,20 +229,12 @@ export async function resetCreditBalanceForPlan(organizationId: string, planKey:
   const includedCredits = await getEntitlementLimit(planKey, "ai_credits");
 
   const supabase = getSupabaseServiceClient();
-  // Un changement de palier repart d'un solde neuf : le bonus de l'essai Pro
-  // (`promo_bonus_credits`) est donc remis à 0, sinon il serait retiré une
-  // 2e fois à la fin de l'essai. Repli sans cette colonne si la migration
-  // 0073 n'est pas encore appliquée : le paiement ne doit jamais casser.
-  let { error } = await supabase.from("ai_credit_balances").upsert(
-    { organization_id: organizationId, included_credits: includedCredits, used_credits: 0, promo_bonus_credits: 0 },
-    { onConflict: "organization_id" },
-  );
-  if (error && /promo_bonus_credits/.test(error.message)) {
-    ({ error } = await supabase.from("ai_credit_balances").upsert(
-      { organization_id: organizationId, included_credits: includedCredits, used_credits: 0 },
-      { onConflict: "organization_id" },
-    ));
-  }
+  // RPC atomique (0189) : nouveau plafond, consommation remise à 0, crédits
+  // d'add-on non consommés CONSERVÉS (la part déjà consommée au-delà du plan est déduite).
+  const { error } = await supabase.rpc("reset_ai_credits_for_plan", {
+    p_organization_id: organizationId,
+    p_included: includedCredits,
+  });
 
   if (error) {
     throw new Error(`Impossible de réinitialiser le solde de crédits IA (changement de palier): ${error.message}`);
@@ -307,39 +246,18 @@ export async function resetCreditBalanceForPlan(organizationId: string, planKey:
  * pour Lot C (Super Admin) — pas d'UI commerçant dans ce lot.
  */
 export async function grantCredits(organizationId: string, amount: number, reason = "manual_grant"): Promise<void> {
-  if (amount <= 0) {
-    throw new ValidationError("Le nombre de crédits à ajouter doit être positif");
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new ValidationError("Le nombre de crédits à ajouter doit être un entier positif");
   }
+
+  await initializeCreditBalance(organizationId); // sans effet si la ligne existe déjà
 
   const supabase = getSupabaseServiceClient();
-  const { data: balance, error: readError } = await supabase
-    .from("ai_credit_balances")
-    .select("included_credits")
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-
-  if (readError) {
-    throw new Error(`Impossible de lire le solde de crédits IA: ${readError.message}`);
-  }
-
-  if (!balance) {
-    await initializeCreditBalance(organizationId);
-  }
-
-  const currentIncluded =
-    balance?.included_credits ?? (await getEntitlementLimit(await getOrganizationPlanKey(organizationId), "ai_credits"));
-
-  // Illimité : rien à additionner, mais on trace quand même l'évènement
-  // (utile pour l'historique Super Admin).
-  if (currentIncluded !== -1) {
-    const { error: updateError } = await supabase
-      .from("ai_credit_balances")
-      .update({ included_credits: currentIncluded + amount })
-      .eq("organization_id", organizationId);
-
-    if (updateError) {
-      throw new Error(`Impossible d'ajouter les crédits IA: ${updateError.message}`);
-    }
+  // Ajout ATOMIQUE (0189) : plus de lecture-puis-écriture, donc plus de crédits perdus
+  // en cas d'achats simultanés. Sans effet pour un plan illimité (-1) — on trace quand même.
+  const { error } = await supabase.rpc("grant_ai_credit", { p_organization_id: organizationId, p_amount: amount });
+  if (error) {
+    throw new Error(`Impossible d'ajouter les crédits IA: ${error.message}`);
   }
 
   const { error: eventError } = await supabase

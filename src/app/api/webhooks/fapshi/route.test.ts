@@ -12,6 +12,11 @@ vi.mock("@/infrastructure/supabase/server-client", () => ({
   getSupabaseServiceClient: () => ({
     from: () => ({
       insert: mocks.insert,
+      // doublon : l'événement déjà enregistré est « processed » → ignoré (seul un événement « failed » est rejoué)
+      select: () => {
+        const chain = { eq: () => chain, maybeSingle: () => Promise.resolve({ data: { status: "processed", attempts: 1 }, error: null }) };
+        return chain;
+      },
       update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
     }),
   }),

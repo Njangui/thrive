@@ -31,7 +31,15 @@ export interface TelegramMessage {
   chat: TelegramChat;
   date: number;
   text?: string;
+  /** Message vocal (C2, commandes vocales) — core.telegram.org/bots/api#voice. */
+  voice?: TelegramVoice;
+  /** Fichier audio envoyé comme musique — core.telegram.org/bots/api#audio. */
+  audio?: TelegramVoice;
 }
+
+/** Champs utilisés de `Voice`/`Audio` : identifiant de fichier, durée (s), taille (octets). */
+export interface TelegramVoice { file_id: string; file_unique_id?: string; duration?: number; mime_type?: string; file_size?: number }
+export interface TelegramFile { file_id: string; file_size?: number; file_path?: string }
 
 export interface TelegramCallbackQuery {
   id: string;

@@ -76,6 +76,26 @@ export interface CatalogVideo {
 // Fonctions pures (testées en isolation)
 // ---------------------------------------------------------------------------
 
+export type VideoStorageClass = "temporary" | "permanent";
+
+/**
+ * Classe de stockage déduite de l'URL / de la clé (jamais de la parole du navigateur).
+ * Un drapeau explicite du fournisseur (`providerPermanent`) l'emporte ; sinon un chemin `temp/` = temporaire.
+ */
+export function detectVideoStorageClass(url: string, storageKey?: string | null, providerPermanent?: boolean): VideoStorageClass {
+  if (providerPermanent === true) return "permanent";
+  if (providerPermanent === false) return "temporary";
+  const isTemp = (v: string | null | undefined) => !!v && /(^|\/)temp\//.test(v);
+  return isTemp(storageKey) || isTemp(url) ? "temporary" : "permanent";
+}
+
+/** Durée de conservation réellement tenable : un stockage temporaire ne dépasse jamais 7 jours ; permanent = durée du plan (illimité borné à 365 j, absent = 7 j). */
+export function effectiveRetentionDays(storageClass: VideoStorageClass, planDays: number): number {
+  if (storageClass === "temporary") return VIDEO_RETENTION_DAYS;
+  if (planDays === -1) return 365;
+  return planDays > 0 ? planDays : VIDEO_RETENTION_DAYS;
+}
+
 export function computeCatalogVideoExpiry(uploadedAt: Date, retentionDays: number): Date {
   return new Date(uploadedAt.getTime() + retentionDays * 24 * 60 * 60 * 1000);
 }
@@ -236,7 +256,7 @@ export async function registerCatalogVideo(organizationId: string, input: Regist
   }
 
   const { limit: planDays } = await isFeatureEnabled(organizationId, "video_retention_days");
-  const retentionDays = planDays > 0 ? planDays : VIDEO_RETENTION_DAYS;
+  const retentionDays = effectiveRetentionDays(detectVideoStorageClass(input.publicUrl, input.storageKey), planDays);
   const uploadedAt = new Date();
 
   const { data, error } = await supabase

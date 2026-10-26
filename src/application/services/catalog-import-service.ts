@@ -1,10 +1,14 @@
 import Papa from "papaparse";
 import { z } from "zod";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { slugify, ProductStatusSchema, CatalogSpecificationSchema, type CatalogSpecification } from "@/domain/entities/catalog";
+import { slugify, ProductStatusSchema } from "@/domain/entities/catalog";
 import { findOrCreateCategory } from "./catalog-service";
 import { ValidationError, QuotaExceededError } from "@/lib/errors";
 import { canUseFeature } from "./entitlements-service";
+import { parseImageUrls, resolveImageUrls, parseSpecifications } from "./catalog-import-service-parsers";
+
+// Réexport : l'API publique de ce module (et ses tests) reste inchangée.
+export { parseImageUrls, resolveImageUrls, parseSpecifications };
 
 /**
  * Colonnes CSV attendues (section 11) : name, price, category, description,
@@ -54,46 +58,15 @@ export interface ImportRowResult {
   error?: string;
 }
 
+/** Audit CAT2 / Q27 : plafonds de l'import historique. */
+export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+export const MAX_IMPORT_ROWS = 20_000;
+
 export interface ImportProductsResult {
   totalRows: number;
   created: number;
   failed: number;
   rows: ImportRowResult[];
-}
-
-/** Sépare sur "|", nettoie, et ne garde que des URLs http(s) valides — une URL cassée est ignorée, pas bloquante pour le reste de la ligne. */
-export function parseImageUrls(raw: string | undefined): string[] {
-  if (!raw) return [];
-  const httpUrl = z.string().url();
-  return raw
-    .split("|")
-    .map((u) => u.trim())
-    .filter((u) => u.length > 0 && httpUrl.safeParse(u).success);
-}
-
-/** `image_urls` (plusieurs) est prioritaire ; `image_url` (une seule, historique) sert de repli. */
-export function resolveImageUrls(data: { image_url?: string; image_urls?: string }): string[] {
-  if (data.image_urls) return parseImageUrls(data.image_urls);
-  if (data.image_url) return parseImageUrls(data.image_url);
-  return [];
-}
-
-/** "Libellé:Valeur|Libellé2:Valeur2" -> paires validées (CatalogSpecificationSchema), une paire mal formée est ignorée plutôt que de faire échouer les autres. Plafonné à 12, comme CatalogSpecificationsSchema. */
-export function parseSpecifications(raw: string | undefined): CatalogSpecification[] {
-  if (!raw) return [];
-  const valid: CatalogSpecification[] = [];
-  for (const entry of raw.split("|")) {
-    const separatorIndex = entry.indexOf(":");
-    if (separatorIndex === -1) continue;
-    const candidate = {
-      label: entry.slice(0, separatorIndex).trim(),
-      value: entry.slice(separatorIndex + 1).trim(),
-    };
-    const parsed = CatalogSpecificationSchema.safeParse(candidate);
-    if (parsed.success) valid.push(parsed.data);
-    if (valid.length >= 12) break;
-  }
-  return valid;
 }
 
 /**
@@ -106,6 +79,9 @@ export async function importProductsFromCsv(
   csvText: string,
   actorUserId?: string,
 ): Promise<ImportProductsResult> {
+  if (Buffer.byteLength(csvText, "utf8") > MAX_IMPORT_BYTES) {
+    throw new ValidationError("Fichier trop volumineux (5 Mo maximum).");
+  }
   const parsed = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: true,
@@ -114,6 +90,10 @@ export async function importProductsFromCsv(
 
   if (parsed.errors.length > 0 && parsed.data.length === 0) {
     throw new ValidationError(`CSV illisible: ${parsed.errors[0]?.message ?? "format invalide"}`);
+  }
+
+  if (parsed.data.length > MAX_IMPORT_ROWS) {
+    throw new ValidationError(`Trop de lignes (${parsed.data.length.toLocaleString("fr-FR")}) : ${MAX_IMPORT_ROWS.toLocaleString("fr-FR")} maximum. Découpez le fichier.`);
   }
 
   const supabase = getSupabaseServiceClient();

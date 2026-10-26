@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
-import { AuthenticationError, AuthorizationError } from "@/lib/errors";
+import { AuthenticationError, AuthorizationError, OrganizationSuspendedError } from "@/lib/errors";
 
-export type MemberRole = "owner" | "admin" | "manager" | "sales" | "cashier" | "employee" | "accountant";
+export type MemberRole = "owner" | "admin" | "manager" | "employee";
 
 export interface CurrentMembership {
   userId: string;
   organizationId: string;
   role: MemberRole;
+  /** Statut de l'entreprise : « suspended » = tout est bloqué (décision Q3). */
+  organizationStatus?: string;
 }
 
 /**
@@ -28,7 +30,7 @@ export async function getCurrentMembership(organizationId: string): Promise<Curr
 
   const { data, error } = await supabase
     .from("memberships")
-    .select("role")
+    .select("role, organizations(status)")
     .eq("organization_id", organizationId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -39,7 +41,9 @@ export async function getCurrentMembership(organizationId: string): Promise<Curr
   }
   if (!data) return null;
 
-  return { userId: user.id, organizationId, role: data.role as MemberRole };
+  const organization = (data as unknown as { organizations?: { status?: string } | { status?: string }[] | null }).organizations;
+  const organizationStatus = Array.isArray(organization) ? organization[0]?.status : organization?.status;
+  return { userId: user.id, organizationId, role: data.role as MemberRole, organizationStatus };
 }
 
 /**
@@ -58,6 +62,10 @@ export async function requireMembership(
 
   if (!membership) {
     throw new AuthenticationError();
+  }
+  // Décision Q3 : une entreprise suspendue ne peut RIEN faire (toutes les actions du tableau de bord passent ici).
+  if (membership.organizationStatus === "suspended") {
+    throw new OrganizationSuspendedError();
   }
   if (allowedRoles && !allowedRoles.includes(membership.role)) {
     throw new AuthorizationError(

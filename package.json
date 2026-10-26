@@ -13,6 +13,7 @@
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:e2e": "playwright test",
     "seed:demo": "tsx scripts/seed-demo.ts",
+    "media:migrate-r2": "tsx scripts/migrate-media-to-r2.ts",
     "telegram:setup": "node scripts/configure-telegram-admin-webhook.mjs",
     "telegram:discover-chat": "node scripts/discover-telegram-admin-chat.mjs",
     "lint:fix": "eslint . --fix",
@@ -24,7 +25,8 @@
     "@upstash/ratelimit": "2.1.0",
     "@upstash/redis": "1.38.4",
     "d3-geo": "3.1.1",
-    "next": "16.3.5",
+    "exceljs": "4.4.0",
+    "next": "16.3.8",
     "papaparse": "5.7.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -37,23 +39,33 @@
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/d3-geo": "3.1.1",
+    "@types/geojson": "7946.0.16",
     "@types/node": "26.6.2",
     "@types/papaparse": "5.5.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/topojson-client": "3.1.5",
+    "@types/topojson-specification": "1.0.5",
     "@types/web-push": "3.6.4",
     "@typescript/native": "npm:typescript@7.0.2",
     "dotenv": "17.4.2",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.3.8",
     "postcss": "8.5.28",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.13",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vitest": "5.0.1"
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "overrides": {
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2",
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }

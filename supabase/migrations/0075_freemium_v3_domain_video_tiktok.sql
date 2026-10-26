@@ -74,8 +74,11 @@ alter table catalog_videos drop column if exists storage_provider;
 update catalog_videos set host_expires_at = uploaded_at where host_expires_at is null;
 alter table catalog_videos alter column host_expires_at set not null;
 
+-- CORRECTIF d'audit (P2/Q13) : un prédicat d'index doit être IMMUABLE ; `now()` ne l'est pas, ce qui
+-- faisait échouer toute la migration. L'index couvre donc toute la colonne ; le filtre
+-- `expires_at > now()` reste dans la requête du cron de renouvellement.
 create index if not exists idx_catalog_videos_renew
-  on catalog_videos(host_expires_at) where expires_at > now();
+  on catalog_videos(host_expires_at);
 create index if not exists idx_catalog_videos_notify
   on catalog_videos(notified_expiry_soon, expires_at);
 

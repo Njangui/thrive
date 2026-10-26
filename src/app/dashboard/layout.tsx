@@ -1,16 +1,18 @@
 import { redirect } from "next/navigation";
 import { getSupabaseServerSessionClient } from "@/infrastructure/supabase/server-session-client";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
+import { isOrganizationSuspended } from "@/infrastructure/supabase/organization-guard";
 import { getCurrentUserOrganizations, requireCurrentOrganization } from "@/application/services/auth-service";
 import { getUnreadNotificationCount } from "@/application/services/notification-service";
 import { getOnboardingStatus } from "@/application/services/onboarding-service";
 import { getEnabledModules } from "@/application/services/module-service";
 import { getCreditStatus } from "@/application/services/ai-credits-service";
 import { getPlatformAdminStatus } from "@/application/services/platform-admin-service";
+import { SignOutButton } from "@/app/_components/sign-out-button";
 import { DashboardSidebar } from "./_components/dashboard-nav";
 import { DashboardTopbar } from "./_components/topbar";
 import { InstallAppBanner } from "./_components/install-app-banner";
-import { PromoTrialBanner } from "./_components/promo-trial-banner";
+import { WhatsAppHealthBanner } from "./_components/whatsapp-health-banner";
 import { OrgSwitcher } from "./_components/org-switcher";
 import { ROLE_LABELS } from "./_components/role-labels";
 import { DashboardHelp } from "./_components/dashboard-help";
@@ -51,6 +53,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // à l'étape 1 (voir onboarding/page.tsx). Sans danger pour les
   // organisations créées avant ce lot : la migration 0025 les a
   // rétroactivement marquées "terminé" (voir son commentaire).
+  // Décision Q3 : entreprise suspendue → plus d'accès au tableau de bord (ni, côté serveur, à aucune action :
+  // `requireMembership` et les points d'envoi/IA refusent aussi).
+  if (await isOrganizationSuspended(currentOrg.organizationId)) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-4 px-6 text-center">
+        <h1 className="text-2xl font-bold text-navy-900">Entreprise suspendue</h1>
+        <p className="text-slate-600">
+          L&apos;accès à « {currentOrg.organizationName} » est suspendu. Vos données sont conservées.
+          Contactez le support Flexco pour réactiver votre entreprise.
+        </p>
+        <SignOutButton className="text-sm font-medium text-violet-700 underline" />
+      </main>
+    );
+  }
+
   const onboardingStatus = await getOnboardingStatus(currentOrg.organizationId);
   if (!onboardingStatus.completedAt) redirect("/onboarding");
 
@@ -104,7 +121,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           isPlatformAdmin={Boolean(platformAdmin)}
         />
         <OrgSwitcher orgs={allOrgs} currentId={currentOrg.organizationId} />
-        <PromoTrialBanner organizationId={currentOrg.organizationId} />
+        <WhatsAppHealthBanner organizationId={currentOrg.organizationId} userId={user.id} />
         <InstallAppBanner />
         <NotificationWatcher />
         <DashboardHelp />

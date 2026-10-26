@@ -7,6 +7,9 @@ export type PlatformTelegramEvent =
   | "ORGANIZATION_PLAN_CHANGED"
   | "SUBSCRIPTION_PAYMENT_COMPLETED"
   | "SUBSCRIPTION_PAYMENT_FAILED"
+  | "SUBSCRIPTION_PAYMENT_AMOUNT_MISMATCH"
+  | "WEBHOOK_EVENT_DEAD"
+  | "SUBSCRIPTION_PAYMENT_EFFECT_FAILED"
   | "SUBSCRIPTION_EXPIRED"
   | "TELEGRAM_CHANNEL_CONNECTED"
   | "TELEGRAM_CHANNEL_DISCONNECTED"
@@ -32,6 +35,9 @@ const EVENT_LABELS: Record<PlatformTelegramEvent, { icon: string; label: string 
   ORGANIZATION_PLAN_CHANGED: { icon: "💳", label: "Forfait modifié" },
   SUBSCRIPTION_PAYMENT_COMPLETED: { icon: "💰", label: "Paiement confirmé" },
   SUBSCRIPTION_PAYMENT_FAILED: { icon: "⚠️", label: "Paiement échoué" },
+  WEBHOOK_EVENT_DEAD: { icon: "☠️", label: "Événement de paiement abandonné après 3 essais" },
+  SUBSCRIPTION_PAYMENT_AMOUNT_MISMATCH: { icon: "🚨", label: "Montant encaissé ≠ montant attendu" },
+  SUBSCRIPTION_PAYMENT_EFFECT_FAILED: { icon: "🛠️", label: "Paiement encaissé, effet non appliqué (rejeu automatique)" },
   SUBSCRIPTION_EXPIRED: { icon: "⏰", label: "Abonnement expiré" },
   TELEGRAM_CHANNEL_CONNECTED: { icon: "📲", label: "Bot Telegram connecté" },
   TELEGRAM_CHANNEL_DISCONNECTED: { icon: "🔌", label: "Bot Telegram déconnecté" },

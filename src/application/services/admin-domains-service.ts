@@ -201,6 +201,18 @@ export async function resolveDomainRequest(
     throw new ValidationError("Marquez d'abord le paiement comme « payé » avant d'enregistrer ce domaine.");
   }
 
+  // Q30 : un domaine déjà rattaché à UNE AUTRE organisation ne peut jamais lui être retiré par un upsert.
+  if (newStatus === "registered") {
+    const { data: existingDomain } = await supabase
+      .from("tenant_domains")
+      .select("organization_id")
+      .eq("domain", before.domain_name)
+      .maybeSingle();
+    if (existingDomain && existingDomain.organization_id !== before.organization_id) {
+      throw new ValidationError("Ce domaine est déjà rattaché à une autre organisation : enregistrement refusé.");
+    }
+  }
+
   const isFinal = FINAL_DOMAIN_REQUEST_STATUSES.has(newStatus);
 
   const { error } = await supabase

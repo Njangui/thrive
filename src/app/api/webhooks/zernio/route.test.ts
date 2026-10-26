@@ -19,6 +19,10 @@ const m = vi.hoisted(() => ({
   isKnownGroupConversation: vi.fn(),
   isGroupThread: vi.fn(),
   insertEvent: vi.fn(),
+  backoffice: vi.fn(),
+  templateEvent: vi.fn(),
+  accountEvent: vi.fn(),
+  deliveryFailure: vi.fn(),
   updates: [] as Array<Record<string, unknown>>,
 }));
 
@@ -65,6 +69,9 @@ vi.mock("@/application/services/whatsapp-group-threads", () => ({ isWhatsAppGrou
 vi.mock("@/application/services/marketing-service", () => ({ handlePostStatusWebhook: vi.fn() }));
 vi.mock("@/application/services/provider-connection-service", () => ({ handleAccountStatusChanged: vi.fn() }));
 vi.mock("@/application/services/notification-service", () => ({ notifyOrgAdmins: vi.fn() }));
+vi.mock("@/application/services/whatsapp-backoffice-service", () => ({ handleWhatsAppBackoffice: m.backoffice }));
+vi.mock("@/application/services/whatsapp-template-service", () => ({ applyTemplateStatusEvent: m.templateEvent }));
+vi.mock("@/application/services/whatsapp-channel-health-service", () => ({ applyAccountEvent: m.accountEvent, recordDeliveryFailure: m.deliveryFailure }));
 vi.mock("@/application/services/social-post-tracking-service", () => ({ trackExternalPost: vi.fn(), handleIncomingComment: vi.fn() }));
 
 import { POST } from "./route";
@@ -101,6 +108,10 @@ beforeEach(() => {
   m.activateGroup.mockResolvedValue(undefined);
   m.isKnownGroupConversation.mockResolvedValue(false);
   m.isGroupThread.mockResolvedValue(false);
+  m.backoffice.mockResolvedValue("not_backoffice");
+  m.templateEvent.mockResolvedValue("updated");
+  m.accountEvent.mockResolvedValue(true);
+  m.deliveryFailure.mockResolvedValue(undefined);
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -178,5 +189,64 @@ describe("Webhook Zernio — GROUPES WhatsApp (numéro dédié)", () => {
     expect(m.insertEvent).not.toHaveBeenCalled();
     expect(m.activateGroup).not.toHaveBeenCalled();
     expect(m.handleInboundMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("Webhook Zernio — back-office WhatsApp (C2 étape 5)", () => {
+  it("message du personnel : traité par le back-office, JAMAIS par le pipeline client", async () => {
+    m.resolveByAccount.mockResolvedValue("org-1");
+    m.backoffice.mockResolvedValue("handled");
+
+    const res = await deliver(inbound({ accountId: "acc-msg", conversationId: "conv-staff", text: "stock du savon ?" }));
+
+    expect(res.status).toBe(200);
+    expect(m.backoffice).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-1", accountId: "acc-msg", conversationId: "conv-staff", phoneE164: "+237600000000", text: "stock du savon ?", hasAttachment: false }));
+    expect(m.evaluateInboxChannel).not.toHaveBeenCalled();
+    expect(m.handleInboundMessage).not.toHaveBeenCalled();
+    expect(m.processInboundAutoReply).not.toHaveBeenCalled();
+    expect(m.updates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("numéro non lié : le message continue vers le pipeline client", async () => {
+    m.resolveByAccount.mockResolvedValue("org-1");
+    await deliver(inbound({ accountId: "acc-msg", conversationId: "conv-client-9" }));
+    expect(m.backoffice).toHaveBeenCalledTimes(1);
+    expect(m.handleInboundMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("le back-office échoue : rien n'est rendu au pipeline client, événement marqué failed", async () => {
+    m.resolveByAccount.mockResolvedValue("org-1");
+    m.backoffice.mockRejectedValue(new Error("boom"));
+    const res = await deliver(inbound({ accountId: "acc-msg", conversationId: "conv-staff-2" }));
+    expect(res.status).toBe(200);
+    expect(m.handleInboundMessage).not.toHaveBeenCalled();
+    expect(m.updates.at(-1)).toMatchObject({ status: "failed" });
+  });
+
+  it("messages d'un autre canal (Messenger) : back-office non consulté", async () => {
+    m.resolveByAccount.mockResolvedValue("org-1");
+    await deliver(inbound({ accountId: "acc-fb", conversationId: "c", platform: "facebook" }));
+    expect(m.backoffice).not.toHaveBeenCalled();
+  });
+
+  it("whatsapp.template.status_updated : statut mis à jour, aucun message client", async () => {
+    m.resolveByAccount.mockResolvedValue("org-1");
+    const res = await deliver({ id: "evt-t1", event: "whatsapp.template.status_updated", timestamp: "2026-10-09T10:00:00Z", account: { id: "acc-msg", platform: "whatsapp" }, template: { name: "flexco_alerte_v1", status: "APPROVED", reason: "NONE" } });
+    expect(res.status).toBe(200);
+    expect(m.templateEvent).toHaveBeenCalledWith("org-1", { name: "flexco_alerte_v1", id: undefined, status: "APPROVED", reason: "NONE" });
+    expect(m.handleInboundMessage).not.toHaveBeenCalled();
+    expect(m.updates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("whatsapp.account.* : état du compte enregistré", async () => {
+    m.resolveByAccount.mockResolvedValue("org-1");
+    await deliver({ id: "evt-a1", event: "whatsapp.account.status_updated", timestamp: "t", account: { id: "acc-msg", platform: "whatsapp" }, status: { status: "restricted" } });
+    expect(m.accountEvent).toHaveBeenCalledWith(expect.anything(), "org-1", expect.objectContaining({ event: "whatsapp.account.status_updated" }), expect.any(String));
+  });
+
+  it("message.failed WhatsApp : échec enregistré pour le diagnostic", async () => {
+    m.resolveByAccount.mockResolvedValue("org-1");
+    await deliver({ id: "evt-f1", event: "message.failed", timestamp: "t", account: { id: "acc-msg", platform: "whatsapp" }, conversation: { id: "c1" }, message: { id: "mid-1" }, metadata: { error: "131042" } });
+    expect(m.deliveryFailure).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ organizationId: "org-1", externalMessageId: "mid-1" }));
   });
 });

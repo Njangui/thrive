@@ -8,6 +8,7 @@ import type { CreditStatus } from "@/application/services/ai-credits-service";
 import { getIndustryUi } from "@/application/config/industry-ui";
 import { FlexcoBrand } from "@/app/_components/flexco-brand";
 import {
+  IconBell,
   IconGrid,
   IconTag,
   IconBriefcase,
@@ -90,10 +91,13 @@ export const DASHBOARD_NAV_GROUPS: {
       { href: "/dashboard/business", label: "Fiche entreprise", icon: IconBuilding },
       { href: "/dashboard/site", label: "Mon site", icon: IconGlobe, module: "landing" },
       { href: "/dashboard/domain", label: "Domaine personnalisé", icon: IconGlobe },
+      { href: "/dashboard/assistant", label: "Assistant de pilotage", icon: IconBot, module: "ai" },
       { href: "/dashboard/ai", label: "Assistant IA", icon: IconBot, module: "ai" },
       { href: "/dashboard/finance", label: "Finance", icon: IconBanknote, module: "finance" },
       { href: "/dashboard/faq", label: "FAQ", icon: IconHelp, module: "faq" },
       { href: "/dashboard/team", label: "Équipe", icon: IconUsers },
+      { href: "/dashboard/alerts", label: "Alertes", icon: IconBell },
+      { href: "/dashboard/security", label: "Sécurité", icon: IconBuilding },
     ],
   },
   {
@@ -131,8 +135,8 @@ export function useVisibleNavGroups(enabledModules: ModuleKey[], industry?: stri
     items: group.items
       .filter((item) => !item.module || enabledModules.includes(item.module))
       .filter((item) => {
-        if (item.href === "/dashboard/products") return !["beauty", "professional_services"].includes(ui.key);
-        if (item.href === "/dashboard/services") return ["beauty", "professional_services"].includes(ui.key);
+        if (item.href === "/dashboard/products") return !["beauty", "professional_services", "health", "education"].includes(ui.key);
+        if (item.href === "/dashboard/services") return ["beauty", "professional_services", "health", "education"].includes(ui.key);
         return true;
       })
       .map((item) => {

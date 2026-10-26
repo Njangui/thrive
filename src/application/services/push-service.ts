@@ -217,3 +217,52 @@ export async function sendTestPush(organizationId: string): Promise<void> {
     "/dashboard/notifications",
   );
 }
+
+/**
+ * Push CIBLÉ (C2, étape 4) : uniquement les appareils des utilisateurs donnés
+ * (jamais toute l'organisation). Retourne le nombre d'appareils atteints — 0
+ * (pas de VAPID, aucun appareil abonné, échecs) déclenche l'escalade immédiate.
+ * Ne lève jamais.
+ */
+export async function sendPushToUsers(
+  organizationId: string,
+  userIds: string[],
+  title: string,
+  body: string,
+  url?: string,
+  options: SendPushOptions = {},
+): Promise<number> {
+  const client = getConfiguredWebPushClient();
+  if (!client || userIds.length === 0) return 0;
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { data: subscriptions, error } = await supabase
+      .from("push_subscriptions")
+      .select("id, endpoint, p256dh_key, auth_key")
+      .eq("organization_id", organizationId)
+      .in("user_id", userIds);
+    if (error || !subscriptions || subscriptions.length === 0) return 0;
+
+    const payload = JSON.stringify({ title, body, url: url ?? "/dashboard/notifications" });
+    const results = await Promise.all(
+      subscriptions.map(async (sub) => {
+        try {
+          await client.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh_key, auth: sub.auth_key } },
+            payload,
+            { TTL: PUSH_TTL_SECONDS, urgency: options.urgency ?? "high" },
+          );
+          return 1;
+        } catch (sendError) {
+          const statusCode = (sendError as { statusCode?: number } | null)?.statusCode;
+          if (statusCode === 404 || statusCode === 410) await supabase.from("push_subscriptions").delete().eq("id", sub.id);
+          return 0;
+        }
+      }),
+    );
+    return results.reduce<number>((a, b) => a + b, 0);
+  } catch (unexpectedError) {
+    console.warn(`[push] erreur inattendue dans sendPushToUsers (org ${organizationId}):`, unexpectedError);
+    return 0;
+  }
+}

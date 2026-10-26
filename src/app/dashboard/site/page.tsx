@@ -34,6 +34,7 @@ import { ResetSiteButton } from "./reset-site-button";
 import { HighlightIcon } from "@/app/_components/storefront/storefront-icons";
 import { env } from "@/lib/env";
 import { canUseFeature } from "@/application/services/entitlements-service";
+import { getPublishedSite } from "@/application/services/site-version-service";
 import { AppError, ValidationError, QuotaExceededError } from "@/lib/errors";
 
 /** Libellés FR des icônes de la bande de confiance, pour le sélecteur du formulaire (voir updateHighlightsAction plus bas). Purement de l'affichage dashboard — la clé technique reste celle de storefront-blueprint.ts. */
@@ -503,11 +504,13 @@ export default async function SitePage({
       </div>
     );
   }
-  const [media, landingConfig, testimonials, industry] = await Promise.all([
+  const [media, landingConfig, testimonials, industry, publishedSite] = await Promise.all([
     getSiteMedia(organizationId),
     getLandingConfig(organizationId),
     listTestimonials(organizationId),
     getOrganizationIndustry(organizationId),
+    // Une version publiée (éditeur de versions) PRIME sur ces réglages : sans bandeau, les modifications d'ici resteraient sans effet, sans explication.
+    getPublishedSite(organizationId).catch(() => null),
   ]);
   // Secteur de la vitrine — sert uniquement à afficher, dans l'éditeur de
   // bande de confiance, à quoi ressemblent les promesses par défaut avant
@@ -526,6 +529,7 @@ export default async function SitePage({
         </div>
         <div className="flex gap-2">
           {env.NEXT_PUBLIC_ROOT_DOMAIN !== "localhost:3000" && <a href={`https://${media.slug}.${env.NEXT_PUBLIC_ROOT_DOMAIN}`} target="_blank" rel="noopener noreferrer" className="adm-btn-secondary">Aperçu du site ↗</a>}
+          <a href="/dashboard/site/versions" className="adm-btn-secondary">Versions du site</a>
           <button type="submit" form="site-settings-form" className="adm-btn-primary">Enregistrer</button>
         </div>
       </div>
@@ -542,6 +546,12 @@ export default async function SitePage({
       )}
       {success && (
         <p className="adm-alert-success">{success}</p>
+      )}
+      {publishedSite && (
+        <p className="adm-alert-warning">
+          Votre site est piloté par une version publiée (version {publishedSite.versionNumber}). Les réglages de cette page restent enregistrés mais ne modifient plus la vitrine tant que cette version est publiée.{" "}
+          <a href="/dashboard/site/versions" className="font-semibold underline">Ouvrir l&apos;éditeur de versions</a>
+        </p>
       )}
 
       <form id="site-settings-form" action={updateSiteAction} className="site-editor-main flex flex-col gap-4">

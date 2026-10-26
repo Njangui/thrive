@@ -4,6 +4,7 @@ import { trackEvent } from "@/application/services/analytics-service";
 import { resolveRequestTenant } from "@/infrastructure/tenant/resolve-request-tenant";
 import { headers } from "next/headers";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { trackWhatsAppClick } from "@/application/services/analytics/track";
 
 /**
  * Server Action appelée depuis un clic CTA sur la vitrine publique
@@ -31,4 +32,7 @@ export async function trackClickAction(_organizationId: string, ctaId: string): 
   // Never trust the organizationId supplied by the browser: the tenant is
   // resolved from the request hostname on the server.
   await trackEvent(tenant.organizationId, "cta_click", "cta", undefined, { ctaId: safeCtaId });
+  // C5 : un clic WhatsApp est aussi compté à part, avec l'empreinte anonyme du visiteur
+  // (attribution par source/campagne). `cta_click` reste inchangé : les statistiques existantes ne bougent pas.
+  await trackWhatsAppClick(tenant.organizationId, { ctaId: safeCtaId, ip, userAgent: headerList.get("user-agent") ?? "" });
 }

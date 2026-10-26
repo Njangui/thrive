@@ -156,3 +156,60 @@ describe("matchFaq — tolérance aux variantes (correctif sept. 2026 : FAQ conf
     expect((await matchFaq("org-1", "quel est le prix de la livraison ?"))?.answer).toBe("B2");
   });
 });
+
+describe("FAQ qui apprend (C3 étape 4b) — identifiant, variables, date de revue", () => {
+  it("matchFaq renvoie l'identifiant de la FAQ (nécessaire pour compter ses usages)", async () => {
+    mockFrom.mockReturnValue({
+      select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [{ id: "f42", question: "Livrez-vous ?", answer: "Oui.", keywords: ["livraison"] }], error: null }) }) }),
+    });
+    const result = await matchFaq("org-1", "Question sur la livraison");
+    expect(result?.id).toBe("f42");
+  });
+
+  it("matchFaq renvoie l'identifiant aussi quand c'est la question qui sert de filet de sécurité", async () => {
+    mockFrom.mockReturnValue({
+      select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [{ id: "f7", question: "Quels sont vos horaires d'ouverture ?", answer: "9h-18h", keywords: [] }], error: null }) }) }),
+    });
+    const result = await matchFaq("org-1", "Quels sont vos horaires d'ouverture ?");
+    expect(result?.id).toBe("f7");
+  });
+
+  it("createFaq refuse une variable inconnue (le client verrait « {xyz} ») sans rien écrire", async () => {
+    await expect(createFaq({ organizationId: "org-1", question: "Q ?", answer: "Voir {prix_du_jour}", keywords: ["x"] })).rejects.toThrow(/variable/);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("createFaq accepte les variables connues et fixe une date de relecture dans 90 jours", async () => {
+    let payload: Record<string, unknown> = {};
+    mockFrom.mockReturnValue({
+      insert: (p: Record<string, unknown>) => {
+        payload = p;
+        return { select: () => ({ single: () => Promise.resolve({ data: { id: "f1" }, error: null }) }) };
+      },
+    });
+    const result = await createFaq({ organizationId: "org-1", question: "Horaires ?", answer: "Ouvert : {hours} — {price:sac-cuir}", keywords: ["horaires"] });
+    expect(result).toEqual({ faqId: "f1" });
+    expect(payload.review_at).toBe(new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10));
+  });
+
+  it("createFaq avertit (sans bloquer) quand un montant est écrit en dur", async () => {
+    mockFrom.mockReturnValue({ insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: { id: "f1" }, error: null }) }) }) });
+    const result = await createFaq({ organizationId: "org-1", question: "Livraison ?", answer: "La livraison coûte 1 500 FCFA.", keywords: ["livraison"] });
+    expect(result.faqId).toBe("f1");
+    expect(result.warnings).toHaveLength(1);
+  });
+
+  it("updateFaq refuse une variable inconnue et repousse la relecture quand la réponse change", async () => {
+    await expect(updateFaq("org-1", "f1", { answer: "Voir {nimporte}" })).rejects.toThrow(/variable/);
+
+    let patch: Record<string, unknown> = {};
+    mockFrom.mockReturnValue({
+      update: (p: Record<string, unknown>) => {
+        patch = p;
+        return { eq: () => ({ eq: () => Promise.resolve({ error: null, count: 1 }) }) };
+      },
+    });
+    await updateFaq("org-1", "f1", { answer: "Nouvelle réponse {hours}" });
+    expect(patch.review_at).toBe(new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10));
+  });
+});

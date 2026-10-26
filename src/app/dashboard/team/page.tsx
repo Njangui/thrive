@@ -15,17 +15,14 @@ const ROLE_LABELS: Record<MemberRole, string> = {
   owner: "Propriétaire",
   admin: "Administrateur",
   manager: "Manager",
-  sales: "Vente",
-  cashier: "Caisse",
-  employee: "Employé",
-  accountant: "Comptable",
+  employee: "Membre",
 };
 
 // Un Owner ne s'attribue jamais par invitation ni par changement de rôle
 // depuis cet écran (team-service.ts::inviteMember le refuse déjà
 // côté serveur — cette liste ne fait qu'éviter de proposer l'option dans
 // le formulaire, la vraie barrière reste serveur).
-const INVITABLE_ROLES: MemberRole[] = ["admin", "manager", "sales", "cashier", "employee", "accountant"];
+const INVITABLE_ROLES: MemberRole[] = ["admin", "manager", "employee"];
 
 function flashRedirect(kind: "success" | "error", message: string, extra?: Record<string, string>): never {
   const params = new URLSearchParams({ [kind]: message, ...extra });

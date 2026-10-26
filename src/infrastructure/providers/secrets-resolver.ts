@@ -30,6 +30,7 @@ const ENV_KEY_BY_PROVIDER: Record<string, string> = {
   mistral: "MISTRAL_API_KEY",
   claude: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
+  gemini: "GEMINI_API_KEY",
   cinetpay: "CINETPAY_API_KEY",
 };
 

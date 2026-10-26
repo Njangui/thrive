@@ -1,3 +1,4 @@
+import { assertOrganizationActive } from "@/infrastructure/supabase/organization-guard";
 import type { AIProvider } from "@/domain/ports/ai-provider";
 import type { MessagingProvider } from "@/domain/ports/messaging-provider";
 import type { SocialPublishingProvider } from "@/domain/ports/social-publishing-provider";
@@ -14,12 +15,17 @@ import { ZernioSocialClient } from "./social/zernio/client";
 import { MistralAdapter } from "./ai/mistral-adapter";
 import { ClaudeAdapter } from "./ai/claude-adapter";
 import { OpenAIAdapter } from "./ai/openai-adapter";
+import { GeminiAdapter } from "./ai/gemini-adapter";
+import type { AITier } from "@/domain/ai-routing";
 import { SupabaseStorageAdapter } from "./storage/supabase-storage-adapter";
+import { R2StorageAdapter } from "./storage/r2-storage-adapter";
 import { FapshiAdapter } from "./payment/fapshi/adapter";
 import { FapshiClient } from "./payment/fapshi/client";
 import { ManualDomainAdapter } from "./domain/manual/adapter";
 import { OpenProviderAdapter } from "./domain/openprovider/adapter";
 import { OpenProviderClient } from "./domain/openprovider/client";
+import { BrevoAdapter } from "./email/brevo/adapter";
+import { BrevoClient } from "./email/brevo/client";
 import { ResendAdapter } from "./email/resend/adapter";
 import { ResendClient } from "./email/resend/client";
 import { ConsoleLogEmailAdapter } from "./email/console-log/adapter";
@@ -53,6 +59,20 @@ import { YouTubeClient } from "./social/youtube/client";
  * appelants.
  */
 export async function getStorageProvider(_organizationId: string): Promise<StorageProvider> {
+  if (env.STORAGE_PROVIDER === "r2") {
+    const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_BASE_URL } = env;
+    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET || !R2_PUBLIC_BASE_URL) {
+      // Échouer fort plutôt que d'écrire silencieusement ailleurs (section 54).
+      throw new Error("STORAGE_PROVIDER=r2 exige R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET et R2_PUBLIC_BASE_URL");
+    }
+    return new R2StorageAdapter({
+      accountId: R2_ACCOUNT_ID,
+      accessKeyId: R2_ACCESS_KEY_ID,
+      secretAccessKey: R2_SECRET_ACCESS_KEY,
+      bucket: R2_BUCKET,
+      publicBaseUrl: R2_PUBLIC_BASE_URL,
+    });
+  }
   return new SupabaseStorageAdapter();
 }
 
@@ -136,6 +156,10 @@ export async function getDomainProvider(_organizationId: string): Promise<Domain
  * précis d'adapter.
  */
 export async function getEmailProvider(): Promise<EmailProvider> {
+  // Brevo (300 emails/jour gratuits) prioritaire ; Resend reste possible ; sinon journal console.
+  if (env.BREVO_API_KEY) {
+    return new BrevoAdapter(new BrevoClient(env.BREVO_API_KEY), env.EMAIL_FROM_ADDRESS);
+  }
   if (!env.RESEND_API_KEY) {
     return new ConsoleLogEmailAdapter();
   }
@@ -182,6 +206,7 @@ export async function getNotificationProvider(_organizationId?: string): Promise
  * silencieusement supposée.
  */
 export async function getMessagingProvider(organizationId: string, providerName?: string, providerAccountId?: string): Promise<MessagingProvider> {
+  await assertOrganizationActive(organizationId);
   const supabase = getSupabaseServiceClient();
 
   // Lot O — messagerie unifiée : Messenger / Instagram passent par la boîte
@@ -308,6 +333,7 @@ export async function getMessagingProvider(organizationId: string, providerName?
  * que silencieusement supposée").
  */
 export async function getWhatsAppGroupsProvider(organizationId: string): Promise<MessagingProvider> {
+  await assertOrganizationActive(organizationId);
   const supabase = getSupabaseServiceClient();
 
   const { data: connection, error } = await supabase
@@ -349,7 +375,7 @@ interface AIProviderBundle {
  * `buildAIAdapter` ci-dessous (cahier : "PAS une liste codée en dur qui
  * pourrait diverger de registry.ts").
  */
-export const AI_PROVIDER_NAMES = ["mistral", "claude", "openai"] as const;
+export const AI_PROVIDER_NAMES = ["mistral", "claude", "openai", "gemini"] as const;
 export type AIProviderName = (typeof AI_PROVIDER_NAMES)[number];
 
 /**
@@ -372,6 +398,19 @@ export const DEFAULT_MODEL_BY_PROVIDER: Record<AIProviderName, string> = {
   mistral: "mistral-small-latest",
   claude: "claude-sonnet-5",
   openai: "gpt-4o-mini",
+  gemini: env.GEMINI_MODEL,
+};
+
+/**
+ * Modèle du niveau `large` (agents : cas difficiles), par famille de provider.
+ * À VÉRIFIER avant mise en production : les noms de modèles évoluent (alias
+ * « -latest » côté Mistral ; confirmer l'identifiant exact côté OpenAI/Claude).
+ */
+export const LARGE_MODEL_BY_PROVIDER: Record<AIProviderName, string> = {
+  mistral: "mistral-large-latest",
+  claude: "claude-opus-5-5",
+  openai: "gpt-4o",
+  gemini: env.GEMINI_MODEL,
 };
 
 /**
@@ -390,12 +429,42 @@ async function buildAIAdapter(organizationId: string, providerName: string, mode
       return new ClaudeAdapter(apiKey, model);
     case "openai":
       return new OpenAIAdapter(apiKey, model);
+    case "gemini":
+      return new GeminiAdapter(apiKey, model);
     default:
       throw new Error(`AIProvider "${providerName}" non implémenté.`);
   }
 }
 
-export async function getAIProvider(organizationId: string): Promise<AIProviderBundle> {
+export async function getAIProvider(organizationId: string, tier?: AITier): Promise<AIProviderBundle> {
+  await assertOrganizationActive(organizationId);
+  const base = await getBaseAIProvider(organizationId);
+  if (!tier || env.AI_ROUTING_ENABLED !== "true") return base;
+  return routeAIBundle(organizationId, tier, base);
+}
+
+/**
+ * Routage par niveau de tâche. `simple` : Mistral Small d'abord, Gemini en secours ;
+ * `complex` : Gemini d'abord, Mistral Small en secours. Un fournisseur sans clé est
+ * ignoré ; si aucun des deux n'est disponible on garde la configuration du tenant.
+ * (Le contrôle « IA activée » a déjà été fait par getBaseAIProvider.)
+ */
+async function routeAIBundle(organizationId: string, tier: AITier, base: AIProviderBundle): Promise<AIProviderBundle> {
+  const tryBuild = async (name: "mistral" | "gemini", model: string): Promise<AIProvider | null> => {
+    try {
+      return await buildAIAdapter(organizationId, name, model);
+    } catch {
+      return null; // pas de clé pour ce fournisseur
+    }
+  };
+  const [mistral, gemini] = await Promise.all([tryBuild("mistral", env.MISTRAL_MODEL_SIMPLE), tryBuild("gemini", env.GEMINI_MODEL)]);
+  const [primary, fallback] = tier === "simple" ? [mistral, gemini] : [gemini, mistral];
+  if (primary) return { primary, fallback };
+  if (fallback) return { primary: fallback, fallback: null };
+  return base;
+}
+
+async function getBaseAIProvider(organizationId: string): Promise<AIProviderBundle> {
   const supabase = getSupabaseServiceClient();
 
   const { data: config, error } = await supabase
@@ -427,7 +496,31 @@ export async function getAIProvider(organizationId: string): Promise<AIProviderB
   return { primary, fallback };
 }
 
+/**
+ * Fournisseur pour le runtime d'agents (C1/P2). `small` = modèle réglé par le
+ * tenant (`ai_config.model`) ; `large` = modèle large de la MÊME famille de
+ * provider, avec repli sur le modèle du tenant. Réutilise `getAIProvider` :
+ * mêmes règles d'activation (`ai_config.enabled`) et de credential par tenant.
+ */
+export async function getAIProviderForTier(organizationId: string, tier: "small" | "large"): Promise<AIProviderBundle> {
+  await assertOrganizationActive(organizationId);
+  if (env.AI_ROUTING_ENABLED === "true") {
+    // small = tâches simples (Mistral Small) ; large = raisonnement lourd (Gemini).
+    return getAIProvider(organizationId, tier === "small" ? "simple" : "complex");
+  }
+  const bundle = await getBaseAIProvider(organizationId);
+  if (tier === "small") return bundle;
+
+  const supabase = getSupabaseServiceClient();
+  const { data: config } = await supabase.from("ai_config").select("provider").eq("organization_id", organizationId).maybeSingle();
+  const largeModel = LARGE_MODEL_BY_PROVIDER[config?.provider as AIProviderName];
+  if (!largeModel) return bundle;
+  const large = await buildAIAdapter(organizationId, config!.provider, largeModel);
+  return { primary: large, fallback: bundle.primary };
+}
+
 export async function getSocialPublishingProvider(organizationId: string): Promise<SocialPublishingProvider> {
+  await assertOrganizationActive(organizationId);
   const supabase = getSupabaseServiceClient();
   const [{ data: zernioConnections, error: zernioError }, { data: youtubeRows, error: youtubeError }] = await Promise.all([
     supabase

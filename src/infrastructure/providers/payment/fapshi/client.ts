@@ -17,10 +17,19 @@ export class FapshiClient {
   constructor(
     private readonly apiUser: string | undefined,
     private readonly apiKey: string | undefined,
-    private readonly baseUrl: string = env.FAPSHI_BASE_URL,
+    private readonly baseUrlOverride: string | undefined = env.FAPSHI_BASE_URL,
   ) {}
 
+  private get baseUrl(): string {
+    return (this.baseUrlOverride ?? "").replace(/\/+$/, "");
+  }
+
   private assertConfigured(): void {
+    if (!this.baseUrlOverride) {
+      throw new Error(
+        "Fapshi: FAPSHI_BASE_URL manquant — mettez https://sandbox.fapshi.com (tests, aucun vrai argent) ou https://live.fapshi.com (production).",
+      );
+    }
     if (!this.apiUser || !this.apiKey) {
       throw new Error(
         "Fapshi: FAPSHI_API_USER/FAPSHI_API_KEY manquants — configurez ces variables avant d'initier un paiement.",
@@ -51,29 +60,34 @@ export class FapshiClient {
   }
 
   /**
-   * CORRECTIF 2026-09-24 (suite signalement utilisateur : 6/6 paiements
-   * en attente échouaient la réconciliation avec "Invalid request URL",
-   * y compris des transId Fapshi manifestement valides comme
-   * "URc5wMrwdp" — donc pas un souci d'ID invalide mais de FORME de
-   * requête). Ancien code : `${baseUrl}/payment-status/${transId}`
-   * (transId comme segment de chemin). D'après le dashboard Fapshi
-   * lui-même (Services > API > Documentation), `/payment-status` est
-   * listé SANS paramètre de chemin — contrairement à
-   * `/transaction/{userId}` qui en affiche un explicitement — et
-   * `expirePay` (juste en dessous) passe `transId` comme paramètre
-   * NOMMÉ (dans le corps JSON), jamais concaténé à l'URL. `transId` est
-   * donc passé ici en paramètre de requête, pas en segment de chemin.
-   * Si Fapshi venait à documenter explicitement l'inverse, revenir à
-   * l'ancienne forme — le message d'erreur ci-dessous inclut maintenant
-   * l'URL exacte tentée pour trancher immédiatement en cas de doute.
+   * Statut d'une transaction. Documentation officielle (docs.fapshi.com, « payment-status ») :
+   * `GET /payment-status/{transId}` — transId en SEGMENT DE CHEMIN.
+   * Un correctif du 24/09/2026 était passé à `?transId=` après des « Invalid request URL » observés
+   * en réel ; la cause n'a jamais été prouvée (clés/ID d'un autre environnement possible). Par prudence
+   * on essaie la forme officielle d'abord, et on ne retombe sur la forme `?transId=` que sur un refus
+   * « URL invalide » (400/404). L'URL exacte tentée figure dans le message d'erreur pour trancher au
+   * premier test sandbox (décision Q34).
    */
   async paymentStatus(transId: string): Promise<FapshiTransaction> {
     this.assertConfigured();
-    const url = `${this.baseUrl}/payment-status?transId=${encodeURIComponent(transId)}`;
-    const res = await fetch(url, { headers: this.headers() });
+    const encoded = encodeURIComponent(transId);
+    const officialUrl = `${this.baseUrl}/payment-status/${encoded}`;
+    let res = await fetch(officialUrl, { headers: this.headers() });
+    let url = officialUrl;
+
+    if (!res.ok && (res.status === 400 || res.status === 404)) {
+      const firstBody = await res.clone().text().catch(() => "");
+      if (/invalid request url/i.test(firstBody)) {
+        const fallbackUrl = `${this.baseUrl}/payment-status?transId=${encoded}`;
+        console.warn(`Fapshi paymentStatus: forme officielle refusée (« ${firstBody.slice(0, 80)} »), essai de la forme ?transId=.`);
+        res = await fetch(fallbackUrl, { headers: this.headers() });
+        url = fallbackUrl;
+      }
+    }
+
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Fapshi paymentStatus a échoué (${res.status}) pour l'URL ${url}: ${body}`);
+      throw new Error(`Fapshi paymentStatus a échoué (${res.status}): ${body} — URL tentée : ${url}`);
     }
     return res.json() as Promise<FapshiTransaction>;
   }

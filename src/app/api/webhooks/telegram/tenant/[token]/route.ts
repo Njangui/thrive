@@ -32,7 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   const resolved = await resolveOrganizationIdByTelegramWebhookToken(token);
   if (!resolved) {
-    console.warn(`Telegram tenant webhook: jeton d'URL inconnu (${token}), ignoré.`);
+    console.warn(`Telegram tenant webhook: jeton d'URL inconnu, ignoré.`);
     return NextResponse.json({ ok: true });
   }
   const { organizationId, webhookSecret, botId, botTelegramId, botUsername } = resolved;

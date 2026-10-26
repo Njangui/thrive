@@ -1,0 +1,29 @@
+--- a/src/app/(site)/produits/[slug]/page.tsx
++++ b/src/app/(site)/produits/[slug]/page.tsx
+@@ -1,12 +1,14 @@
+ import { listActiveStorefrontVideos } from "@/application/services/catalog-video-service";
+ import { StorefrontVideo } from "@/app/_components/storefront/storefront-video";
+ import { notFound } from "next/navigation";
++import { headers } from "next/headers";
+ import type { Metadata } from "next";
+ import Link from "next/link";
+ import { resolveRequestTenant, resolveCanonicalOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+ import { buildWhatsAppLink } from "@/lib/whatsapp";
+ import { getProductBySlug, listStorefrontProducts } from "@/application/services/catalog-service";
+ import { trackEvent } from "@/application/services/analytics-service";
++import { isBotUserAgent } from "@/application/services/landing-analytics-service";
+ import { resolveProductSeo, buildProductJsonLd, buildSocialMetadata, type ProductJsonLdAvailability } from "@/lib/seo";
+ import { JsonLd } from "@/app/_components/json-ld";
+ import { STOREFRONT_PATHS, productPath } from "@/application/config/storefront-routes";
+@@ -87,7 +89,10 @@
+ 
+   // Best-effort, ne fait jamais échouer le rendu (voir analytics-service).
+   // Démarré avant le reste, attendu juste avant de rendre.
+-  const trackProductView = trackEvent(tenant.organizationId, "product_view", "product", product.id);
++  // C5 : les robots (Google, aperçus de lien Meta/WhatsApp) ne comptent pas comme des vues : sans ce filtre,
++  // « product_view » est gonflé et fausse les analyses de demande (voir migration 0186).
++  const userAgent = (await headers()).get("user-agent") ?? "";
++  const trackProductView = isBotUserAgent(userAgent) ? Promise.resolve() : trackEvent(tenant.organizationId, "product_view", "product", product.id);
+ 
+   const statusInfo = STATUS_LABELS[product.status] ?? { label: product.status, available: false };
+ 

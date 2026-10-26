@@ -1,4 +1,6 @@
 import type {
+  AIChatRequest,
+  AIChatResponse,
   AIClassifyRequest,
   AIClassifyResponse,
   AIProvider,
@@ -6,6 +8,7 @@ import type {
   AITextRequest,
   AITextResponse,
 } from "@/domain/ports/ai-provider";
+import { openAICompatibleChat } from "./openai-compatible-chat";
 
 /**
  * Adapter Mistral — provider AI par défaut du MVP (le moins cher / le plus
@@ -21,6 +24,11 @@ export class MistralAdapter implements AIProvider {
     private readonly model: string,
     private readonly baseUrl = "https://api.mistral.ai/v1",
   ) {}
+
+  /** Conversation à outils (runtime d'agents). */
+  chat(request: AIChatRequest): Promise<AIChatResponse> {
+    return openAICompatibleChat({ label: "Mistral", baseUrl: this.baseUrl, apiKey: this.apiKey, model: this.model, request });
+  }
 
   async generateText(request: AITextRequest): Promise<AITextResponse> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {

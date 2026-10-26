@@ -315,3 +315,43 @@ vidéo tourne ; les autres s'affichent `SKIP`. Corrige tout `FAIL` avant de cont
 - [ ] Domaine personnalisé : la page tenant a changé d'adresse (`/dashboard/site` → `/dashboard/domain`), ouverte à
       **tous les plans**. Rien à configurer côté Vercel/DNS au déploiement — inchangé, toujours manuel par demande.
 - [ ] `/admin/domains` : nouveau bouton "Marquer payé" avant de pouvoir enregistrer une demande.
+
+## Noyau agentique (C1) — cron et variables
+
+**Cron** : `app/api/cron/agents-tick/route.ts` enchaîne le dispatcher d'événements (`domain_events`), le planificateur d'agents (`scheduled_tasks`) et l'hygiène (runs bloqués, rétention). Même `CRON_SECRET` que les autres routes ; appeler `GET` ou `POST` toutes les 5 minutes vers `/api/cron/agents-tick` avec l'en-tête `Authorization: Bearer <CRON_SECRET>`. Réponse JSON : un rapport par étape (une étape en échec n'empêche pas les autres).
+
+**Variables d'environnement (toutes facultatives ; absence = comportement sûr)**
+| Variable | Rôle | Si absente |
+|---|---|---|
+| `AGENT_STUCK_RUN_SECONDS` | délai avant clôture d'un run `running` | 1800 |
+| `AGENT_RUN_RETENTION_DAYS` | purge des runs terminés | aucune purge |
+| `AGENT_EVENT_RETENTION_DAYS` | purge des événements `done` | aucune purge |
+| `AGENT_MEMORY_ARCHIVE_RETENTION_DAYS` (≥ 2) | purge de la mémoire archivée/expirée | aucune purge |
+| `AGENT_TRAINING_EXPORT_ENABLED` | `true` pour autoriser l'export pseudonymisé | export désactivé |
+| `AGENT_EXPORT_PSEUDONYM_SECRET` (≥ 32 car.) | secret de pseudonymisation | export désactivé |
+| `MISTRAL_API_KEY` | embeddings de la mémoire d'entreprise | mémoire non branchée |
+
+Migrations 0100 à 0108 à appliquer dans l'ordre. `0108` exige l'extension `vector` (Supabase : Database > Extensions). Les durées de rétention sont à fixer après validation juridique (loi 2024/017).
+
+## Médias sur Cloudflare R2 (C4)
+
+Tâche **humaine** (aucun code ne crée le bucket). Le code livre l'adaptateur `R2StorageAdapter` derrière le port `StorageProvider` ; Supabase Storage reste l'adaptateur par défaut.
+
+1. Cloudflare → R2 → créer un bucket (ex. `flexco-media`).
+2. R2 → « Gérer les jeton API » → créer un jeton **Object Read & Write limité à ce bucket** ; noter l'Access Key ID et le Secret (affiché une seule fois).
+3. Relier un **domaine personnalisé** au bucket (ex. `media.<votre-domaine>`) : c'est lui qui devient `R2_PUBLIC_BASE_URL`. Éviter le domaine `r2.dev` en production (limité en débit, non destiné à la production).
+4. Variables Vercel : `STORAGE_PROVIDER=r2`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL`. Redéployer.
+5. Test le moins coûteux : téléverser un logo depuis le dashboard d'un tenant de test, vérifier que l'URL pointe vers le domaine R2 et que l'image s'affiche.
+6. **Vidéos** : elles restent sur R2 et ne doivent **pas** être servies via le cache CDN de Cloudflare (conditions d'usage — à relire avant d'activer un cache sur ce domaine). Règle de cache à ne pas appliquer aux extensions vidéo.
+7. Bascule : ne concerne que les nouveaux envois. Les médias existants gardent leur URL Supabase jusqu'à l'outil de migration (prochaine PR C4).
+8. Domaines personnalisés des tenants et « Cloudflare for SaaS » : **non évalué / à vérifier**.
+
+
+## Rejeu des événements de paiement échoués (décision Q20)
+
+`/api/cron/replay-webhook-events` rejoue les événements de paiement en statut `failed` (3 essais au total),
+puis les passe en `dead` et envoie une alerte Telegram. Même `CRON_SECRET` (`Authorization: Bearer <CRON_SECRET>`),
+fréquence conseillée : toutes les 10 à 15 minutes. En plus, `/api/cron/process-payment-reconciliation`
+reprend les paiements `pending` / `effect_failed` / `processing` interrompus.
+
+`FAPSHI_BASE_URL` est désormais OBLIGATOIRE (aucune valeur par défaut) : `https://sandbox.fapshi.com` pour les tests.

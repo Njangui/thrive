@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isPlatformTenant } from "@/application/services/platform-tenant";
+import { defaultProspectingDeps, recordProspectInbound } from "@/application/services/prospecting-service";
 import { env } from "@/lib/env";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import {
@@ -33,6 +35,10 @@ import { handleAccountStatusChanged } from "@/application/services/provider-conn
 import { notifyOrgAdmins } from "@/application/services/notification-service";
 import { trackExternalPost, handleIncomingComment } from "@/application/services/social-post-tracking-service";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isInboundAttachmentPlaceholder } from "@/domain/events/domain-events";
+import { handleWhatsAppBackoffice } from "@/application/services/whatsapp-backoffice-service";
+import { applyTemplateStatusEvent } from "@/application/services/whatsapp-template-service";
+import { applyAccountEvent, recordDeliveryFailure } from "@/application/services/whatsapp-channel-health-service";
 
 /**
  * Pipeline (section 37) :
@@ -76,7 +82,13 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabaseServiceClient();
-  const rawEvents = parseZernioWebhookPayload(rawBody);
+  // Audit W3 : JSON invalide après authentification = 400, pas 500.
+  let rawEvents: ReturnType<typeof parseZernioWebhookPayload>;
+  try {
+    rawEvents = parseZernioWebhookPayload(rawBody);
+  } catch {
+    return NextResponse.json({ error: "invalid payload" }, { status: 400 });
+  }
 
   for (const rawEvent of rawEvents) {
     // CONFIRMÉ : `id` (racine du payload) est la clé de déduplication
@@ -189,6 +201,23 @@ export async function POST(request: Request) {
     }
 
     try {
+      // C2 étape 5 : événements `whatsapp.*` (revue des modèles, restriction/qualité/alerte du compte).
+      // Avant tout mapping : ce ne sont ni des messages ni des publications.
+      if (String(rawEvent.event).startsWith("whatsapp.")) {
+        const raw = rawEvent as unknown as Record<string, unknown>;
+        if (rawEvent.event === ("whatsapp.template.status_updated" as string)) {
+          const t = (raw.template ?? {}) as Record<string, unknown>;
+          await applyTemplateStatusEvent(organizationId, {
+            name: typeof t.name === "string" ? t.name : undefined, id: typeof t.id === "string" ? t.id : undefined,
+            status: typeof t.status === "string" ? t.status : undefined, reason: typeof t.reason === "string" ? t.reason : undefined,
+          });
+        } else {
+          await applyAccountEvent(supabase, organizationId, raw, new Date().toISOString());
+        }
+        await markWebhookEvent(externalEventId, "processed");
+        continue;
+      }
+
       if (isZernioPostEvent(rawEvent)) {
         const postEvent = mapZernioPostEventToDomainEvent(rawEvent, organizationId);
         if (postEvent) {
@@ -259,6 +288,27 @@ export async function POST(request: Request) {
         continue;
       }
 
+      // C2 étape 5 — back-office WhatsApp : un message du PERSONNEL (numéro lié, ou numéro dédié au
+      // back-office) ne doit JAMAIS atteindre le pipeline client (CRM, IA clients). Avant la politique
+      // d'offre : le pilotage ne dépend pas du quota de messagerie. En cas d'exception, on n'enchaîne
+      // pas sur le pipeline client (catch global => événement « failed »).
+      if (domainEvent.type === "MESSAGE_RECEIVED" && domainEvent.payload.channel === "whatsapp") {
+        const routed = await handleWhatsAppBackoffice({
+          organizationId,
+          accountId: domainEvent.payload.providerAccountId ?? rawEvent.account.id,
+          conversationId: domainEvent.payload.externalThreadId,
+          phoneE164: domainEvent.payload.phoneE164,
+          text: isInboundAttachmentPlaceholder(domainEvent.payload.content) ? "" : domainEvent.payload.content,
+          hasAttachment: Boolean(domainEvent.payload.attachment),
+          attachmentType: domainEvent.payload.attachment?.type,
+          attachmentUrl: domainEvent.payload.attachment?.url,
+        });
+        if (routed === "handled") {
+          await markWebhookEvent(externalEventId, "processed");
+          continue;
+        }
+      }
+
       if (domainEvent.type === "MESSAGE_RECEIVED") {
         // Lot O — messagerie unifiée : WhatsApp, Messenger et Instagram
         // arrivent par la même boîte Zernio. Un canal non inclus dans l'offre
@@ -269,6 +319,14 @@ export async function POST(request: Request) {
           console.info(`Zernio webhook: message ${inboundChannel} ignoré (org ${organizationId}) — ${inboxDecision.reason}`);
           await markWebhookEvent(externalEventId, "ignored_duplicate");
           continue;
+        }
+
+        // Flexco sur Flexco : un message d'un prospect (campagne de prospection) met à jour son statut ; STOP ou refus
+        // le désinscrit définitivement. Best-effort : n'empêche jamais le traitement normal du message.
+        if (inboundChannel === "whatsapp" && domainEvent.payload.phoneE164 && isPlatformTenant(organizationId)) {
+          await recordProspectInbound(organizationId, domainEvent.payload.phoneE164, domainEvent.payload.content, defaultProspectingDeps()).catch((error) => {
+            console.error("Zernio webhook: suivi prospect en échec:", error instanceof Error ? error.message : error);
+          });
         }
 
         const result = await handleInboundMessage(domainEvent);
@@ -334,6 +392,9 @@ export async function POST(request: Request) {
       // CORRECTIF Lot 3 (audit master prompt §44) : message.failed
       // confirmé mais jamais traité jusqu'ici.
       if (domainEvent.type === "MESSAGE_FAILED") {
+        if (rawEvent.account.platform === "whatsapp") {
+          await recordDeliveryFailure(supabase, { organizationId, externalMessageId: domainEvent.payload.externalMessageId, errorMessage: domainEvent.payload.errorMessage });
+        }
         await notifyOrgAdmins({
           organizationId,
           title: "Message non délivré.",

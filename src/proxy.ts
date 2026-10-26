@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { buildCsp, supabaseHostFromEnv } from "@/lib/csp";
 
 /**
  * Résolution tenant par hostname (section 23) :
@@ -58,6 +59,25 @@ export function proxy(request: NextRequest) {
     // Domaine custom potentiel - la résolution réelle vers organization_id
     // via tenant_domains se fait côté serveur (Phase 6), pas ici.
     requestHeaders.set("x-tenant-custom-domain", hostname);
+  }
+
+  // Audit SEC1 : CSP à nonce, activée explicitement (CSP_NONCE=true). Next.js lit le nonce dans l'en-tête
+  // de requête `Content-Security-Policy` et l'applique aux scripts qu'il injecte.
+  if (process.env.CSP_NONCE === "true") {
+    const nonce = btoa(crypto.randomUUID());
+    let r2Origin: string | null = null;
+    try {
+      const r2 = new URL(process.env.R2_PUBLIC_BASE_URL ?? "");
+      r2Origin = r2.protocol === "https:" ? r2.origin : null;
+    } catch {
+      r2Origin = null;
+    }
+    const csp = buildCsp({ nonce, supabaseHost: supabaseHostFromEnv(process.env.NEXT_PUBLIC_SUPABASE_URL), r2Origin });
+    requestHeaders.set("x-nonce", nonce);
+    requestHeaders.set("Content-Security-Policy", csp);
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    response.headers.set("Content-Security-Policy", csp);
+    return response;
   }
 
   return NextResponse.next({ request: { headers: requestHeaders } });

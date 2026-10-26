@@ -34,7 +34,8 @@ export type MediaType =
   | "hero"
   | "service"
   | "telegram-inbox"
-  | "message-attachment";
+  | "message-attachment"
+  | "assistant-attachment";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 Mo — large mais borné (section 54 : échouer fort plutôt que silencieusement)
 

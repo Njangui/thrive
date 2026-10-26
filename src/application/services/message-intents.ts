@@ -142,12 +142,14 @@ const SECTOR_NOUNS: Record<string, Set<string>> = {
   retail: new Set<string>(),
   beauty: new Set<string>(),
   professional_services: new Set<string>(),
+  health: words("consultation acte examen analyse bilan vaccin"),
+  education: words("formation filiere programme cursus inscription cours licence master"),
 };
 /** Ambigus hors de leur secteur (« bien » = adverbe, « carte » = carte bancaire) : exclus quand le secteur est inconnu. */
 const AMBIGUOUS_NOUNS = words("bien maison carte local bureau location studio chambre loyer menu plat boisson dessert repas");
 /** Pluriel sans ambiguïté : « vos biens » désigne le catalogue dans tous les secteurs. */
 const ALWAYS_NOUN_RAW = words("biens");
-const SERVICE_FIRST_SECTORS = new Set(["beauty", "professional_services"]);
+const SERVICE_FIRST_SECTORS = new Set(["beauty", "professional_services", "health", "education"]);
 
 function productLikeNouns(sector: string): Set<string> {
   if (sector === "*") {
@@ -231,6 +233,9 @@ const SEARCH_STOP_WORDS = words(`
   photos image images video lien site voici voila oui non autre autres meme juste seulement question questions moi toi lui eux ici
 `);
 
+/** Mots de 3 lettres sans valeur de recherche (utilisé seulement quand `minLength` = 3). */
+const SHORT_FUNCTION_WORDS = words("des les une sur par pas est qui que ses ces mon ton son mes tes aux ont ete eux car mais vos nos moi toi lui ici eux et ou ni ne se ce ca ma ta sa");
+
 /**
  * Mots significatifs d'un message à chercher par NOM dans le catalogue :
  * ni mots vides, ni verbes de demande, ni noms génériques de catalogue
@@ -238,11 +243,14 @@ const SEARCH_STOP_WORDS = words(`
  * pratiques (horaires, adresse) — qui ne désignent jamais un article précis.
  * Renvoyés au SINGULIER (« jeans » → « jean » trouve aussi « Jeans slim »).
  */
-export function extractSearchTerms(message: string, max = 4): string[] {
+export function extractSearchTerms(message: string, max = 4, minLength = 4): string[] {
   const nouns = productLikeNouns("*");
   const terms: string[] = [];
   for (const token of tokenize(message)) {
-    if (token.length < 4) continue;
+    if (token.length < minLength) continue;
+    // C3 : en acceptant les mots de 3 lettres (« sac », « jus », « pot »), les articles et
+    // prépositions courts ne doivent pas devenir des mots-clés.
+    if (token.length === 3 && SHORT_FUNCTION_WORDS.has(token)) continue;
     if (SEARCH_STOP_WORDS.has(token) || isBrowseCue(token)) continue;
     const singular = singularize(token);
     if (SEARCH_STOP_WORDS.has(singular) || nouns.has(singular) || SERVICE_NOUNS.has(singular) || ALWAYS_NOUN_RAW.has(token)) continue;

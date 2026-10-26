@@ -86,6 +86,8 @@ const PUBLIC_REFERENCE_TABLES = new Set([
  *   rôle membre. RLS activée, volontairement sans policy (deny-all).
  */
 const SERVICE_ROLE_ONLY_TABLES = new Set([
+  // C1 P4 : outbox d'événements, service-role uniquement (migration 0105).
+  "domain_events",
   "platform_admins",
   "platform_settings",
   "webhook_events",
@@ -106,6 +108,30 @@ const SERVICE_ROLE_ONLY_TABLES = new Set([
   // lecture/écriture exclusivement via la console Super Admin (service role).
   "platform_expenses",
   "platform_costs",
+  // C2 (0120_channel_identities_step_up.sql) : secrets d'authentification
+  // renforcée, lus et écrits UNIQUEMENT par `supabase-step-up-adapter.ts` et
+  // `channel-identity-service.ts` en service-role (qui filtrent par
+  // organisation/membership) — un hachage de PIN ou de code de liaison ne doit
+  // JAMAIS être lisible par un client, pas même par son propriétaire.
+  "step_up_pins", // PIN haché + compteur d'échecs / verrouillage
+  "channel_link_codes", // codes de liaison à usage unique (hachés)
+  // C2 (0122_telegram_backoffice.sql) : références d'approbations pilotées par le
+  // bot Telegram et choix d'entreprise active — uniquement service-role
+  // (`telegram-backoffice-service.ts`, qui filtre par membership/organisation).
+  "channel_active_org",
+  "channel_approval_prompts",
+  // C2 étape 4 : alertes propriétaire — réglages, alertes et journal d'envois ne
+  // sont lus/écrits que par `alert-service.ts` (filtré par organisation).
+  // C2 (0125) : remboursements de commandes — écrits uniquement via record_order_refund (service_role).
+  "order_refunds",
+  "alert_settings",
+  "alerts",
+  "alert_deliveries",
+  // C2 étape 5 : back-office WhatsApp — lus/écrits par les services whatsapp-* (filtrés par organisation).
+  "whatsapp_backoffice_settings",
+  "whatsapp_templates",
+  "whatsapp_channel_health",
+  "whatsapp_delivery_failures",
 ]);
 
 /**

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockFrom = vi.fn();
+const mockRpc = vi.fn();
 vi.mock("@/infrastructure/supabase/server-client", () => ({
-  getSupabaseServiceClient: () => ({ from: mockFrom }),
+  getSupabaseServiceClient: () => ({ from: mockFrom, rpc: mockRpc }),
 }));
 
 // createOrganization dépend aussi de la session Supabase et de plusieurs
@@ -13,8 +14,6 @@ vi.mock("@/infrastructure/supabase/server-session-client", () => ({
   getSupabaseServerSessionClient: vi.fn(),
 }));
 vi.mock("./finance-service", () => ({ seedDefaultExpenseCategories: vi.fn() }));
-vi.mock("./plans-repository", () => ({ createFreemiumSubscription: vi.fn() }));
-vi.mock("./ai-credits-service", () => ({ initializeCreditBalance: vi.fn() }));
 vi.mock("./country-service", () => ({ validateCountryForSignup: vi.fn() }));
 
 import { updateOnboardingStep, markOnboardingComplete, getOnboardingStatus, createOrganization } from "./onboarding-service";
@@ -110,22 +109,13 @@ describe("getOnboardingStatus", () => {
 
 describe("createOrganization — Country Engine (section 12/13)", () => {
   function configureFrom() {
-    const insertedOrgs: Record<string, unknown>[] = [];
+    const rpcCalls: Record<string, unknown>[] = [];
+    mockRpc.mockImplementation(async (_fn: string, args: Record<string, unknown>) => {
+      rpcCalls.push(args);
+      return { data: "org-1", error: null };
+    });
 
     mockFrom.mockImplementation((table: string) => {
-      if (table === "organizations") {
-        return {
-          // generateUniqueSlug : le slug demandé n'est jamais déjà pris.
-          select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
-          insert: (payload: Record<string, unknown>) => {
-            insertedOrgs.push(payload);
-            return { select: () => ({ single: () => Promise.resolve({ data: { id: "org-1" }, error: null }) }) };
-          },
-        };
-      }
-      if (table === "memberships" || table === "tenant_modules" || table === "ai_config") {
-        return { insert: () => Promise.resolve({ error: null }) };
-      }
       if (table === "categories") {
         // seedDefaultCategories : vérifie d'abord qu'aucune catégorie
         // n'existe déjà (compte à 0 ici), puis insère le preset par défaut.
@@ -134,10 +124,11 @@ describe("createOrganization — Country Engine (section 12/13)", () => {
           insert: () => Promise.resolve({ error: null }),
         };
       }
+      // generateUniqueSlug : le slug demandé n'est jamais déjà pris ; autres lectures : rien.
       return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
     });
 
-    return { insertedOrgs };
+    return { insertedOrgs: rpcCalls };
   }
 
   function mockAuthenticatedSession(userId = "user-1") {
@@ -181,7 +172,7 @@ describe("createOrganization — Country Engine (section 12/13)", () => {
 
     expect(result.organizationId).toBe("org-1");
     expect(mockValidateCountryForSignup).toHaveBeenCalledWith("gh");
-    expect(insertedOrgs[0]).toMatchObject({ country_code: "GH", currency: "GHS", name: "Accra Shop" });
+    expect(insertedOrgs[0]).toMatchObject({ p_country: "GH", p_currency: "GHS", p_name: "Accra Shop" });
   });
 
   it("régression Cameroun : un pays CM valide produit currency=XAF, country_code=CM, exactement comme avant le Country Engine", async () => {
@@ -191,6 +182,53 @@ describe("createOrganization — Country Engine (section 12/13)", () => {
 
     await createOrganization({ name: "Boutique Yaoundé", countryCode: "CM" });
 
-    expect(insertedOrgs[0]).toMatchObject({ country_code: "CM", currency: "XAF" });
+    expect(insertedOrgs[0]).toMatchObject({ p_country: "CM", p_currency: "XAF" });
+  });
+});
+
+describe("createOrganization — limite, atomicité et sous-domaines réservés (Lot 4)", () => {
+  beforeEach(() => {
+    mockValidateCountryForSignup.mockResolvedValue({ countryCode: "CM", currencyCode: "XAF" });
+    mockGetSupabaseServerSessionClient.mockResolvedValue({
+      auth: { getUser: () => Promise.resolve({ data: { user: { id: "user-1" } } }) },
+    } as never);
+    mockFrom.mockImplementation((table: string) =>
+      table === "categories"
+        ? { select: () => ({ eq: () => Promise.resolve({ count: 0, error: null }) }), insert: () => Promise.resolve({ error: null }) }
+        : { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) },
+    );
+  });
+
+  it("Q6 : déjà une entreprise gratuite -> message clair, rien d'autre n'est écrit", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "organization_limit_free", code: "P0001" } });
+    await expect(createOrganization({ name: "Deuxième", countryCode: "CM" })).rejects.toThrow(/offre gratuite/);
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("Q6 : 5 entreprises atteintes -> refus", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "organization_limit_total", code: "P0001" } });
+    await expect(createOrganization({ name: "Sixième", countryCode: "CM" })).rejects.toThrow(/maximum/);
+  });
+
+  it("slug pris dans une course (23505) : retente avec un autre slug", async () => {
+    mockRpc
+      .mockResolvedValueOnce({ data: null, error: { message: "duplicate key", code: "23505" } })
+      .mockResolvedValueOnce({ data: "org-7", error: null });
+    const result = await createOrganization({ name: "Ma Boutique", countryCode: "CM" });
+    expect(result.organizationId).toBe("org-7");
+    expect(mockRpc.mock.calls[0]![1].p_slug).not.toBe(mockRpc.mock.calls[1]![1].p_slug);
+  });
+
+  it("Q29 : un nom qui donne un sous-domaine réservé reçoit un suffixe", async () => {
+    mockRpc.mockResolvedValue({ data: "org-8", error: null });
+    await createOrganization({ name: "Admin", countryCode: "CM" });
+    const slug = mockRpc.mock.calls[0]![1].p_slug as string;
+    expect(slug).not.toBe("admin");
+    expect(slug.startsWith("admin-")).toBe(true);
+  });
+
+  it("erreur SQL inattendue -> propagée (rien de partiel : la transaction est annulée côté base)", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "boom", code: "XX000" } });
+    await expect(createOrganization({ name: "Ma Boutique", countryCode: "CM" })).rejects.toThrow(/Impossible de créer l'organisation: boom/);
   });
 });

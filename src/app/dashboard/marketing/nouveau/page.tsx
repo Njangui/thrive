@@ -17,7 +17,7 @@ export default async function NewPublicationPage({ searchParams }: { searchParam
 
   async function publishAction(formData: FormData) {
     "use server";
-    const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+    const membership = await requireMembership(organizationId, ["owner", "admin", "manager"]);
     const productIds = String(formData.get("productIds") ?? "").split(",").map((v) => v.trim()).filter(Boolean);
     const targetIds = String(formData.get("targetIds") ?? "").split(",").map((v) => v.trim()).filter(Boolean);
     const currentTargets = await listOmnichannelPublicationTargets(organizationId);

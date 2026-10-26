@@ -54,6 +54,8 @@ function UsageCard({ gauge }: { gauge: UsageGauge }) {
 
 const PAYMENT_STATUS_LABEL: Record<string, { label: string; className: string }> = {
   pending: { label: "En attente", className: "text-danger-600" },
+  processing: { label: "Activation en cours", className: "text-amber-600" },
+  effect_failed: { label: "Activation en cours", className: "text-amber-600" }, // rejoué automatiquement
   completed: { label: "Payé", className: "text-violet-600" },
   failed: { label: "Échoué", className: "text-danger-600" },
   refunded: { label: "Remboursé", className: "text-slate-500" },

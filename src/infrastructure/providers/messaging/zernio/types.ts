@@ -371,3 +371,30 @@ export function isZernioExternalPostEvent(raw: { event: string }): raw is Zernio
 export function isZernioPostEvent(raw: { event: string }): raw is ZernioPostWebhookEvent {
   return raw.event.startsWith("post.") && !isZernioExternalPostEvent(raw);
 }
+
+/** C2 étape 5 — modèles WhatsApp. CONFIRMÉ : docs.zernio.com/platforms/whatsapp/templates (oct. 2026). */
+export interface ZernioCreateWhatsAppTemplate {
+  accountId: string;
+  name: string;
+  category: "UTILITY" | "MARKETING" | "AUTHENTICATION";
+  language: string;
+  components: unknown[];
+}
+export interface ZernioWhatsAppTemplate {
+  id?: string;
+  name: string;
+  status: string;
+  category?: string;
+  language?: string;
+  components?: unknown[];
+}
+export interface ZernioStartTemplateConversation {
+  accountId: string;
+  /** Numéro avec indicatif pays, chiffres uniquement, sans « + ». */
+  participantId: string;
+  templateName: string;
+  /** Doit correspondre EXACTEMENT à la langue de création (« en » ≠ « en_US »). */
+  templateLanguage: string;
+  /** Tableau plat : variables d'en-tête texte, puis de corps, puis de boutons URL dynamiques. */
+  templateParams: string[];
+}

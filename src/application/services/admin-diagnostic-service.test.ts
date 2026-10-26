@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/infrastructure/supabase/server-client", () => ({ getSupabaseServiceClient: vi.fn() }));
 vi.mock("./entitlements-service", () => ({ isFeatureEnabled: vi.fn() }));
-vi.mock("./promo-trial-service", () => ({ getPromoTrial: vi.fn(), getPromoPhase: vi.fn() }));
 
 import { explainAccess, findMissingEntitlements } from "./admin-diagnostic-service";
 import { KNOWN_ENTITLEMENT_KEYS, PLAN_KEYS } from "./plans-repository";
@@ -22,15 +21,15 @@ describe("findMissingEntitlements", () => {
 
 describe("explainAccess", () => {
   it("sans ligne d'abonnement : explique le repli Discover et renvoie vers les paiements", () => {
-    expect(explainAccess({ hasSubscriptionRow: false, realPlan: "free", effectivePlan: "free", phase: "none" })).toMatch(/Aucune ligne d'abonnement/);
+    expect(explainAccess({ hasSubscriptionRow: false, realPlan: "free", effectivePlan: "free" })).toMatch(/Aucune ligne d'abonnement/);
   });
   it("essai en cours : plan réel ≠ plan effectif", () => {
-    expect(explainAccess({ hasSubscriptionRow: true, realPlan: "starter", effectivePlan: "pro", phase: "active" })).toMatch(/essai Pro offert en cours/);
+    expect(explainAccess({ hasSubscriptionRow: true, realPlan: "starter", effectivePlan: "pro" })).toMatch(/plus à jour/);
   });
   it("Pro payant pendant l'essai", () => {
-    expect(explainAccess({ hasSubscriptionRow: true, realPlan: "pro", effectivePlan: "pro", phase: "active" })).toMatch(/n'y change rien/);
+    expect(explainAccess({ hasSubscriptionRow: true, realPlan: "pro", effectivePlan: "pro" })).toMatch(/plan « pro »/);
   });
   it("hors essai : droits du plan réel", () => {
-    expect(explainAccess({ hasSubscriptionRow: true, realPlan: "starter", effectivePlan: "starter", phase: "none" })).toMatch(/plan « starter »/);
+    expect(explainAccess({ hasSubscriptionRow: true, realPlan: "starter", effectivePlan: "starter" })).toMatch(/plan « starter »/);
   });
 });

@@ -157,31 +157,28 @@ export async function listPendingPayouts(): Promise<(AffiliatePayoutSummary & { 
   });
 }
 
+/** Traduit les exceptions applicatives des fonctions SQL en erreurs métier claires. */
+function translatePayoutError(message: string): never {
+  if (message.includes("payout_already_processed")) throw new ValidationError("Cette demande a déjà été traitée (payée ou rejetée) : aucune modification possible.");
+  if (message.includes("payout_not_found")) throw new NotFoundError("Demande de paiement introuvable.");
+  if (message.includes("payment_reference_required")) throw new ValidationError("La référence du virement est obligatoire.");
+  throw new Error(message);
+}
+
 /**
- * Marque une demande comme effectivement virée. Passe TOUTES ses
- * commissions couvertes (`affiliate_payout_items`) à `status='paid'` —
- * elles quittent définitivement le solde "disponible" (voir
- * summarizeBalance, domain/entities/affiliate.ts).
+ * Marque une demande comme effectivement virée — ATOMIQUE (0192, `settle_affiliate_payout`) : statut de la
+ * demande + commissions couvertes passent à `paid` dans la même transaction. Les commissions quittent
+ * définitivement le solde « disponible » (voir summarizeBalance, domain/entities/affiliate.ts).
  */
 export async function markPayoutPaid(payoutId: string, adminUserId: string, paymentReference: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
-
-  const { data: payout, error } = await supabase
-    .from("affiliate_payouts")
-    .update({ status: "paid", processed_at: new Date().toISOString(), processed_by: adminUserId, payment_reference: paymentReference })
-    .eq("id", payoutId)
-    .in("status", ["requested", "approved"])
-    .select("id, affiliate_id, amount_fcfa")
-    .maybeSingle();
-
-  if (error) throw new Error(`Impossible de marquer le paiement comme effectué: ${error.message}`);
-  if (!payout) throw new NotFoundError("Demande de paiement introuvable ou déjà traitée.");
-
-  const { data: items } = await supabase.from("affiliate_payout_items").select("conversion_id").eq("payout_id", payoutId);
-  const conversionIds = (items ?? []).map((i) => i.conversion_id);
-  if (conversionIds.length > 0) {
-    await supabase.from("affiliate_conversions").update({ status: "paid" }).in("id", conversionIds);
-  }
+  const { data, error } = await supabase.rpc("settle_affiliate_payout", {
+    p_payout_id: payoutId,
+    p_admin: adminUserId,
+    p_reference: paymentReference,
+  });
+  if (error) translatePayoutError(error.message);
+  const row = (Array.isArray(data) ? data[0] : data) as { out_amount?: number } | undefined;
 
   await writeAdminAuditLog({
     actorUserId: adminUserId,
@@ -189,33 +186,19 @@ export async function markPayoutPaid(payoutId: string, adminUserId: string, paym
     action: "AFFILIATE_PAYOUT_PAID",
     entityType: "affiliate_payout",
     entityId: payoutId,
-    afterState: { amountFcfa: payout.amount_fcfa, paymentReference },
+    afterState: { amountFcfa: row?.out_amount ?? null, paymentReference },
   });
 }
 
 /**
- * Rejette une demande — DÉTACHE ses commissions (supprime les lignes
- * `affiliate_payout_items` correspondantes) pour qu'elles redeviennent
- * éligibles à une future demande (voir la clause `not exists` de
- * `request_affiliate_payout`, 0047_affiliate_payout_atomic.sql) : un
- * rejet (ex: RIB erroné signalé par l'affilié) ne doit jamais bloquer
- * ces commissions indéfiniment.
+ * Rejette une demande — ATOMIQUE (0192, `reject_affiliate_payout`) : détache ses commissions (elles redeviennent
+ * éligibles à une future demande) ET passe la demande en `rejected` dans la même transaction. Une demande déjà
+ * PAYÉE ne peut plus être rejetée (avant : ses commissions redevenaient payables → double paiement possible).
  */
 export async function rejectPayout(payoutId: string, adminUserId: string, reason: string): Promise<void> {
   const supabase = getSupabaseServiceClient();
-
-  const { error: deleteItemsError } = await supabase.from("affiliate_payout_items").delete().eq("payout_id", payoutId);
-  if (deleteItemsError) throw new Error(`Impossible de détacher les commissions: ${deleteItemsError.message}`);
-
-  const { data: payout, error } = await supabase
-    .from("affiliate_payouts")
-    .update({ status: "rejected", admin_notes: reason, processed_at: new Date().toISOString(), processed_by: adminUserId })
-    .eq("id", payoutId)
-    .select("id")
-    .maybeSingle();
-
-  if (error) throw new Error(`Impossible de rejeter la demande: ${error.message}`);
-  if (!payout) throw new NotFoundError("Demande de paiement introuvable.");
+  const { error } = await supabase.rpc("reject_affiliate_payout", { p_payout_id: payoutId, p_admin: adminUserId, p_reason: reason });
+  if (error) translatePayoutError(error.message);
 
   await writeAdminAuditLog({
     actorUserId: adminUserId,

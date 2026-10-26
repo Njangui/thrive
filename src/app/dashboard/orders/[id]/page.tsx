@@ -18,7 +18,7 @@ async function completeOrderAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   const orderId = String(formData.get("orderId") ?? "");
-  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "cashier"]);
+  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
   await markOrderCompleted(organizationId, orderId, membership.userId);
   redirect(`/dashboard/orders/${orderId}?success=${encodeURIComponent("Commande finalisée.")}`);
 }
@@ -27,7 +27,7 @@ async function cancelOrderAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
   const orderId = String(formData.get("orderId") ?? "");
-  await requireMembership(organizationId, ["owner", "admin", "manager", "cashier"]);
+  await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
   await cancelOrder(organizationId, orderId);
   redirect(`/dashboard/orders/${orderId}?success=${encodeURIComponent("Commande annulée.")}`);
 }

@@ -100,7 +100,7 @@ function validateAudience(audience: BroadcastAudience): BroadcastAudience {
   return { channels, recentDays };
 }
 
-async function loadCandidates(organizationId: string, audience: BroadcastAudience): Promise<AudienceCandidate[]> {
+export async function loadCandidates(organizationId: string, audience: BroadcastAudience): Promise<AudienceCandidate[]> {
   const supabase = getSupabaseServiceClient();
   const since = new Date(Date.now() - audience.recentDays * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
@@ -215,19 +215,46 @@ export async function createContactBroadcast(input: CreateContactBroadcastInput)
   return { broadcastId: broadcast.id as string, recipients: picked.length };
 }
 
-export async function cancelContactBroadcast(organizationId: string, broadcastId: string): Promise<void> {
+/**
+ * Annulation AVANT envoi, idempotente (C5) : un second appel (double clic, relance
+ * de l'agent) répond « déjà annulée » au lieu d'une erreur. Seule une campagne
+ * `scheduled` s'annule : une campagne en cours (`processing`) ou terminée est
+ * refusée explicitement, car le cron poursuit les lots restants et réécrirait
+ * le statut — mieux vaut un refus clair qu'une fausse annulation.
+ */
+export async function cancelContactBroadcast(
+  organizationId: string,
+  broadcastId: string,
+  actorUserId?: string,
+): Promise<{ result: "cancelled" | "already_cancelled" }> {
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from("contact_broadcasts")
-    .update({ status: "cancelled", completed_at: new Date().toISOString() })
+    .update({ status: "cancelled", completed_at: new Date().toISOString(), cancelled_at: new Date().toISOString(), ...(actorUserId ? { cancelled_by: actorUserId } : {}) })
     .eq("id", broadcastId)
     .eq("organization_id", organizationId)
     .eq("status", "scheduled")
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`Annulation impossible: ${error.message}`);
-  if (!data) throw new NotFoundError("Campagne introuvable ou déjà en cours d'envoi.");
-  await supabase.from("contact_broadcast_recipients").update({ status: "skipped", error_message: "Campagne annulée" }).eq("broadcast_id", broadcastId).eq("status", "pending");
+  if (!data) {
+    const { data: current, error: readError } = await supabase
+      .from("contact_broadcasts")
+      .select("status")
+      .eq("id", broadcastId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (readError) throw new Error(`Annulation impossible: ${readError.message}`);
+    if (!current) throw new NotFoundError("Campagne introuvable.");
+    if (current.status === "cancelled") return { result: "already_cancelled" };
+    throw new ValidationError(
+      current.status === "processing"
+        ? "L'envoi est déjà en cours : il ne peut plus être annulé."
+        : "Cette campagne est déjà terminée : elle ne peut plus être annulée.",
+    );
+  }
+  await supabase.from("contact_broadcast_recipients").update({ status: "skipped", error_message: "Campagne annulée" }).eq("broadcast_id", broadcastId).eq("organization_id", organizationId).eq("status", "pending");
+  return { result: "cancelled" };
 }
 
 export interface ContactBroadcastSummary {

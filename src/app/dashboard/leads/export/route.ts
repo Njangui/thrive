@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
 export async function GET() {
   try {
     const { organizationId } = await requireCurrentOrganization();
-    await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+    await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
 
     const { rows, truncated } = await listAllLeadsForExport(organizationId);
     const csv = buildLeadsCsv(rows, STATUS_LABELS);

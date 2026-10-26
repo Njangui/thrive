@@ -145,7 +145,7 @@ describe("buildStorefrontNav", () => {
     const nav = buildStorefrontNav(["hero", "products"], RETAIL_BLUEPRINT, capabilities, tenant);
 
     for (const entry of nav) {
-      expect(entry.href).toBe(STOREFRONT_PATHS[entry.key]);
+      expect(entry.href).toBe(STOREFRONT_PATHS[entry.key as keyof typeof STOREFRONT_PATHS]);
     }
   });
 

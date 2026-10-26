@@ -28,7 +28,7 @@ export default async function ConversationDetailPage({
 
   async function replyAction(formData: FormData) {
     "use server";
-    const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+    const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
     const content = String(formData.get("content") ?? "");
     const fileEntry = formData.get("attachment");
     const file = fileEntry instanceof File && fileEntry.size > 0 ? fileEntry : null;
@@ -73,7 +73,7 @@ export default async function ConversationDetailPage({
 
   async function returnToAiAction() {
     "use server";
-    await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+    await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
     try {
       await returnConversationToAI(organizationId, conversationId);
     } catch (err) {
@@ -85,7 +85,7 @@ export default async function ConversationDetailPage({
   /** Lot P — bouton « Prendre la main » : met l'IA en pause sans avoir à écrire un message tout de suite. */
   async function takeOverAction() {
     "use server";
-    const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+    const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
     try {
       await takeOverConversation(organizationId, conversationId, membership.userId);
     } catch (err) {
@@ -96,7 +96,7 @@ export default async function ConversationDetailPage({
 
   async function closeAction() {
     "use server";
-    await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+    await requireMembership(organizationId, ["owner", "admin", "manager", "employee"]);
     try {
       await closeConversation(organizationId, conversationId);
     } catch (err) {

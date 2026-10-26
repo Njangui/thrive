@@ -58,3 +58,53 @@ export const RECOMMENDED_PLAN_PRICES: Record<PlanKey, number> = {
   starter: 15000,
   pro: 30000,
 };
+
+/**
+ * Source UNIQUE des quotas affichés (décision Q11, audit P-tarifs) : les chiffres de la page /tarifs
+ * sont lus dans `plan_entitlements` (la table qui applique réellement les limites côté serveur),
+ * pas recopiés à la main. Le texte statique de PRICING_FEATURES ne sert plus que de repli pour
+ * les lignes non numériques ou absentes de la base.
+ */
+export type LimitsByPlan = Partial<Record<PlanKey, Record<string, number>>>;
+
+const countOrOff = (n: number): string | boolean => (n === 0 ? false : n === -1 ? "Illimité" : String(n));
+
+const LIMIT_FORMATTERS: Record<string, { entitlement: string; format: (n: number, limits: Record<string, number>) => string | boolean }> = {
+  catalog: { entitlement: "catalog_products", format: (n) => (n === -1 ? "Illimité" : `${n} produits max`) },
+  telegram_bots: { entitlement: "telegram_bots", format: countOrOff },
+  telegram_channels: { entitlement: "telegram_channels", format: countOrOff },
+  telegram_groups: { entitlement: "telegram_groups", format: countOrOff },
+  youtube: { entitlement: "youtube_accounts", format: countOrOff },
+  whatsapp: { entitlement: "whatsapp", format: countOrOff },
+  whatsapp_groups: {
+    entitlement: "whatsapp_groups",
+    format: (n, limits) => {
+      const base = countOrOff(n);
+      const bonus = limits["whatsapp_groups_dedicated_bonus"] ?? 0;
+      return typeof base === "string" && bonus > 0 ? `${base} (+${bonus} avec numéro dédié)` : base;
+    },
+  },
+  facebook: { entitlement: "facebook_pages", format: countOrOff },
+  linkedin: { entitlement: "linkedin_pages", format: countOrOff },
+  instagram: { entitlement: "instagram_accounts", format: countOrOff },
+  tiktok: { entitlement: "tiktok_accounts", format: countOrOff },
+  ai: { entitlement: "ai_credits", format: (n) => (n === -1 ? "Illimité" : String(n)) },
+  broadcast: { entitlement: "broadcast_contacts", format: (n) => (n === 0 ? false : n === -1 ? "Illimité" : `${n} contacts / campagne`) },
+  video_retention: { entitlement: "video_retention_days", format: (n) => (n === -1 ? "Illimitée" : `${n} jours`) },
+  team: { entitlement: "team_members", format: countOrOff },
+};
+
+/** Pure : remplace les valeurs chiffrées par celles de la base, garde le texte statique si la limite n'est pas configurée. */
+export function applyDbLimits(features: PricingFeature[], limits: LimitsByPlan): PricingFeature[] {
+  return features.map((feature) => {
+    const formatter = LIMIT_FORMATTERS[feature.key];
+    if (!formatter) return feature;
+    const values = { ...feature.values };
+    for (const plan of PLAN_ORDER) {
+      const planLimits = limits[plan];
+      const raw = planLimits?.[formatter.entitlement];
+      if (planLimits && typeof raw === "number") values[plan] = formatter.format(raw, planLimits);
+    }
+    return { ...feature, values };
+  });
+}

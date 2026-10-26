@@ -54,7 +54,7 @@ describe("generateAIReply — Lot 3 (réservation atomique avant génération, j
     const result = await generateAIReply("org-1", "Bonjour");
 
     expect(result.text).toBe("Réponse");
-    expect(mockConsumeCredit).toHaveBeenCalledWith("org-1");
+    expect(mockConsumeCredit).toHaveBeenCalledWith("org-1", 1, "ai_customer_reply", { task: "customer_reply", tier: "simple" });
     expect(mockReleaseCredit).not.toHaveBeenCalled();
   });
 
@@ -83,7 +83,7 @@ describe("generateAIReply — Lot 3 (réservation atomique avant génération, j
     });
 
     await expect(generateAIReply("org-1", "Bonjour")).rejects.toThrow(/fallback aussi indisponible/);
-    expect(mockReleaseCredit).toHaveBeenCalledWith("org-1");
+    expect(mockReleaseCredit).toHaveBeenCalledWith("org-1", 1);
   });
 
   it("sans fallback configuré, primary échoue : rembourse et propage l'erreur d'origine", async () => {
@@ -92,6 +92,6 @@ describe("generateAIReply — Lot 3 (réservation atomique avant génération, j
     mockGetAIProvider.mockResolvedValue({ primary: { providerName: "mistral", generateText: primaryGenerateText }, fallback: null });
 
     await expect(generateAIReply("org-1", "Bonjour")).rejects.toThrow(/seul provider en échec/);
-    expect(mockReleaseCredit).toHaveBeenCalledWith("org-1");
+    expect(mockReleaseCredit).toHaveBeenCalledWith("org-1", 1);
   });
 });

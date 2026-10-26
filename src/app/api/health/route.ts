@@ -13,17 +13,30 @@ export const dynamic = "force-dynamic";
  * process up mais incapable de parler à Supabase doit déclencher une
  * alerte, pas un faux "OK".
  */
+/** Audit S3 : résultat mis en cache 10 s — des appels en boucle ne multiplient pas les requêtes base. */
+const CACHE_MS = 10_000;
+let cached: { at: number; status: number; body: Record<string, string> } | null = null;
+
 export async function GET() {
+  if (cached && Date.now() - cached.at < CACHE_MS) {
+    return NextResponse.json(cached.body, { status: cached.status });
+  }
+  const res = await check();
+  cached = { at: Date.now(), status: res.status, body: res.body };
+  return NextResponse.json(res.body, { status: res.status });
+}
+
+async function check(): Promise<{ status: number; body: Record<string, string> }> {
   try {
     const supabase = getSupabaseServiceClient();
     const { error } = await supabase.from("organizations").select("id", { count: "exact", head: true }).limit(1);
 
     if (error) {
-      return NextResponse.json({ status: "error", database: "unreachable" }, { status: 503 });
+      return { status: 503, body: { status: "error", database: "unreachable" } };
     }
 
-    return NextResponse.json({ status: "ok", database: "reachable" }, { status: 200 });
+    return { status: 200, body: { status: "ok", database: "reachable" } };
   } catch {
-    return NextResponse.json({ status: "error" }, { status: 503 });
+    return { status: 503, body: { status: "error" } };
   }
 }

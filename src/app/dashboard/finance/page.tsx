@@ -9,7 +9,7 @@ import { FinanceForms } from "./finance-forms";
 async function createRevenueAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
-  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "accountant"]);
+  const membership = await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
     await createRevenue({
@@ -31,7 +31,7 @@ async function createRevenueAction(formData: FormData) {
 async function createExpenseAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
-  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "accountant"]);
+  const membership = await requireMembership(organizationId, ["owner", "admin", "manager"]);
 
   try {
     await createExpense({

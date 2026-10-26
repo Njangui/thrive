@@ -6,7 +6,6 @@ vi.mock("./plans-repository", () => ({
   getEntitlementLimit: vi.fn(),
 }));
 // Pas d'essai Pro dans ces tests : le bonus de crédits d'essai a ses propres tests.
-vi.mock("./promo-trial-core", () => ({ getActivePromo: vi.fn().mockResolvedValue(null) }));
 
 const mockFrom = vi.fn();
 const mockRpc = vi.fn();
@@ -72,9 +71,19 @@ describe("getCreditStatus", () => {
     expect(status).toEqual({
       organizationId: "org-1",
       includedCredits: 500,
+      addonCredits: 0,
       usedCredits: 120,
       remainingCredits: 380,
     });
+  });
+
+  it("ajoute les crédits d'add-on au disponible (plan + achetés − consommés)", async () => {
+    configureSupabase({
+      ai_credit_balances: { data: { included_credits: 500, used_credits: 520, addon_credits: 100 }, error: null },
+    });
+    const status = await getCreditStatus("org-1");
+    expect(status.addonCredits).toBe(100);
+    expect(status.remainingCredits).toBe(80);
   });
 
   it("gère un plan illimité (-1) sans produire de valeur négative", async () => {
@@ -107,6 +116,7 @@ describe("getCreditStatus", () => {
     expect(status).toEqual({
       organizationId: "org-legacy",
       includedCredits: 500,
+      addonCredits: 0,
       usedCredits: 0,
       remainingCredits: 500,
     });
@@ -239,25 +249,27 @@ describe("initializeCreditBalance", () => {
 });
 
 describe("grantCredits", () => {
-  it("rejette un montant négatif ou nul", async () => {
+  it("rejette un montant négatif, nul ou non entier", async () => {
     await expect(grantCredits("org-1", 0)).rejects.toThrow();
+    await expect(grantCredits("org-1", 1.5)).rejects.toThrow();
   });
 
-  it("additionne au solde inclus existant", async () => {
-    configureSupabase({
-      ai_credit_balances: { data: { included_credits: 500 }, error: null },
-      ai_usage_events: { data: null, error: null },
-    });
+  it("ajoute via la RPC atomique grant_ai_credit (plus de lecture-puis-écriture) et journalise", async () => {
+    configureSupabase({ ai_credit_balances: { data: null, error: null }, ai_usage_events: { data: null, error: null } });
+    mockGetOrganizationRealPlanKey.mockResolvedValue("pro");
+    mockGetEntitlementLimit.mockResolvedValue(500);
+    mockRpc.mockResolvedValue({ data: true, error: null });
 
     await expect(grantCredits("org-1", 100, "geste_commercial")).resolves.toBeUndefined();
+    expect(mockRpc).toHaveBeenCalledWith("grant_ai_credit", { p_organization_id: "org-1", p_amount: 100 });
   });
 
-  it("n'essaie pas d'additionner sur un plan illimité, mais journalise quand même l'évènement", async () => {
-    configureSupabase({
-      ai_credit_balances: { data: { included_credits: -1 }, error: null },
-      ai_usage_events: { data: null, error: null },
-    });
+  it("remonte l'erreur si la RPC échoue (aucun crédit silencieusement perdu)", async () => {
+    configureSupabase({ ai_credit_balances: { data: null, error: null } });
+    mockGetOrganizationRealPlanKey.mockResolvedValue("pro");
+    mockGetEntitlementLimit.mockResolvedValue(500);
+    mockRpc.mockResolvedValue({ data: null, error: { message: "boom" } });
 
-    await expect(grantCredits("org-1", 100)).resolves.toBeUndefined();
+    await expect(grantCredits("org-1", 100)).rejects.toThrow("boom");
   });
 });

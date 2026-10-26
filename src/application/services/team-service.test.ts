@@ -17,7 +17,8 @@ vi.mock("./entitlements-service", () => ({
 // NEXT_PUBLIC_APP_URL — mocké ici car `headers()` explose hors d'une vraie
 // requête Next.js (contexte Vitest/Node pur).
 vi.mock("@/infrastructure/tenant/resolve-request-tenant", () => ({
-  resolveRequestOrigin: vi.fn(async () => "https://boutique-test.sme-os.app"),
+  // Correctif C10 : l'origine du lien vient de la configuration, jamais de l'en-tête host.
+  resolveMarketingOrigin: vi.fn(() => "https://boutique-test.sme-os.app"),
 }));
 
 /**
@@ -208,6 +209,23 @@ describe("acceptInvitation", () => {
     expect(expireUpdate).toBeDefined();
   });
 
+  it("Q4 : déjà membre -> refus, rôle JAMAIS modifié, invitation close", async () => {
+    pushResult("team_invitations", {
+      data: {
+        id: "inv-9", organization_id: "org-1", email: "owner@example.com", role: "employee", status: "pending",
+        expires_at: new Date(Date.now() + 100000).toISOString(), organizations: { name: "Ma Boutique" },
+      },
+      error: null,
+    });
+    pushResult("memberships", { data: { id: "m-1" }, error: null });
+
+    await expect(acceptInvitation("token-9", "user-owner", "owner@example.com")).rejects.toThrow(/déjà partie de cette équipe/);
+
+    expect(insertCalls.find((c) => c.table === "memberships")).toBeUndefined();
+    expect(updateCalls.find((c) => c.table === "memberships")).toBeUndefined();
+    expect(updateCalls.find((c) => c.table === "team_invitations" && (c.patch as { status?: string }).status === "revoked")).toBeDefined();
+  });
+
   it("crée la membership et marque l'invitation acceptée — chemin nominal", async () => {
     pushResult("team_invitations", {
       data: {
@@ -391,5 +409,16 @@ describe("listMembers", () => {
     expect(members).toHaveLength(2);
     expect(members[0]).toMatchObject({ userId: "user-1", email: "owner@example.com", role: "owner" });
     expect(members[1]).toMatchObject({ userId: "user-2", email: null, role: "employee" });
+  });
+});
+
+describe("escapeHtml / email d'invitation (C11)", () => {
+  it("un nom d'entreprise piégé ne peut ni injecter de balise ni de lien", async () => {
+    const { buildInvitationEmailHtml, escapeHtml } = await import("./team-service");
+    const html = buildInvitationEmailHtml('<img src=x onerror=alert(1)>"Evil" & Co', "https://app.test/invite/accept?token=a&b=1", "employee");
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;&quot;Evil&quot; &amp; Co");
+    expect(html).toContain('href="https://app.test/invite/accept?token=a&amp;b=1"');
+    expect(escapeHtml("'")).toBe("&#39;");
   });
 });

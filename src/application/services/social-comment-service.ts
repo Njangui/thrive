@@ -1,6 +1,6 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
-import { getSocialPublishingProvider, getAIProvider } from "@/infrastructure/providers/registry";
-import { consumeCredit, releaseCredit } from "./ai-credits-service";
+import { getSocialPublishingProvider } from "@/infrastructure/providers/registry";
+import { runAITask } from "./ai-metering";
 import { NotFoundError } from "@/lib/errors";
 
 /**
@@ -292,29 +292,26 @@ export async function unhideComment(organizationId: string, commentId: string): 
  * suivi d'un consumeCredit() best-effort après coup.
  */
 export async function draftCommentReplySuggestion(organizationId: string, commentContent: string): Promise<string | null> {
-  const reservation = await consumeCredit(organizationId, 1, "social_comment_draft").catch((err) => {
-    console.warn(`[social-comments] échec réservation crédit(${organizationId}):`, err);
-    return { success: false as const };
-  });
-  if (!reservation.success) return null;
-
   try {
     const supabase = getSupabaseServiceClient();
     const { data: org } = await supabase.from("organizations").select("name").eq("id", organizationId).maybeSingle();
 
-    const { primary } = await getAIProvider(organizationId);
     const systemPrompt = [
       `Tu es le community manager de "${org?.name ?? "cette entreprise"}".`,
       "Propose une courte réponse professionnelle et chaleureuse à ce commentaire client, en 1 à 2 phrases, dans la langue du commentaire.",
       "N'invente jamais de prix, de stock ou de politique commerciale précise que tu ne connais pas — reste général si nécessaire.",
     ].join(" ");
 
-    const result = await primary.generateText({ systemPrompt, userMessage: commentContent, maxTokens: 150 });
-
+    // Routage + crédits + remboursement + journal de tokens : voir ai-metering.ts (tâche simple).
+    const result = await runAITask({
+      organizationId,
+      task: "comment_draft",
+      inputChars: commentContent.length,
+      call: (provider) => provider.generateText({ systemPrompt, userMessage: commentContent, maxTokens: 150 }),
+    });
     return result.text;
   } catch (err) {
     console.warn(`[social-comments] draftCommentReplySuggestion indisponible (org ${organizationId}):`, err);
-    await releaseCredit(organizationId, 1, "ai_generation_failed").catch(() => {});
     return null;
   }
 }

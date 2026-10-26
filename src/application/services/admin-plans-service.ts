@@ -147,7 +147,19 @@ export async function updatePlanDetails(
     .eq("key", planKey);
   if (error) throw new Error(`Erreur mise à jour du plan: ${error.message}`);
 
-  // Clé texte ("starter"/"business"/"pro"), pas un uuid -> pas d'entityId
+  // Décision Q9 : un seul prix de référence par pays. Le prix par défaut du plan (XAF) et les lignes
+  // `plan_prices` actives en XAF doivent bouger ENSEMBLE, sinon le prix affiché diffère du prix facturé.
+  if (planKey !== "free") {
+    const { error: alignError } = await supabase
+      .from("plan_prices")
+      .update({ amount: priceFcfa })
+      .eq("plan_key", planKey)
+      .eq("currency_code", "XAF")
+      .eq("is_active", true);
+    if (alignError) throw new Error(`Erreur alignement des prix par pays (XAF): ${alignError.message}`);
+  }
+
+  // Clé texte ("starter"/"pro"), pas un uuid -> pas d'entityId
   // (entity_id est typé uuid en base, voir writeAdminAuditLog) ; la clé
   // vit dans before_state/after_state, même pattern que upsertTldPricing
   // ci-dessus et createAddon (admin-addons-service.ts).

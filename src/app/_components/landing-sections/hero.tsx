@@ -140,7 +140,7 @@ export function HeroSection({ site, fallbackMediaUrl = null }: { site: Storefron
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-brand bg-black/[0.03] lg:aspect-[5/4]">
               <StorefrontImage
                 src={effectiveMediaUrl}
-                alt=""
+                alt={effectiveMediaUrl === heroMediaUrl ? site.heroMediaAlt ?? "" : ""}
                 sizes="(min-width: 1024px) 50vw, 100vw"
                 priority
                 fallbackLabel=""

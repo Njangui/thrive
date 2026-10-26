@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./notification-service", () => ({ notifyOrgAdmins: vi.fn() }));
-vi.mock("./ai-credits-service", () => ({ grantCredits: vi.fn() }));
+vi.mock("./ai-credits-service", () => ({ initializeCreditBalance: vi.fn(async () => undefined) }));
 
 const mockCreatePayment = vi.fn();
 vi.mock("@/infrastructure/providers/registry", () => ({
@@ -9,16 +9,17 @@ vi.mock("@/infrastructure/providers/registry", () => ({
 }));
 
 const mockFrom = vi.fn();
+const mockRpc = vi.fn();
 vi.mock("@/infrastructure/supabase/server-client", () => ({
-  getSupabaseServiceClient: () => ({ from: mockFrom }),
+  getSupabaseServiceClient: () => ({ from: mockFrom, rpc: mockRpc }),
 }));
 
 import { listAddons, getOrganizationAddonBonus, purchaseAddon, confirmAddonPurchase } from "./addons-service";
 import { notifyOrgAdmins } from "./notification-service";
-import { grantCredits } from "./ai-credits-service";
+import { initializeCreditBalance } from "./ai-credits-service";
 
 const mockNotifyOrgAdmins = vi.mocked(notifyOrgAdmins);
-const mockGrantCredits = vi.mocked(grantCredits);
+const mockInit = vi.mocked(initializeCreditBalance);
 
 interface TableResult {
   data?: unknown;
@@ -109,7 +110,7 @@ describe("purchaseAddon — critère d'acceptation : jamais d'incrément avant c
     // organization_addons n'est JAMAIS appelé par purchaseAddon — seul
     // confirmAddonPurchase (déclenché par le webhook) y écrit.
     expect(mockFrom).not.toHaveBeenCalledWith("organization_addons");
-    expect(mockGrantCredits).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
   it("refuse un add-on désactivé, sans jamais appeler le provider de paiement", async () => {
@@ -125,71 +126,27 @@ describe("purchaseAddon — critère d'acceptation : jamais d'incrément avant c
 });
 
 describe("confirmAddonPurchase — appelé uniquement sur paiement confirmé (webhook)", () => {
-  it("incrémente organization_addons ET top-up ai_credit_balances quand l'add-on cible ai_credits", async () => {
-    configureSupabase({
-      addons: {
-        data: { key: "extra_credits", name: "Crédits IA +100", entitlement_key: "ai_credits", increment_value: 100 },
-        error: null,
-      },
-      organization_addons: { data: { quantity: 3 }, error: null }, // possédait déjà 3
-    });
+  it("applique tout en UNE transaction SQL (apply_addon_purchase) puis notifie une seule fois", async () => {
+    mockRpc.mockResolvedValue({ data: { status: "applied", name: "Crédits IA +100", quantity: 2 }, error: null });
 
     await confirmAddonPurchase({ id: "pay-1", organizationId: "org-1", addonKey: "extra_credits", addonQuantity: 2 });
 
-    // 100 (increment_value) × 2 (addonQuantity) = 200 crédits accordés
-    expect(mockGrantCredits).toHaveBeenCalledWith("org-1", 200, "addon_purchase");
+    expect(mockInit).toHaveBeenCalledWith("org-1");
+    expect(mockRpc).toHaveBeenCalledWith("apply_addon_purchase", { p_payment_id: "pay-1" });
     expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
   });
 
-  it("n'appelle jamais grantCredits pour un add-on ne ciblant pas ai_credits", async () => {
-    configureSupabase({
-      addons: { data: { key: "extra_groups", name: "+2 groupes WhatsApp", entitlement_key: "whatsapp_groups", increment_value: 2 }, error: null },
-      organization_addons: { data: null, error: null },
-    });
-
-    await confirmAddonPurchase({ id: "pay-2", organizationId: "org-1", addonKey: "extra_groups", addonQuantity: 1 });
-
-    expect(mockGrantCredits).not.toHaveBeenCalled();
+  it("rejeu d'un paiement déjà appliqué : aucun second effet, aucune seconde notification", async () => {
+    mockRpc.mockResolvedValue({ data: { status: "already" }, error: null });
+    await confirmAddonPurchase({ id: "pay-1", organizationId: "org-1", addonKey: "extra_credits", addonQuantity: 2 });
+    expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
   });
 
-  it("critère d'acceptation Lot N : un second achat après un changement de increment_value ADDITIONNE au bonus déjà figé, ne le recalcule jamais", async () => {
-    // Simule : un premier achat a été fait quand increment_value valait 10
-    // (total_increment_granted=20 pour quantity=2, déjà en base) ; l'admin
-    // a depuis changé increment_value à 50 ; un second achat de 1 unité
-    // arrive. Le total attendu est 20 + 50 = 70 — PAS (2+1) × 50 = 150,
-    // qui serait une réécriture rétroactive du premier achat.
-    let capturedUpsert: Record<string, unknown> | null = null;
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "addons") {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: () =>
-                Promise.resolve({
-                  data: { key: "extra_groups", name: "+2 groupes WhatsApp", entitlement_key: "whatsapp_groups", increment_value: 50 },
-                  error: null,
-                }),
-            }),
-          }),
-        };
-      }
-      if (table === "organization_addons") {
-        const builder = {
-          select: () => builder,
-          eq: () => builder,
-          maybeSingle: () => Promise.resolve({ data: { quantity: 2, total_increment_granted: 20 }, error: null }),
-          upsert: (payload: Record<string, unknown>) => {
-            capturedUpsert = payload;
-            return Promise.resolve({ error: null });
-          },
-        };
-        return builder;
-      }
-      return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
-    });
-
-    await confirmAddonPurchase({ id: "pay-3", organizationId: "org-1", addonKey: "extra_groups", addonQuantity: 1 });
-
-    expect(capturedUpsert).toMatchObject({ quantity: 3, total_increment_granted: 70 });
+  it("échec SQL : l'erreur remonte (le paiement passera en effect_failed et sera rejoué)", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+    await expect(
+      confirmAddonPurchase({ id: "pay-1", organizationId: "org-1", addonKey: "extra_credits", addonQuantity: 2 }),
+    ).rejects.toThrow("boom");
+    expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
   });
 });

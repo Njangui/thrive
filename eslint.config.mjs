@@ -20,6 +20,12 @@ export default defineConfig([
       "react-hooks/purity": "warn",
       "react-hooks/immutability": "warn",
       "react-hooks/error-boundaries": "warn",
+      // Fusion C1-C5 : la page racine dynamique `/(site)/[pageSlug]` (C4) fait correspondre TOUT
+      // chemin à une route, si bien que cette règle signale désormais chaque `<a href="/…">`
+      // interne existant (≈ 24, pages légales, admin, dashboard) alors qu'elle était inerte
+      // avant. Ces liens sont légitimes (navigation complète, sans préchargement) : statu quo
+      // conservé. À rétablir quand ils auront été convertis en `<Link />` (chantier dédié).
+      "@next/next/no-html-link-for-pages": "off",
     },
   },
   {

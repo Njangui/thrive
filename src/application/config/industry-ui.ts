@@ -1,6 +1,6 @@
 import type { ModuleKey } from "./modules";
 
-export type IndustryKey = "retail" | "restaurant" | "beauty" | "professional_services" | "real_estate" | "";
+export type IndustryKey = "retail" | "restaurant" | "beauty" | "professional_services" | "real_estate" | "health" | "education" | "";
 
 export interface IndustryUiConfig {
   key: IndustryKey;
@@ -66,6 +66,26 @@ export const INDUSTRY_UI: Record<IndustryKey, IndustryUiConfig> = {
     primaryAction: "Ajouter un service",
     secondaryMetric: "Rendez-vous",
   },
+  health: {
+    key: "health",
+    label: "Santé & médecine",
+    eyebrow: "Pilotage de votre structure de santé",
+    catalogLabel: "Consultations",
+    catalogDescription: "Consultations, actes, tarifs et disponibilité.",
+    primaryMetric: "Revenus",
+    primaryAction: "Ajouter une consultation",
+    secondaryMetric: "Rendez-vous",
+  },
+  education: {
+    key: "education",
+    label: "Éducation & formation",
+    eyebrow: "Pilotage de votre établissement",
+    catalogLabel: "Formations",
+    catalogDescription: "Filières, formations, frais et inscriptions.",
+    primaryMetric: "Frais encaissés",
+    primaryAction: "Ajouter une formation",
+    secondaryMetric: "Inscriptions",
+  },
   real_estate: {
     key: "real_estate",
     label: "Immobilier",
@@ -96,6 +116,8 @@ export function getIndustryModules(value: string | null | undefined): ModuleKey[
     beauty: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "appointments", "finance", "marketing"],
     professional_services: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "appointments", "finance", "marketing"],
     real_estate: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "finance", "marketing"],
+    health: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "appointments", "finance", "marketing"],
+    education: ["crm", "catalog", "landing", "whatsapp", "faq", "ai", "appointments", "finance", "marketing"],
   };
   return presets[key];
 }

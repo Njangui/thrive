@@ -77,7 +77,7 @@ const VALID_INPUT = {
 
 describe("updateAiConfig — validation contre AI_PROVIDER_NAMES (registry.ts), jamais une valeur arbitraire", () => {
   it("refuse un provider inconnu, sans toucher la base", async () => {
-    await expect(updateAiConfig("org-1", { ...VALID_INPUT, provider: "gemini" }, "user-1")).rejects.toThrow(
+    await expect(updateAiConfig("org-1", { ...VALID_INPUT, provider: "cohere" }, "user-1")).rejects.toThrow(
       /inconnu/,
     );
     expect(mockFrom).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe("updateAiConfig — validation contre AI_PROVIDER_NAMES (registry.ts), 
 
   it("refuse un fallback provider inconnu", async () => {
     await expect(
-      updateAiConfig("org-1", { ...VALID_INPUT, fallbackProvider: "gemini" }, "user-1"),
+      updateAiConfig("org-1", { ...VALID_INPUT, fallbackProvider: "cohere" }, "user-1"),
     ).rejects.toThrow(/secours/);
   });
 

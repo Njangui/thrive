@@ -13,6 +13,8 @@ export const INDUSTRY_CATEGORY_PRESETS: Record<string, string[]> = {
   restaurant: ["Entrées", "Plats", "Desserts", "Boissons", "Menus", "Autres"],
   beauty: ["Soins du visage", "Soins du corps", "Maquillage", "Cheveux", "Parfums", "Autres"],
   professional_services: ["Consultations", "Formations", "Abonnements", "Autres"],
+  health: ["Consultations", "Examens et analyses", "Soins", "Prévention", "Autres"],
+  education: ["Filières et programmes", "Formations courtes", "Cours du soir", "Préparations et concours", "Autres"],
   real_estate: ["Appartements", "Maisons", "Terrains", "Bureaux", "Commerces", "Autres"],
 };
 

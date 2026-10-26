@@ -23,6 +23,8 @@ export const ANALYTICS_EVENT_TYPES = [
   "order_created",
   "publication_published",
   "video_play",
+  /** C5 : clic vers WhatsApp (sous-ensemble des `cta_click`), porte `visitor` pour l'attribution par source. */
+  "whatsapp_click",
 ] as const;
 
 export type AnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number];

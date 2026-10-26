@@ -16,7 +16,9 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await getSupabaseServerSessionClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    // Audit C13 : un échec d'échange de code n'est plus silencieux — retour à la connexion avec un message.
+    if (exchangeError) return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent("Lien de connexion invalide ou expiré.")}`);
   }
 
   // Lot L : un `next` valide (ex: /invite/accept?token=...) prime sur la

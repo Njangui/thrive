@@ -249,14 +249,14 @@ describe("buildProfessionalServicesHomeModel — équipe", () => {
     const model = buildProfessionalServicesHomeModel({
       site: makeSite(),
       ...emptyInput,
-      team: [makeMember(1, { fullName: "Awa Ndiaye", role: "cashier" }), makeMember(2, { fullName: "Boris Eto'o", role: "owner" })],
+      team: [makeMember(1, { fullName: "Awa Ndiaye", role: "employee" }), makeMember(2, { fullName: "Boris Eto'o", role: "owner" })],
     });
     expect(model.team?.items).toEqual([
       { id: "u1", name: "Awa Ndiaye", avatarUrl: null },
       { id: "u2", name: "Boris Eto'o", avatarUrl: null },
     ]);
     const serialized = JSON.stringify(model.team);
-    expect(serialized).not.toContain("cashier");
+    expect(serialized).not.toContain("employee");
     expect(serialized).not.toContain("owner");
   });
 

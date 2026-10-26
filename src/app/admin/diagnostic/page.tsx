@@ -60,7 +60,6 @@ export default async function AdminDiagnosticPage({ searchParams }: { searchPara
               <h2 className="font-jakarta text-lg font-semibold">{d.organizationName}</h2>
               <AdminBadge tone="neutral">réel : {d.realPlan}</AdminBadge>
               <AdminBadge tone={d.effectivePlan === d.realPlan ? "neutral" : "violet"}>effectif : {d.effectivePlan}</AdminBadge>
-              <AdminBadge tone={d.promoPhase === "active" ? "success" : "neutral"}>essai : {d.promoPhase}</AdminBadge>
             </div>
             <p className="mt-3 text-sm text-slate-700">{d.explanation}</p>
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">

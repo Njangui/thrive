@@ -11,6 +11,8 @@ import { confirmAddonPurchase } from "./addons-service";
 import { recordAffiliateConversion, getPromoCodeDiscountBpsForNextPayment } from "./affiliate-service";
 import { computeDiscountedAmountFcfa } from "@/domain/entities/affiliate";
 import { resetCreditBalanceForPlan } from "./ai-credits-service";
+import { isEntitlementExpired } from "./subscription-state";
+import { writeAdminAuditLog } from "./admin-organizations-service";
 
 /**
  * Lot G, Partie 1 — Paiement d'abonnement. Flow : initiatePayment()
@@ -62,8 +64,13 @@ interface SubscriptionPaymentRow {
   amount_fcfa: number;
   currency_code: string;
   provider_reference: string;
-  status: "pending" | "completed" | "failed" | "refunded" | "cancelled";
+  status: "pending" | "processing" | "effect_failed" | "completed" | "failed" | "refunded" | "cancelled";
 }
+
+/** États encore « à traiter » : le provider a (peut-être) encaissé mais l'effet n'est pas acté. */
+const REPLAYABLE_STATUSES = ["pending", "effect_failed"] as const;
+/** Un traitement `processing` plus vieux que ça est considéré comme interrompu (crash) et repris. */
+const PROCESSING_STALE_MINUTES = 10;
 
 /** Historique de facturation tenant (abonnement + add-ons confondus) — /dashboard/subscription. */
 export async function listPaymentsForOrganization(organizationId: string, limit = 20): Promise<SubscriptionPaymentSummary[]> {
@@ -330,9 +337,9 @@ async function verifyAndReconcilePayment(payment: SubscriptionPaymentRow): Promi
   // des retries) — ou cette même fonction appelée à la fois par le
   // webhook et par la réconciliation programmée pour le même paiement —
   // ne doit produire aucun second effet.
-  if (payment.status !== "pending") {
-    return payment.status === "completed" ? "completed" : "failed";
-  }
+  if (payment.status === "completed") return "completed";
+  if (payment.status === "processing") return "still_pending"; // un autre traitement est en cours
+  if (payment.status !== "pending" && payment.status !== "effect_failed") return "failed";
 
   // Ne JAMAIS faire confiance au seul corps du webhook — revérifier via
   // l'API avant de livrer quoi que ce soit (recommandation standard de
@@ -343,8 +350,22 @@ async function verifyAndReconcilePayment(payment: SubscriptionPaymentRow): Promi
   const verified = await provider.verifyPayment(payment.provider_reference);
 
   if (verified.status === "succeeded") {
-    await markPaymentCompleted(payment);
-    return "completed";
+    // Contrôle du montant (audit P9) : on n'accorde rien si le provider annonce un montant
+    // différent de celui attendu. On laisse le paiement en attente et on alerte un humain.
+    if (typeof verified.amount === "number" && verified.amount !== payment.amount_fcfa) {
+      console.error(
+        `verifyAndReconcilePayment: montant incohérent pour ${payment.id} (attendu ${payment.amount_fcfa}, encaissé ${verified.amount}) — non accordé.`,
+      );
+      await notifyPlatformAdminTelegram("SUBSCRIPTION_PAYMENT_AMOUNT_MISMATCH", {
+        organizationId: payment.organization_id,
+        entityType: "subscription_payment",
+        entityId: payment.id,
+        details: { attendu: payment.amount_fcfa, encaisse: verified.amount },
+      });
+      return "still_pending";
+    }
+    const done = await markPaymentCompleted(payment);
+    return done ? "completed" : "still_pending";
   }
 
   if (verified.status === "failed") {
@@ -352,7 +373,7 @@ async function verifyAndReconcilePayment(payment: SubscriptionPaymentRow): Promi
       .from("subscription_payments")
       .update({ status: "failed", webhook_received_at: new Date().toISOString() })
       .eq("id", payment.id)
-      .eq("status", "pending")
+      .eq("status", payment.status) // pending ou effect_failed : jamais écraser un traitement en cours
       .select("id")
       .maybeSingle();
 
@@ -412,13 +433,21 @@ export async function reconcileStalePayments(staleAfterMinutes = 20): Promise<{
     .select(
       "id, organization_id, payment_type, plan_key, addon_key, addon_quantity, phone_number_id, amount_fcfa, currency_code, provider_reference, status",
     )
-    .eq("status", "pending")
+    .in("status", [...REPLAYABLE_STATUSES])
     .lt("created_at", staleThreshold)
     .not("provider_reference", "is", null);
 
   if (error) {
     throw new Error(`reconcileStalePayments: erreur lecture subscription_payments: ${error.message}`);
   }
+
+  // Traitements interrompus (crash en plein effet) : `processing` depuis trop longtemps → on les remet à rejouer.
+  const processingThreshold = new Date(Date.now() - PROCESSING_STALE_MINUTES * 60 * 1000).toISOString();
+  await supabase
+    .from("subscription_payments")
+    .update({ status: "effect_failed" })
+    .eq("status", "processing")
+    .lt("webhook_received_at", processingThreshold);
 
   const result = { checked: 0, completed: 0, failed: 0, stillPending: 0 };
   for (const payment of stalePayments ?? []) {
@@ -552,6 +581,7 @@ const RENEWAL_REMINDER_WINDOW_DAYS = 3;
 
 interface RenewalCandidate {
   organization_id: string;
+  plan_key: string;
   status: "trialing" | "active" | "past_due" | "cancelled";
   trial_end: string | null;
   current_period_end: string | null;
@@ -583,6 +613,7 @@ interface RenewalCandidate {
 export async function processSubscriptionRenewals(): Promise<{
   remindersSent: number;
   markedPastDue: number;
+  downgraded: number;
   skipped: number;
 }> {
   const supabase = getSupabaseServiceClient();
@@ -591,17 +622,72 @@ export async function processSubscriptionRenewals(): Promise<{
 
   const { data: candidates, error } = await supabase
     .from("organization_subscriptions")
-    .select("organization_id, status, trial_end, current_period_end, last_renewal_reminder_sent_at")
-    .in("status", ["trialing", "active"])
+    .select("organization_id, plan_key, status, trial_end, current_period_end, last_renewal_reminder_sent_at")
+    .in("status", ["trialing", "active", "past_due"])
     .neq("plan_key", "free");
 
   if (error) throw new Error(`Erreur lecture organization_subscriptions: ${error.message}`);
 
   let remindersSent = 0;
   let markedPastDue = 0;
+  let downgraded = 0;
   let skipped = 0;
 
   for (const row of (candidates ?? []) as RenewalCandidate[]) {
+    // Décision Q7 : rétrogradation automatique vers Discover (gratuit) une fois l'échéance + 3 jours
+    // de grâce dépassées. Les droits sont déjà coupés à la lecture (effectivePlanKey) ; ici on
+    // aligne aussi la ligne d'abonnement et le plafond de crédits IA.
+    if (
+      isEntitlementExpired(
+        { planKey: row.plan_key, status: row.status, currentPeriodEnd: row.current_period_end, trialEnd: row.trial_end },
+        now,
+      )
+    ) {
+      const { data: moved, error: downgradeError } = await supabase
+        .from("organization_subscriptions")
+        .update({ plan_key: "free", status: "active", current_period_end: null, trial_end: null })
+        .eq("organization_id", row.organization_id)
+        .eq("plan_key", row.plan_key)
+        .eq("status", row.status) // course contre un paiement tombé entre-temps : on ne l'écrase pas
+        .select("organization_id")
+        .maybeSingle();
+
+      if (downgradeError || !moved) {
+        if (downgradeError) {
+          console.error(`processSubscriptionRenewals: échec rétrogradation (${row.organization_id}):`, downgradeError.message);
+        }
+        skipped++;
+        continue;
+      }
+
+      await resetCreditBalanceForPlan(row.organization_id, "free").catch((err) =>
+        console.error(`processSubscriptionRenewals: échec remise des crédits au palier gratuit (${row.organization_id}):`, err),
+      );
+      await supabase.from("audit_logs").insert({
+        organization_id: row.organization_id,
+        actor_user_id: null,
+        action: "SUBSCRIPTION_DOWNGRADED_NONPAYMENT",
+        entity_type: "organization_subscription",
+        entity_id: row.organization_id,
+        before_state: { planKey: row.plan_key, status: row.status },
+        after_state: { planKey: "free" },
+      });
+      await notifyOrgAdmins({
+        organizationId: row.organization_id,
+        title: "Votre abonnement a pris fin.",
+        body: "Faute de paiement après le délai de grâce de 3 jours, votre compte est repassé à l'offre gratuite. Vos données sont conservées : renouvelez depuis Mon abonnement pour retrouver votre offre.",
+        relatedEntityType: "organization_subscription",
+        relatedEntityId: row.organization_id,
+      });
+      downgraded++;
+      continue;
+    }
+
+    if (row.status === "past_due") {
+      skipped++; // en période de grâce : déjà notifié, on attend le paiement ou la fin du délai
+      continue;
+    }
+
     const dueDateRaw = row.status === "trialing" ? row.trial_end : row.current_period_end;
     if (!dueDateRaw) {
       skipped++;
@@ -680,34 +766,72 @@ export async function processSubscriptionRenewals(): Promise<{
     skipped++;
   }
 
-  return { remindersSent, markedPastDue, skipped };
+  return { remindersSent, markedPastDue, downgraded, skipped };
 }
 
-async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<void> {
+/**
+ * Applique l'effet d'un paiement CONFIRMÉ par le provider, puis seulement alors le marque `completed`
+ * (correctif d'audit P9/Q14 : avant, le statut passait à « terminé » AVANT l'effet ; un échec en
+ * cours de route laissait un client facturé sans abonnement, sans aucun rejeu possible).
+ *
+ *  1. réservation atomique `pending|effect_failed → processing` (un seul traitement à la fois) ;
+ *  2. effet appliqué (add-on : une seule transaction SQL ; abonnement/numéro : écritures rejouables) ;
+ *  3. `completed` en dernier. Si l'effet échoue : `effect_failed` + alerte, repris par la réconciliation.
+ *
+ * Renvoie true si le paiement est (désormais) `completed`, false s'il est pris par un autre
+ * traitement ou si l'effet a échoué (il sera rejoué).
+ */
+async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<boolean> {
   const supabase = getSupabaseServiceClient();
 
-  // Garde d'idempotence au niveau SQL : `.eq("status", "pending")` fait
-  // qu'entre deux exécutions concurrentes de ce même webhook (delivery
-  // dupliquée réellement simultanée, pas juste rejouée plus tard), une
-  // seule des deux peut gagner cette mise à jour — `updated` est alors
-  // null pour l'autre, qui s'arrête avant de dupliquer l'effet
-  // (extension d'abonnement / incrément add-on).
-  const { data: updated, error: updateError } = await supabase
+  const { data: claimed, error: claimError } = await supabase
     .from("subscription_payments")
-    .update({ status: "completed", webhook_received_at: new Date().toISOString() })
+    .update({ status: "processing", webhook_received_at: new Date().toISOString() })
     .eq("id", payment.id)
-    .eq("status", "pending")
+    .in("status", [...REPLAYABLE_STATUSES])
     .select("id")
     .maybeSingle();
 
-  if (updateError) {
-    throw new Error(`markPaymentCompleted: échec mise à jour subscription_payments: ${updateError.message}`);
+  if (claimError) {
+    throw new Error(`markPaymentCompleted: échec réservation du paiement: ${claimError.message}`);
   }
-  if (!updated) {
-    return;
+  if (!claimed) {
+    return false; // déjà traité, ou en cours de traitement ailleurs
   }
 
+  try {
+    await applyPaymentEffect(payment);
+  } catch (effectError) {
+    console.error(`markPaymentCompleted: effet non appliqué (paiement ${payment.id}) — sera rejoué:`, effectError);
+    await supabase.from("subscription_payments").update({ status: "effect_failed" }).eq("id", payment.id).eq("status", "processing");
+    await notifyPlatformAdminTelegram("SUBSCRIPTION_PAYMENT_EFFECT_FAILED", {
+      organizationId: payment.organization_id,
+      entityType: "subscription_payment",
+      entityId: payment.id,
+      details: { type: payment.payment_type, forfait: payment.plan_key, montantFcfa: payment.amount_fcfa },
+    }).catch(() => undefined);
+    return false;
+  }
+  return true;
+}
+
+async function applyPaymentEffect(payment: SubscriptionPaymentRow): Promise<void> {
+  const supabase = getSupabaseServiceClient();
+
+  const complete = async (): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from("subscription_payments")
+      .update({ status: "completed" })
+      .eq("id", payment.id)
+      .eq("status", "processing")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(`échec passage à completed: ${error.message}`);
+    return Boolean(data);
+  };
+
   if (payment.payment_type === "addon" && payment.addon_key && payment.addon_quantity) {
+    // Quantité + crédits + statut `completed` dans UNE transaction SQL (0189) : tout ou rien, sans double comptage.
     await confirmAddonPurchase({
       id: payment.id,
       organizationId: payment.organization_id,
@@ -717,12 +841,7 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
     return;
   }
 
-  // Loyer du numéro WhatsApp dédié aux groupes (0058_whatsapp_
-  // coexistence_dedicated_numbers.sql) — cycle indépendant de
-  // organization_subscriptions ci-dessous, volontairement traité ici
-  // (pas dans phone-number-rental-service.ts) pour éviter tout import
-  // croisé entre les deux fichiers de paiement (voir ce fichier,
-  // findOwnerEmailForPhoneNumberRenewal).
+  // Loyer du numéro WhatsApp dédié aux groupes — cycle indépendant de organization_subscriptions.
   if (payment.payment_type === "dedicated_number" && payment.phone_number_id) {
     const currentPeriodEnd = new Date();
     currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
@@ -733,8 +852,9 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
       .eq("id", payment.phone_number_id);
 
     if (numberError) {
-      throw new Error(`markPaymentCompleted: échec mise à jour phone_numbers: ${numberError.message}`);
+      throw new Error(`échec mise à jour phone_numbers: ${numberError.message}`);
     }
+    if (!(await complete())) return;
 
     await notifyOrgAdmins({
       organizationId: payment.organization_id,
@@ -756,28 +876,20 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
         plan_key: payment.plan_key,
         status: "active",
         current_period_end: currentPeriodEnd.toISOString(),
+        last_renewal_reminder_sent_at: null, // nouvelle échéance → nouvelle relance possible
       },
       { onConflict: "organization_id" },
     );
 
     if (subError) {
-      throw new Error(`markPaymentCompleted: échec mise à jour organization_subscriptions: ${subError.message}`);
+      throw new Error(`échec mise à jour organization_subscriptions: ${subError.message}`);
     }
 
-    // CORRECTIF (20/09/2026, audit suite signalement utilisateur) — voir
-    // ai-credits-service.ts::resetCreditBalanceForPlan pour le détail du
-    // bug corrigé (le plafond de crédits IA ne suivait jamais un
-    // changement RÉEL de palier). Best-effort délibéré, même principe que
-    // `recordAffiliateConversion` juste en dessous : un échec ici
-    // n'affecte JAMAIS la confirmation du paiement, déjà actée ci-dessus
-    // — au pire, le plafond de crédits reste à corriger manuellement,
-    // jamais le paiement du client.
-    await resetCreditBalanceForPlan(payment.organization_id, payment.plan_key as PlanKey).catch((err) => {
-      console.error(
-        `markPaymentCompleted: échec réinitialisation crédits IA (org ${payment.organization_id}, plan ${payment.plan_key}):`,
-        err,
-      );
-    });
+    // Plus « best-effort » : un plafond de crédits qui ne suit pas le palier est un effet manquant,
+    // donc un échec ici fait rejouer le paiement (la remise à zéro est idempotente).
+    await resetCreditBalanceForPlan(payment.organization_id, payment.plan_key as PlanKey);
+
+    if (!(await complete())) return; // déjà acté par un autre passage : ne pas dupliquer notifications / commission
 
     const { error: auditError } = await supabase.from("audit_logs").insert({
       organization_id: payment.organization_id,
@@ -791,12 +903,7 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
       console.error("markPaymentCompleted: échec journalisation audit_logs:", auditError.message);
     }
 
-    // Programme d'affiliation (0044) — best-effort par contrat de
-    // fonction (voir affiliate-service.ts) : n'affecte jamais la
-    // confirmation du paiement lui-même, qui est déjà actée ci-dessus.
-    // Scopé aux paiements d'abonnement uniquement (jamais un addon,
-    // section suivante) — c'est la valeur d'abonnement, pas un achat
-    // ponctuel, qui fonde la commission (voir 0044_affiliate_system.sql).
+    // Programme d'affiliation (0044) — best-effort par contrat (voir affiliate-service.ts) ; le paiement est déjà acté.
     await recordAffiliateConversion({
       id: payment.id,
       organizationId: payment.organization_id,
@@ -817,5 +924,43 @@ async function markPaymentCompleted(payment: SubscriptionPaymentRow): Promise<vo
       entityId: payment.id,
       details: { forfait: payment.plan_key, montantFcfa: payment.amount_fcfa },
     });
+    return;
   }
+
+  // Type de paiement inconnu ou incomplet : on ne l'acte pas silencieusement.
+  throw new Error(`type de paiement non pris en charge ou données manquantes (type=${payment.payment_type})`);
+}
+
+/**
+ * Enregistre le remboursement d'un paiement (action admin, décision Q25). Le remboursement d'argent lui-même
+ * se fait hors plateforme (dashboard Fapshi) ; ici on garde la trace et on annule la commission d'affiliation
+ * liée tant qu'elle n'est pas versée — tout dans UNE transaction SQL (`refund_subscription_payment`, 0192).
+ * Ne modifie PAS le plan du client : c'est une décision séparée (changement de plan depuis la console).
+ */
+export async function refundPayment(
+  paymentId: string,
+  adminUserId: string,
+  reason: string,
+): Promise<{ commission: "none" | "reversed" | "already_paid" }> {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase.rpc("refund_subscription_payment", { p_payment_id: paymentId });
+  if (error) {
+    if (error.message.includes("payment_not_refundable")) throw new ValidationError("Seul un paiement « Payé » peut être remboursé.");
+    if (error.message.includes("payment_not_found")) throw new NotFoundError("Paiement introuvable.");
+    if (error.message.includes("commission_in_open_payout")) {
+      throw new ValidationError("La commission d'affiliation de ce paiement est dans une demande de versement en cours : rejetez d'abord cette demande.");
+    }
+    throw new Error(`Impossible d'enregistrer le remboursement: ${error.message}`);
+  }
+  const result = (data ?? {}) as { commission?: "none" | "reversed" | "already_paid"; organization_id?: string; amount_fcfa?: number };
+
+  await writeAdminAuditLog({
+    actorUserId: adminUserId,
+    organizationId: result.organization_id ?? null,
+    entityId: paymentId,
+    action: "SUBSCRIPTION_PAYMENT_REFUNDED",
+    entityType: "subscription_payment",
+    afterState: { reason: reason.slice(0, 300), amountFcfa: result.amount_fcfa ?? null, commission: result.commission ?? "none" },
+  });
+  return { commission: result.commission ?? "none" };
 }

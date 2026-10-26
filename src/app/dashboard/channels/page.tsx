@@ -235,12 +235,12 @@ async function disconnectYouTubeAction(formData: FormData) {
 async function connectYouTubeAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
-  await requireMembership(organizationId, ["owner", "admin"]);
+  const membership = await requireMembership(organizationId, ["owner", "admin"]);
   const youtubeEntitlement = await canUseFeature(organizationId, "youtube_accounts", 1);
   if (!youtubeEntitlement.allowed) flash("error", "YouTube n'est pas inclus dans votre offre ou sa limite est atteinte.");
   let url: string;
   try {
-    url = createYouTubeConnectUrl(organizationId);
+    url = createYouTubeConnectUrl(organizationId, membership.userId);
   } catch (error) {
     flash("error", error instanceof Error ? error.message : "Connexion YouTube indisponible.");
   }

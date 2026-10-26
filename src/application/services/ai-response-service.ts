@@ -1,8 +1,5 @@
-import { getAIProvider } from "@/infrastructure/providers/registry";
-import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { buildTenantAIContext } from "./tenant-ai-context";
-import { consumeCredit, releaseCredit } from "./ai-credits-service";
-import { QuotaExceededError } from "@/lib/errors";
+import { runAITask } from "./ai-metering";
 import type { AITextResponse } from "@/domain/ports/ai-provider";
 import type { CatalogProductSummary } from "./catalog-service";
 
@@ -42,60 +39,14 @@ export async function generateAIReply(
   userMessage: string,
   recentProducts: CatalogProductSummary[] = [],
 ): Promise<AITextResponse> {
-  // CORRECTIF (sept. 2026) — la disponibilité de l'IA est vérifiée AVANT
-  // toute réservation de crédit. Avant ce correctif, `consumeCredit()` était
-  // appelé en premier, puis `getAIProvider()` levait "AI non activée" pour
-  // un tenant qui n'avait pas encore configuré/activé l'IA : le crédit
-  // réservé n'était JAMAIS remboursé (ce `getAIProvider` se trouvait hors du
-  // `try` qui appelle `releaseCredit`). Symptôme rapporté : des crédits IA
-  // consommés à chaque message client non couvert par la FAQ, alors que
-  // l'IA n'avait jamais été configurée.
-  //
-  // Ni `getAIProvider` ni `buildTenantAIContext` ne facturent quoi que ce
-  // soit (construction d'adaptateur + lecture DB) : les appeler avant la
-  // réservation ne coûte rien, et toute erreur ici (IA désactivée, clé
-  // manquante, contexte illisible) sort sans avoir touché au solde.
-  const { primary, fallback } = await getAIProvider(organizationId);
+  // Contexte (lecture DB, gratuit) construit avant toute réservation de crédit. `runAITask` vérifie
+  // ensuite que l'IA est disponible, route vers le bon modèle (réponse client = niveau simple),
+  // réserve les crédits de la tâche, gère le repli, le remboursement et le journal de tokens.
   const systemPrompt = await buildTenantAIContext(organizationId, recentProducts);
-
-  const reservation = await consumeCredit(organizationId);
-  if (!reservation.success) {
-    throw new QuotaExceededError("Crédits IA épuisés pour cette organisation.");
-  }
-
-  let result: AITextResponse;
-  try {
-    try {
-      result = await primary.generateText({ systemPrompt, userMessage });
-    } catch (primaryError) {
-      if (!fallback) throw primaryError;
-
-      console.warn(
-        `[AI fallback] org=${organizationId} provider=${primary.providerName} -> ${fallback.providerName}:`,
-        primaryError,
-      );
-
-      await getSupabaseServiceClient()
-        .from("audit_logs")
-        .insert({
-          organization_id: organizationId,
-          action: "AI_PROVIDER_FALLBACK",
-          entity_type: "ai_config",
-          after_state: {
-            from: primary.providerName,
-            to: fallback.providerName,
-            error: primaryError instanceof Error ? primaryError.message : String(primaryError),
-          },
-        });
-
-      result = await fallback.generateText({ systemPrompt, userMessage });
-    }
-  } catch (generationError) {
-    // Ni primary ni fallback n'ont abouti : aucune génération n'a
-    // réellement eu lieu, le crédit réservé ne doit pas rester consommé.
-    await releaseCredit(organizationId);
-    throw generationError;
-  }
-
-  return result;
+  return runAITask({
+    organizationId,
+    task: "customer_reply",
+    inputChars: systemPrompt.length + userMessage.length,
+    call: (provider) => provider.generateText({ systemPrompt, userMessage }),
+  });
 }

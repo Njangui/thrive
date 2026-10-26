@@ -48,6 +48,46 @@ interface RawOrganizationRow {
   seo_og_image_url: string | null;
 }
 
+const ORG_COLUMNS =
+  "id, name, slug, industry, description, phone, whatsapp_number, email, address, opening_hours, social_links, logo_url, banner_url, favicon_url, currency, status, seo_title, seo_description, seo_og_image_url";
+
+function toTenantContext(org: RawOrganizationRow): TenantContext {
+  return {
+    organizationId: org.id,
+    name: org.name,
+    slug: org.slug,
+    industry: org.industry,
+    description: org.description,
+    phone: org.phone,
+    whatsappNumber: org.whatsapp_number,
+    email: org.email,
+    address: org.address,
+    openingHours: (org.opening_hours as Record<string, string>) ?? {},
+    socialLinks: (org.social_links as Record<string, string>) ?? {},
+    logoUrl: org.logo_url,
+    bannerUrl: org.banner_url,
+    faviconUrl: org.favicon_url,
+    currency: org.currency,
+    seoTitle: org.seo_title,
+    seoDescription: org.seo_description,
+    seoOgImageUrl: org.seo_og_image_url,
+  };
+}
+
+/**
+ * Contexte d'un tenant PAR IDENTIFIANT, hors requête de vitrine (aucun header
+ * de domaine). Réservé aux usages authentifiés où l'appelant a déjà vérifié
+ * que l'utilisateur appartient à cette organisation (ex. aperçu du brouillon
+ * du site dans le dashboard) — jamais pour du contenu public. Retourne
+ * `null` si l'organisation est absente, suspendue ou annulée.
+ */
+export async function loadTenantContextByOrganizationId(organizationId: string): Promise<TenantContext | null> {
+  const { data } = await getSupabaseServiceClient().from("organizations").select(ORG_COLUMNS).eq("id", organizationId).maybeSingle();
+  const org = data as RawOrganizationRow | null;
+  if (!org || org.status === "suspended" || org.status === "cancelled") return null;
+  return toTenantContext(org);
+}
+
 /**
  * Résout le tenant courant à partir des headers posés par le middleware
  * (`x-tenant-slug` pour tenant.sme-os.app, `x-tenant-custom-domain` pour un
@@ -80,8 +120,6 @@ export const resolveRequestTenant = cache(async function resolveRequestTenant():
   if (!slug && !customDomain) return null;
 
   const supabase = getSupabaseServiceClient();
-  const ORG_COLUMNS =
-    "id, name, slug, industry, description, phone, whatsapp_number, email, address, opening_hours, social_links, logo_url, banner_url, favicon_url, currency, status, seo_title, seo_description, seo_og_image_url";
 
   let org: RawOrganizationRow | null = null;
 
@@ -100,26 +138,7 @@ export const resolveRequestTenant = cache(async function resolveRequestTenant():
 
   if (!org || org.status === "suspended" || org.status === "cancelled") return null;
 
-  return {
-    organizationId: org.id,
-    name: org.name,
-    slug: org.slug,
-    industry: org.industry,
-    description: org.description,
-    phone: org.phone,
-    whatsappNumber: org.whatsapp_number,
-    email: org.email,
-    address: org.address,
-    openingHours: (org.opening_hours as Record<string, string>) ?? {},
-    socialLinks: (org.social_links as Record<string, string>) ?? {},
-    logoUrl: org.logo_url,
-    bannerUrl: org.banner_url,
-    faviconUrl: org.favicon_url,
-    currency: org.currency,
-    seoTitle: org.seo_title,
-    seoDescription: org.seo_description,
-    seoOgImageUrl: org.seo_og_image_url,
-  };
+  return toTenantContext(org);
 });
 
 /**

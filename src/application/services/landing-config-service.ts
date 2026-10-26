@@ -54,6 +54,8 @@ export interface LandingConfig {
   /** `null` = composition choisie automatiquement selon la présence d'un visuel (voir resolveHeroLayout). */
   heroLayout: HeroLayout | null;
   heroMediaUrl: string | null;
+  /** Texte alternatif du visuel du hero (C4, versions du site). Pas de colonne dédiée : renseigné par une version publiée. */
+  heroMediaAlt?: string | null;
   /**
    * `null` = le commerçant n'a jamais touché la bande de confiance : les
    * promesses par défaut de son secteur s'appliquent. Tableau VIDE = il

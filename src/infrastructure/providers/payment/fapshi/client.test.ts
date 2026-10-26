@@ -43,6 +43,33 @@ describe("FapshiClient — requêtes", () => {
     expect(init.headers).toMatchObject({ apiuser: "user", apikey: "key" });
   });
 
+  it("Q34 : « Invalid request URL » sur la forme officielle -> repli sur ?transId=, l'URL tentée est dans l'erreur si tout échoue", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response("Invalid request URL", { status: 400 }))
+      .mockResolvedValueOnce(jsonResponse({ transId: "TX-2", status: "SUCCESSFUL", amount: 100 }));
+    const client = new FapshiClient("user", "key", BASE);
+
+    const tx = await client.paymentStatus("TX-2");
+
+    expect(tx.status).toBe("SUCCESSFUL");
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/payment-status/TX-2`);
+    expect(fetchMock.mock.calls[1]![0]).toBe(`${BASE}/payment-status?transId=TX-2`);
+  });
+
+  it("autre erreur 400 (ex. transaction introuvable) : PAS de second essai", async () => {
+    fetchMock.mockResolvedValue(new Response("transaction not found", { status: 400 }));
+    const client = new FapshiClient("user", "key", BASE);
+
+    await expect(client.paymentStatus("TX-3")).rejects.toThrow(/transaction not found.*URL tentée/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("FAPSHI_BASE_URL absent -> erreur explicite, aucun appel réseau (plus de repli silencieux sur le service réel)", async () => {
+    const client = new FapshiClient("user", "key", undefined);
+    await expect(client.initiatePay({ amount: 500 })).rejects.toThrow(/FAPSHI_BASE_URL manquant/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("expirePay : POST /expire-pay avec { transId }", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ transId: "TX-9", status: "EXPIRED", amount: 5000 }));
     const client = new FapshiClient("user", "key", BASE);

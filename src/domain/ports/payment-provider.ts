@@ -29,6 +29,8 @@ export interface CreatePaymentResult {
 export interface PaymentStatusResult {
   providerReference: string;
   status: "pending" | "succeeded" | "failed" | "refunded";
+  /** Montant réellement encaissé selon le provider (si fourni) — comparé au montant attendu avant d'accorder quoi que ce soit. */
+  amount?: number;
   rawPayload: Record<string, unknown>;
 }
 

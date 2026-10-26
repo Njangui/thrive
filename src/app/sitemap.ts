@@ -11,6 +11,7 @@ import { getStorefrontCapabilities } from "@/application/services/storefront-ser
 import { STOREFRONT_PATHS, categoryPath, productPath, servicePath } from "@/application/config/storefront-routes";
 import { MARKETING_SITEMAP_ENTRIES } from "@/lib/request-surface";
 import { latestIsoDate, toIsoDate } from "@/lib/seo";
+import { getPublishedSitemapInfo } from "@/application/services/site-published-config";
 
 /**
  * sitemap.xml par tenant.
@@ -66,7 +67,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     capabilities.hasServices ? listSitemapServices(tenant.organizationId) : Promise.resolve([]),
   ]);
 
-  const entries: MetadataRoute.Sitemap = [{ url: origin, changeFrequency: "weekly", priority: 1 }];
+  // Version publiée du site (C4) : pages supplémentaires déclarées, accueil retiré s'il est en « noindex » (une URL noindex dans le sitemap envoie un signal contradictoire).
+  const siteInfo = await getPublishedSitemapInfo(tenant.organizationId);
+  const entries: MetadataRoute.Sitemap = siteInfo?.homeIndexable === false ? [] : [{ url: origin, changeFrequency: "weekly", priority: 1 }];
 
   const addPage = (
     path: string,
@@ -97,6 +100,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (capabilities.bookingEnabled && (capabilities.hasServices || capabilities.hasWhatsApp || tenant.phone || tenant.email)) {
     addPage(STOREFRONT_PATHS.booking, 0.8, "monthly");
   }
+
+  for (const slug of siteInfo?.slugs ?? []) addPage(`/${slug}`, 0.6, "monthly");
 
   for (const category of categories) {
     entries.push({ url: `${origin}${categoryPath(category.slug)}`, changeFrequency: "weekly", priority: 0.6 });

@@ -129,7 +129,9 @@ export async function canUseFeature(
   // supplémentaire ici.
   if (entitlementKey === "ai_credits") {
     const status = await getCreditStatus(organizationId);
-    return evaluateEntitlement(status.includedCredits, status.usedCredits, requestedAmount);
+    // plafond = crédits du plan + crédits d'add-on achetés (illimité : -1 inchangé)
+    const ceiling = status.includedCredits === -1 ? -1 : status.includedCredits + status.addonCredits;
+    return evaluateEntitlement(ceiling, status.usedCredits, requestedAmount);
   }
 
   const planKey = await getOrganizationPlanKey(organizationId);

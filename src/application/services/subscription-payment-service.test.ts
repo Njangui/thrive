@@ -13,6 +13,11 @@ vi.mock("./addons-service", () => ({
   confirmAddonPurchase: vi.fn(),
 }));
 
+const mockResetCredits = vi.fn(async (..._args: unknown[]) => undefined);
+vi.mock("./ai-credits-service", () => ({
+  resetCreditBalanceForPlan: (...args: unknown[]) => mockResetCredits(...args),
+}));
+
 const mockCreatePayment = vi.fn();
 const mockVerifyPayment = vi.fn();
 const mockCancelPayment = vi.fn();
@@ -59,7 +64,7 @@ interface MockPaymentRow {
   addon_quantity: number | null;
   amount_fcfa: number;
   provider_reference: string;
-  status: "pending" | "completed" | "failed" | "refunded" | "cancelled";
+  status: "pending" | "processing" | "effect_failed" | "completed" | "failed" | "refunded" | "cancelled";
 }
 
 /**
@@ -79,16 +84,15 @@ function configureSubscriptionPaymentsMock(initialRow: MockPaymentRow | null) {
   mockFrom.mockImplementation((table: string) => {
     if (table === "subscription_payments") {
       let pendingUpdate: Record<string, unknown> | null = null;
+      const statusIn: string[][] = [];
 
-      // Résout le terminal de la chaîne courante (`.maybeSingle()` OU un
-      // `await` direct du builder via `.then()`) contre l'état courant.
-      // Une SEULE des deux formes ci-dessous s'applique selon ce que la
-      // chaîne a fait avant : `update()` a été appelé -> on rejoue la
-      // garde `.eq("status","pending")` réelle ; sinon c'est une lecture
-      // simple qui renvoie l'état courant tel quel.
+      // Résout le terminal de la chaîne courante contre l'état courant. `update()` a été appelé →
+      // on rejoue les gardes de statut RÉELLES (`.eq("status", x)` / `.in("status", [...])`) ;
+      // sinon c'est une lecture simple qui renvoie l'état courant tel quel.
       const resolveTerminal = () => {
         if (pendingUpdate) {
-          if (state && state.status === "pending") {
+          const guardsPass = !!state && statusIn.every((allowed) => allowed.includes(state.status));
+          if (state && guardsPass) {
             Object.assign(state, pendingUpdate);
             return { data: { id: state.id }, error: null };
           }
@@ -99,27 +103,28 @@ function configureSubscriptionPaymentsMock(initialRow: MockPaymentRow | null) {
 
       const builder: {
         select: () => typeof builder;
-        eq: () => typeof builder;
+        eq: (col?: string, val?: unknown) => typeof builder;
+        in: (col: string, vals: string[]) => typeof builder;
         insert: () => Promise<{ error: null }>;
         update: (patch: Record<string, unknown>) => typeof builder;
         maybeSingle: () => Promise<{ data: unknown; error: null }>;
         then: (onFulfilled: (v: { data: unknown; error: null }) => unknown) => Promise<unknown>;
       } = {
         select: () => builder,
-        eq: () => builder,
+        eq: (col, val) => {
+          if (col === "status") statusIn.push([String(val)]);
+          return builder;
+        },
+        in: (col, vals) => {
+          if (col === "status") statusIn.push(vals);
+          return builder;
+        },
         insert: () => Promise.resolve({ error: null }),
         update: (patch: Record<string, unknown>) => {
           pendingUpdate = patch;
           return builder;
         },
-        // Terminal explicite : lecture (`select().eq().maybeSingle()`) OU
-        // mise à jour avec relecture (`update().eq().eq().select().maybeSingle()`,
-        // utilisée par le webhook pour son id d'idempotence).
         maybeSingle: () => Promise.resolve(resolveTerminal()),
-        // Terminal implicite : `await` direct du builder SANS `.maybeSingle()`
-        // (`update().eq().eq()`, utilisée par cancelPendingPayment) — le
-        // vrai query builder Supabase est "thenable", donc `await` sur le
-        // builder appelle `.then()` directement.
         then: (onFulfilled) => Promise.resolve(resolveTerminal()).then(onFulfilled),
       };
       return builder;
@@ -215,6 +220,11 @@ describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => 
       status: "pending",
     });
     mockVerifyPayment.mockResolvedValue({ providerReference: "pay-2", status: "succeeded" });
+    // La vraie RPC SQL passe le paiement à `completed` dans sa transaction : on le simule.
+    mockConfirmAddonPurchase.mockImplementation(async () => {
+      const row = mock.getState();
+      if (row) row.status = "completed";
+    });
 
     const event = webhookReference("pay-2");
     await handlePaymentWebhook(event);
@@ -228,6 +238,71 @@ describe("handlePaymentWebhook — idempotence (critère d'acceptation)", () => 
       addonQuantity: 2,
     });
     expect(mock.getOrganizationSubscriptionsUpsertCount()).toBe(0);
+  });
+
+  it("P9 : effet en échec → statut effect_failed (jamais « terminé »), puis REJOUÉ avec succès par la réconciliation", async () => {
+    const mock = configureSubscriptionPaymentsMock({
+      id: "pay-9",
+      organization_id: "org-1",
+      payment_type: "plan_subscription",
+      plan_key: "pro",
+      addon_key: null,
+      addon_quantity: null,
+      amount_fcfa: 15000,
+      provider_reference: "pay-9",
+      status: "pending",
+    });
+    mockVerifyPayment.mockResolvedValue({ providerReference: "pay-9", status: "succeeded", amount: 15000 });
+    mockResetCredits.mockRejectedValueOnce(new Error("base indisponible"));
+
+    await handlePaymentWebhook("pay-9");
+    expect(mock.getState()?.status).toBe("effect_failed");
+    expect(mockNotifyOrgAdmins).not.toHaveBeenCalled(); // pas de « abonnement activé » tant que l'effet n'est pas appliqué
+
+    await handlePaymentWebhook("pay-9"); // rejeu
+    expect(mock.getState()?.status).toBe("completed");
+    expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
+  });
+
+  it("montant encaissé ≠ montant attendu : rien n'est accordé, le paiement reste en attente", async () => {
+    const mock = configureSubscriptionPaymentsMock({
+      id: "pay-10",
+      organization_id: "org-1",
+      payment_type: "plan_subscription",
+      plan_key: "pro",
+      addon_key: null,
+      addon_quantity: null,
+      amount_fcfa: 15000,
+      provider_reference: "pay-10",
+      status: "pending",
+    });
+    mockVerifyPayment.mockResolvedValue({ providerReference: "pay-10", status: "succeeded", amount: 100 });
+
+    await handlePaymentWebhook("pay-10");
+
+    expect(mock.getState()?.status).toBe("pending");
+    expect(mock.getOrganizationSubscriptionsUpsertCount()).toBe(0);
+    expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
+  });
+
+  it("paiement déjà en cours de traitement (processing) : un second webhook ne fait rien", async () => {
+    const mock = configureSubscriptionPaymentsMock({
+      id: "pay-11",
+      organization_id: "org-1",
+      payment_type: "plan_subscription",
+      plan_key: "pro",
+      addon_key: null,
+      addon_quantity: null,
+      amount_fcfa: 15000,
+      provider_reference: "pay-11",
+      status: "processing",
+    });
+    mockVerifyPayment.mockResolvedValue({ providerReference: "pay-11", status: "succeeded" });
+
+    await handlePaymentWebhook("pay-11");
+
+    expect(mock.getOrganizationSubscriptionsUpsertCount()).toBe(0);
+    expect(mock.getState()?.status).toBe("processing");
   });
 
   it("aucune ligne locale pour la référence reçue : ignore silencieusement, ne lève jamais", async () => {
@@ -331,6 +406,7 @@ describe("initiatePayment", () => {
 describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N)", () => {
   interface MockSubRow {
     organization_id: string;
+    plan_key?: string;
     status: "trialing" | "active" | "past_due";
     trial_end: string | null;
     current_period_end: string | null;
@@ -375,6 +451,17 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
           maybeSingle: () => {
             const orgFilter = filters.find((f) => f.col === "organization_id");
             const row = subState.find((s) => s.organization_id === orgFilter?.val);
+            if (mode === "update") {
+              const guardsPass =
+                !!row &&
+                filters.every((f) => f.col === "organization_id" || (row as unknown as Record<string, unknown>)[f.col] === f.val);
+              if (row && guardsPass) {
+                updateCalls.push({ organizationId: row.organization_id, patch });
+                Object.assign(row, patch);
+                return Promise.resolve({ data: { organization_id: row.organization_id }, error: null });
+              }
+              return Promise.resolve({ data: null, error: null });
+            }
             return Promise.resolve({ data: row ? { ...row } : null, error: null });
           },
           then: (onFulfilled: (v: { data?: unknown; error: null }) => unknown) => {
@@ -395,6 +482,8 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
         };
         return builder;
       }
+
+      if (table === "audit_logs") return { insert: () => Promise.resolve({ error: null }) };
 
       if (table === "memberships") {
         return {
@@ -450,7 +539,7 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
 
     const result = await processSubscriptionRenewals();
 
-    expect(result).toEqual({ remindersSent: 1, markedPastDue: 0, skipped: 0 });
+    expect(result).toEqual({ remindersSent: 1, markedPastDue: 0, downgraded: 0, skipped: 0 });
     expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
     expect(mockNotifyOrgAdmins.mock.calls[0]![0]).toMatchObject({ organizationId: "org-1" });
     expect(updateCalls).toContainEqual(
@@ -471,7 +560,7 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
 
     const result = await processSubscriptionRenewals();
 
-    expect(result).toEqual({ remindersSent: 0, markedPastDue: 0, skipped: 1 });
+    expect(result).toEqual({ remindersSent: 0, markedPastDue: 0, downgraded: 0, skipped: 1 });
     expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
   });
 
@@ -488,7 +577,7 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
 
     const result = await processSubscriptionRenewals();
 
-    expect(result).toEqual({ remindersSent: 0, markedPastDue: 1, skipped: 0 });
+    expect(result).toEqual({ remindersSent: 0, markedPastDue: 1, downgraded: 0, skipped: 0 });
     expect(subState[0]!.status).toBe("past_due");
     expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
   });
@@ -506,7 +595,32 @@ describe("processSubscriptionRenewals — relance J-3 et passage past_due (Lot N
 
     const result = await processSubscriptionRenewals();
 
-    expect(result).toEqual({ remindersSent: 0, markedPastDue: 0, skipped: 1 });
+    expect(result).toEqual({ remindersSent: 0, markedPastDue: 0, downgraded: 0, skipped: 1 });
+    expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
+  });
+
+  it("Q7 : échéance + 3 jours de grâce dépassées → rétrogradé au plan gratuit, crédits remis au palier gratuit, notifié", async () => {
+    const { subState } = configureRenewalMocks([
+      { organization_id: "org-9", plan_key: "pro", status: "past_due", trial_end: null, current_period_end: daysFromNow(-4), last_renewal_reminder_sent_at: daysFromNow(-8) },
+    ]);
+
+    const result = await processSubscriptionRenewals();
+
+    expect(result).toEqual({ remindersSent: 0, markedPastDue: 0, downgraded: 1, skipped: 0 });
+    expect(subState[0]).toMatchObject({ plan_key: "free", status: "active", current_period_end: null });
+    expect(mockResetCredits).toHaveBeenCalledWith("org-9", "free");
+    expect(mockNotifyOrgAdmins).toHaveBeenCalledTimes(1);
+  });
+
+  it("Q7 : en période de grâce (échéance dépassée de 2 jours) → conserve le plan payant, aucune notification en double", async () => {
+    const { subState } = configureRenewalMocks([
+      { organization_id: "org-8", plan_key: "pro", status: "past_due", trial_end: null, current_period_end: daysFromNow(-2), last_renewal_reminder_sent_at: daysFromNow(-6) },
+    ]);
+
+    const result = await processSubscriptionRenewals();
+
+    expect(result).toEqual({ remindersSent: 0, markedPastDue: 0, downgraded: 0, skipped: 1 });
+    expect(subState[0]).toMatchObject({ plan_key: "pro", status: "past_due" });
     expect(mockNotifyOrgAdmins).not.toHaveBeenCalled();
   });
 
@@ -593,7 +707,7 @@ describe("reconcileStalePayments (section 62)", () => {
     addon_quantity: number | null;
     amount_fcfa: number;
     provider_reference: string;
-    status: "pending" | "completed" | "failed";
+    status: "pending" | "processing" | "effect_failed" | "completed" | "failed";
   }
 
   function configureStalePaymentsMock(rows: StaleRow[]) {
@@ -602,15 +716,20 @@ describe("reconcileStalePayments (section 62)", () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === "subscription_payments") {
         let filterByReference: string | undefined;
+        let filterById: string | undefined;
+        const statusIn: string[][] = [];
         let pendingUpdate: Record<string, unknown> | null = null;
 
         const builder = {
           select: () => builder,
           eq: (column: string, value: string) => {
             if (column === "provider_reference") filterByReference = value;
-            if (column === "status" && pendingUpdate) {
-              // garde d'idempotence de l'update, comme le mock ci-dessus
-            }
+            if (column === "id") filterById = value;
+            if (column === "status") statusIn.push([value]);
+            return builder;
+          },
+          in: (column: string, values: string[]) => {
+            if (column === "status") statusIn.push(values);
             return builder;
           },
           lt: () => builder,
@@ -620,19 +739,24 @@ describe("reconcileStalePayments (section 62)", () => {
             return builder;
           },
           maybeSingle: () => {
-            const row = filterByReference ? [...states.values()].find((r) => r.provider_reference === filterByReference) : undefined;
-            if (pendingUpdate && row && row.status === "pending") {
-              Object.assign(row, pendingUpdate);
-              return Promise.resolve({ data: { id: row.id }, error: null });
+            const row = [...states.values()].find((r) =>
+              filterById ? r.id === filterById : filterByReference ? r.provider_reference === filterByReference : false,
+            );
+            if (pendingUpdate) {
+              if (row && statusIn.every((allowed) => allowed.includes(row.status))) {
+                Object.assign(row, pendingUpdate);
+                return Promise.resolve({ data: { id: row.id }, error: null });
+              }
+              return Promise.resolve({ data: null, error: null });
             }
-            if (pendingUpdate) return Promise.resolve({ data: null, error: null });
             return Promise.resolve({ data: row ? { ...row } : null, error: null });
           },
-          // `await` direct du builder = la requête liste de reconcileStalePayments.
+          // `await` direct du builder = la requête liste de reconcileStalePayments (les UPDATE en lot sont sans effet ici).
           then: (onFulfilled: (v: { data: unknown; error: null }) => unknown) =>
-            Promise.resolve({ data: [...states.values()].filter((r) => r.status === "pending"), error: null }).then(
-              onFulfilled,
-            ),
+            Promise.resolve({
+              data: pendingUpdate ? null : [...states.values()].filter((r) => r.status === "pending" || r.status === "effect_failed"),
+              error: null,
+            }).then(onFulfilled),
         };
         return builder;
       }

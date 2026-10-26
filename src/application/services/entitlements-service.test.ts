@@ -79,6 +79,7 @@ describe("canUseFeature", () => {
     mockGetCreditStatus.mockResolvedValue({
       organizationId: "org-1",
       includedCredits: 500,
+      addonCredits: 0,
       usedCredits: 480,
       remainingCredits: 20,
     });
@@ -95,6 +96,7 @@ describe("canUseFeature", () => {
     mockGetCreditStatus.mockResolvedValue({
       organizationId: "org-1",
       includedCredits: 500,
+      addonCredits: 0,
       usedCredits: 495,
       remainingCredits: 5,
     });
@@ -230,6 +232,7 @@ describe("canUseFeature", () => {
     mockGetCreditStatus.mockResolvedValue({
       organizationId: "org-1",
       includedCredits: 600, // suppose déjà topé par un addon via grantCredits, hors scope de canUseFeature
+      addonCredits: 0,
       usedCredits: 100,
       remainingCredits: 500,
     });
@@ -335,6 +338,7 @@ describe("Tests de bordure — 99/100, 100/100, 101/100 par entitlement_key", ()
     const creditStatus = (usedCredits: number) => ({
       organizationId: "org-1",
       includedCredits: 100,
+      addonCredits: 0,
       usedCredits,
       remainingCredits: Math.max(100 - usedCredits, 0),
     });
@@ -370,6 +374,7 @@ describe("Tests de bordure — 99/100, 100/100, 101/100 par entitlement_key", ()
       mockGetCreditStatus.mockResolvedValue({
         organizationId: "org-1",
         includedCredits: -1,
+        addonCredits: 0,
         usedCredits: 100_000,
         remainingCredits: -1,
       });

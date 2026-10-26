@@ -15,8 +15,10 @@ import {
 import { JsonLd } from "./_components/json-ld";
 import { buildMarketingMetadata, PLATFORM_NAME } from "./_lib/marketing-page";
 import { getStorefrontSite } from "@/application/services/storefront-service";
+import { findPublishedFreeHome, getPublishedHomeSeo } from "@/application/services/site-published-config";
 import { StorefrontShell } from "./_components/storefront/storefront-shell";
 import { TenantLanding } from "./_components/tenant-landing";
+import { BlockPage } from "./_components/storefront/block-page";
 import { MarketingLanding } from "./_components/marketing-landing";
 
 /**
@@ -57,17 +59,25 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const origin = await resolveCanonicalOrigin();
   const seo = resolveOrganizationSeo(tenant);
+  // Version publiée du site (C4) : ses champs SEO d'accueil priment ; absents = SEO actuel de l'organisation.
+  const published = await getPublishedHomeSeo(tenant.organizationId);
+  const title = published?.title ?? seo.title;
+  const description = published?.description ?? seo.description;
+  const ogImageUrl = published?.ogImageUrl ?? seo.ogImageUrl;
+  // Si l'image publiée est la même que l'actuelle on garde son format ; sinon on ne présume pas qu'elle est carrée.
+  const ogImageIsSquare = published?.ogImageUrl && published.ogImageUrl !== seo.ogImageUrl ? false : seo.ogImageIsSquare;
 
   return {
-    title: seo.title,
-    description: seo.description,
+    title,
+    description,
     alternates: { canonical: origin },
+    ...(published?.noindex ? { robots: { index: false, follow: false } } : {}),
     ...buildSocialMetadata({
-      title: seo.title,
-      description: seo.description,
+      title,
+      description,
       url: origin,
-      imageUrl: seo.ogImageUrl,
-      imageIsSquare: seo.ogImageIsSquare,
+      imageUrl: ogImageUrl,
+      imageIsSquare: ogImageIsSquare,
       siteName: tenant.name,
     }),
     icons: tenant.faviconUrl ? { icon: tenant.faviconUrl } : undefined,
@@ -155,13 +165,19 @@ export default async function RootPage({
   // promesses, chiffres) — partagé avec l'enveloppe et toutes les autres
   // pages de la vitrine, et mémoïsé par requête.
   const site = await getStorefrontSite(tenant);
+  // Site libre publié : l'accueil est composé de blocs (même enveloppe, mêmes données du tenant).
+  const freeHome = await findPublishedFreeHome(tenant.organizationId);
 
   return (
     <>
       <JsonLd data={jsonLd} />
       <JsonLd data={buildWebSiteJsonLd({ name: tenant.name, url: origin })} />
       <StorefrontShell site={site} home>
-        <TenantLanding site={site} bookingFeedback={{ success: bookingSuccess, error: bookingError }} />
+        {freeHome ? (
+          <BlockPage site={site} page={freeHome} isHome />
+        ) : (
+          <TenantLanding site={site} bookingFeedback={{ success: bookingSuccess, error: bookingError }} />
+        )}
       </StorefrontShell>
     </>
   );

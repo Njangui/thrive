@@ -1,3 +1,5 @@
+import { isProjectSupabaseHost } from "./supabase-host";
+
 /**
  * `next/image` refuse (erreur dure, pas un repli silencieux) toute URL
  * dont le domaine n'est pas explicitement listé dans
@@ -15,7 +17,11 @@
 export function isOptimizableImageUrl(url: string): boolean {
   try {
     const { hostname } = new URL(url);
-    return hostname.endsWith(".supabase.co") || hostname === "picsum.photos";
+    // Domaine public Cloudflare R2 (C4) : injecté AU BUILD par next.config.mjs
+    // (`env.NEXT_PUBLIC_R2_MEDIA_HOST`, même source que `images.remotePatterns`).
+    // Sans cela, les photos R2 s'afficheraient en taille d'origine via <img>.
+    const r2Host = process.env.NEXT_PUBLIC_R2_MEDIA_HOST;
+    return isProjectSupabaseHost(hostname) || hostname === "picsum.photos" || (Boolean(r2Host) && hostname === r2Host);
   } catch {
     return false;
   }

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { getEmailProvider } from "@/infrastructure/providers/registry";
-import { resolveRequestOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
+import { resolveMarketingOrigin } from "@/infrastructure/tenant/resolve-request-tenant";
 import type { CurrentMembership, MemberRole } from "./auth-service";
 import { AuthorizationError, NotFoundError, ValidationError, QuotaExceededError } from "@/lib/errors";
 import { canUseFeature } from "./entitlements-service";
@@ -53,29 +53,30 @@ function generateInvitationToken(): string {
 }
 
 function buildInviteUrl(origin: string, token: string): string {
-  // Périmètre hérité du Lot O (RAPPORT_FUSION_6.md, section 8) —
-  // `NEXT_PUBLIC_APP_URL` est générique et ne reflète jamais le
-  // sous-domaine/domaine réel du tenant qui invite ; `resolveRequestOrigin()`
-  // (précis par requête, déjà utilisé par page.tsx/sitemap.ts/robots.ts)
-  // est la référence unique pour tout lien public construit côté serveur.
+  // Correctif d'audit C10 : l'origine vient de la CONFIGURATION (domaine racine de la plateforme), jamais de
+  // l'en-tête `host` de la requête — un en-tête falsifié ne peut plus faire pointer le lien vers un site pirate.
   return `${origin}/invite/accept?token=${token}`;
 }
 
-function buildInvitationEmailHtml(organizationName: string, inviteUrl: string, role: MemberRole): string {
+/** Échappe le HTML d'une valeur insérée dans un email (correctif d'audit C11) : un nom d'entreprise ne peut plus injecter de balises ni de liens. */
+export function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+}
+
+export function buildInvitationEmailHtml(organizationName: string, inviteUrl: string, role: MemberRole): string {
   const roleLabel: Record<MemberRole, string> = {
     owner: "Propriétaire",
     admin: "Administrateur",
     manager: "Manager",
-    sales: "Vente",
-    cashier: "Caisse",
-    employee: "Employé",
-    accountant: "Comptable",
+    employee: "Membre",
   };
+  const safeName = escapeHtml(organizationName);
+  const safeUrl = escapeHtml(inviteUrl);
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2>Vous êtes invité(e) à rejoindre ${organizationName}</h2>
-      <p>Vous avez été invité(e) à rejoindre <strong>${organizationName}</strong> sur Flexco, avec le rôle <strong>${roleLabel[role]}</strong>.</p>
-      <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 20px;background:#2f6b4f;color:#fff;text-decoration:none;border-radius:8px;">Rejoindre l'équipe</a></p>
+      <h2>Vous êtes invité(e) à rejoindre ${safeName}</h2>
+      <p>Vous avez été invité(e) à rejoindre <strong>${safeName}</strong> sur Flexco, avec le rôle <strong>${roleLabel[role]}</strong>.</p>
+      <p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#2f6b4f;color:#fff;text-decoration:none;border-radius:8px;">Rejoindre l'équipe</a></p>
       <p style="color:#666;font-size:13px;">Ce lien expire dans ${INVITATION_TTL_HOURS / 24} jours. Si vous n'attendiez pas cette invitation, ignorez cet email.</p>
     </div>
   `.trim();
@@ -154,7 +155,7 @@ export async function inviteMember(
     throw new Error(`Impossible de créer l'invitation: ${insertError?.message}`);
   }
 
-  const inviteUrl = buildInviteUrl(await resolveRequestOrigin(), token);
+  const inviteUrl = buildInviteUrl(resolveMarketingOrigin(), token);
   let emailDelivered = false;
   let emailError: string | null = null;
 
@@ -162,7 +163,7 @@ export async function inviteMember(
     const emailProvider = await getEmailProvider();
     const result = await emailProvider.sendEmail({
       to: normalizedEmail,
-      subject: `Invitation à rejoindre ${org.name} sur Flexco`,
+      subject: `Invitation à rejoindre ${org.name.replace(/[\r\n]+/g, " ")} sur Flexco`,
       html: buildInvitationEmailHtml(org.name, inviteUrl, role),
     });
     emailDelivered = result.delivered;
@@ -235,31 +236,37 @@ export async function acceptInvitation(
     );
   }
 
-  // Défense en profondeur : même si une invitation a été créée avant que
-  // le quota soit atteint, son acceptation doit respecter la limite actuelle.
+  // Décision Q4 : inviter quelqu'un qui est DÉJÀ membre ne modifie JAMAIS son rôle (avant : un upsert écrasait
+  // le rôle, un propriétaire invité par erreur comme « membre » le perdait). On refuse et on clôt l'invitation.
   const { data: existingMembership } = await supabase
     .from("memberships")
     .select("id")
     .eq("organization_id", invitation.organization_id)
     .eq("user_id", userId)
     .maybeSingle();
-  if (!existingMembership) {
-    const teamEntitlement = await canUseFeature(invitation.organization_id, "team_members", 1);
-    if (!teamEntitlement.allowed) {
-      throw new QuotaExceededError(`Cette équipe a déjà atteint la limite de ${teamEntitlement.limit.toLocaleString("fr-FR")} membre(s) de son offre.`);
-    }
+  if (existingMembership) {
+    await supabase.from("team_invitations").update({ status: "revoked" }).eq("id", invitation.id);
+    throw new ValidationError("Vous faites déjà partie de cette équipe : votre rôle actuel est conservé.");
   }
 
-  // Idempotent (double clic, lien rouvert après acceptation manuelle déjà
-  // en base) : upsert plutôt qu'insert, jamais d'erreur de contrainte
-  // unique (organization_id, user_id) qui remonterait au client.
-  const { error: upsertError } = await supabase
+  // Défense en profondeur : même si une invitation a été créée avant que le quota soit atteint,
+  // son acceptation doit respecter la limite actuelle.
+  const teamEntitlement = await canUseFeature(invitation.organization_id, "team_members", 1);
+  if (!teamEntitlement.allowed) {
+    throw new QuotaExceededError(`Cette équipe a déjà atteint la limite de ${teamEntitlement.limit.toLocaleString("fr-FR")} membre(s) de son offre.`);
+  }
+
+  // INSERT (jamais upsert) : en cas de course avec une adhésion créée entre-temps, la contrainte unique refuse
+  // plutôt que d'écraser un rôle existant.
+  const { error: insertMemberError } = await supabase
     .from("memberships")
-    .upsert(
-      { organization_id: invitation.organization_id, user_id: userId, role: invitation.role },
-      { onConflict: "organization_id,user_id" },
-    );
-  if (upsertError) throw new Error(`Impossible de finaliser l'adhésion: ${upsertError.message}`);
+    .insert({ organization_id: invitation.organization_id, user_id: userId, role: invitation.role });
+  if (insertMemberError) {
+    if (insertMemberError.code === "23505") {
+      throw new ValidationError("Vous faites déjà partie de cette équipe : votre rôle actuel est conservé.");
+    }
+    throw new Error(`Impossible de finaliser l'adhésion: ${insertMemberError.message}`);
+  }
 
   await supabase.from("team_invitations").update({ status: "accepted" }).eq("id", invitation.id);
 

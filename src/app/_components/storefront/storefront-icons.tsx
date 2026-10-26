@@ -149,6 +149,19 @@ export const IconBag = (p: IconProps) => (
   </Svg>
 );
 
+export const IconHeart = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.4 4.2 4.2 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" />
+    <path d="M12 10v4M10 12h4" />
+  </Svg>
+);
+export const IconGraduation = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M2.5 9 12 4.5 21.5 9 12 13.5z" />
+    <path d="M6.5 11.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-4.5M21.5 9v5" />
+  </Svg>
+);
+
 export const IconSearch = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="11" cy="11" r="6.5" />
@@ -201,6 +214,8 @@ const HIGHLIGHT_ICONS: Record<StorefrontIconKey, (props: IconProps) => JSX.Eleme
   ruler: IconRuler,
   whatsapp: IconWhatsapp,
   bag: IconBag,
+  heart: IconHeart,
+  graduation: IconGraduation,
 };
 
 /** Rendu d'une icône par clé. Clé inconnue -> `IconSparkles` : jamais un trou dans la grille. */

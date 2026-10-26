@@ -26,7 +26,7 @@ import { AppError } from "@/lib/errors";
 async function createBroadcastAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
-  const membership = await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+  const membership = await requireMembership(organizationId, ["owner", "admin", "manager"]);
   let outcome: { ok: true; recipients: number } | { ok: false; message: string };
   try {
     const channels = formData.getAll("channels").map(String) as BroadcastChannel[];
@@ -49,7 +49,7 @@ async function createBroadcastAction(formData: FormData) {
 async function cancelBroadcastAction(formData: FormData) {
   "use server";
   const organizationId = String(formData.get("organizationId") ?? "");
-  await requireMembership(organizationId, ["owner", "admin", "manager", "sales"]);
+  await requireMembership(organizationId, ["owner", "admin", "manager"]);
   let message: string | null = null;
   try {
     await cancelContactBroadcast(organizationId, String(formData.get("broadcastId") ?? ""));

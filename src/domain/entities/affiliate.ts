@@ -127,6 +127,41 @@ export function isSelfReferral(affiliateUserId: string, newOrganizationOwnerId: 
   return affiliateUserId === newOrganizationOwnerId;
 }
 
+/** Q24 : identité e-mail normalisée (minuscules, sans « +alias », points ignorés chez Gmail). */
+export function normalizeEmailIdentity(email: string | null | undefined): string | null {
+  const value = (email ?? "").trim().toLowerCase();
+  const at = value.lastIndexOf("@");
+  if (at < 1) return null;
+  let local = value.slice(0, at).split("+")[0] ?? "";
+  let domain = value.slice(at + 1);
+  if (domain === "googlemail.com") domain = "gmail.com";
+  if (domain === "gmail.com") local = local.replace(/\./g, "");
+  return local ? `${local}@${domain}` : null;
+}
+
+/** Q24 : identité téléphone = 8 derniers chiffres (indicatifs et espaces ignorés) ; null si trop court. */
+export function normalizePhoneIdentity(phone: string | null | undefined): string | null {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  return digits.length >= 8 ? digits.slice(-8) : null;
+}
+
+/**
+ * Q24 : auto-parrainage par second compte — signaux comparant l'affilié et le nouveau propriétaire
+ * (identifiant, e-mail normalisé, téléphone). Toute coïncidence bloque l'attribution.
+ */
+export function selfReferralSignals(
+  affiliate: { userId: string; email?: string | null; phone?: string | null },
+  owner: { userId: string; email?: string | null; phone?: string | null },
+): Array<"user_id" | "email" | "phone"> {
+  const signals: Array<"user_id" | "email" | "phone"> = [];
+  if (isSelfReferral(affiliate.userId, owner.userId)) signals.push("user_id");
+  const ae = normalizeEmailIdentity(affiliate.email);
+  if (ae && ae === normalizeEmailIdentity(owner.email)) signals.push("email");
+  const ap = normalizePhoneIdentity(affiliate.phone);
+  if (ap && ap === normalizePhoneIdentity(owner.phone)) signals.push("phone");
+  return signals;
+}
+
 /**
  * Seuil de vélocité de clics (section fraude) : plus de
  * `MAX_CLICKS_PER_IP_WINDOW` clics depuis le même `ip_hash` en moins de

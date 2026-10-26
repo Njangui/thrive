@@ -284,7 +284,7 @@ describe("draftCommentReplySuggestion — Lot 3 (réservation atomique, jamais u
     const result = await draftCommentReplySuggestion("org-1", "Super produit");
 
     expect(result).toBe("Merci pour votre message !");
-    expect(mockConsumeCredit).toHaveBeenCalledWith("org-1", 1, "social_comment_draft");
+    expect(mockConsumeCredit).toHaveBeenCalledWith("org-1", 1, "ai_comment_draft", { task: "comment_draft", tier: "simple" });
     expect(mockReleaseCredit).not.toHaveBeenCalled();
   });
 
@@ -293,11 +293,22 @@ describe("draftCommentReplySuggestion — Lot 3 (réservation atomique, jamais u
     mockFrom.mockReturnValue({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { name: "Boutique Awa" }, error: null }) }) }),
     });
-    mockGetAIProvider.mockRejectedValue(new Error("IA non configurée"));
+    mockGetAIProvider.mockResolvedValue({ primary: { providerName: "mistral", generateText: vi.fn().mockRejectedValue(new Error("fournisseur en panne")) }, fallback: null });
 
     const result = await draftCommentReplySuggestion("org-1", "Super produit");
 
     expect(result).toBeNull();
-    expect(mockReleaseCredit).toHaveBeenCalledWith("org-1", 1, "ai_generation_failed");
+    expect(mockReleaseCredit).toHaveBeenCalledWith("org-1", 1);
+  });
+
+  it("IA non configurée : aucun crédit réservé, donc rien à rembourser", async () => {
+    mockFrom.mockReturnValue({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { name: "Boutique Awa" }, error: null }) }) }),
+    });
+    mockGetAIProvider.mockRejectedValue(new Error("IA non configurée"));
+
+    expect(await draftCommentReplySuggestion("org-1", "Super produit")).toBeNull();
+    expect(mockConsumeCredit).not.toHaveBeenCalled();
+    expect(mockReleaseCredit).not.toHaveBeenCalled();
   });
 });

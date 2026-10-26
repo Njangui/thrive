@@ -327,11 +327,16 @@ export async function recordStorefrontVisit(organizationId: string, input: Store
   await trackEvent(organizationId, "page_view", "page", undefined, {
     path,
     entry: input.entry,
-    visitor: buildVisitorId(env.SUPABASE_SERVICE_ROLE_KEY, organizationId, input.ip, input.userAgent, day),
+    visitor: buildVisitorId(visitorHashSecret(), organizationId, input.ip, input.userAgent, day),
     device: classifyDevice(input.userAgent),
     ...(input.entry ? { source, referrerHost, campaign: params.get("utm_campaign")?.slice(0, 60) ?? null } : {}),
     ...(input.country ? { country: input.country.toUpperCase().slice(0, 2) } : {}),
   });
+}
+
+/** Audit AN2 : secret DÉDIÉ au hachage des visiteurs ; repli sur la clé service tant qu'il n'est pas défini (aucune rupture de statistiques). */
+function visitorHashSecret(): string {
+  return process.env.ANALYTICS_HASH_SECRET || env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
 // ---------------------------------------------------------------------------

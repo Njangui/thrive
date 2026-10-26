@@ -57,7 +57,9 @@ export type StorefrontIconKey =
   | "key"
   | "ruler"
   | "whatsapp"
-  | "bag";
+  | "bag"
+  | "heart"
+  | "graduation";
 
 /**
  * Capacité réelle du tenant dont dépend l'affichage d'une promesse PAR
@@ -395,12 +397,101 @@ const DEFAULT: StorefrontBlueprint = {
   emptyCatalogMessage: "Le catalogue est en cours de mise à jour — contactez-nous pour toute demande.",
 };
 
+const HEALTH: StorefrontBlueprint = {
+  sector: "health",
+  eyebrow: "Santé",
+  catalogLabel: "Consultations",
+  catalogItemLabel: "consultation",
+  catalogItemLabelPlural: "consultations",
+  headings: {
+    products: "Nos consultations",
+    categories: "Spécialités et soins",
+    promotions: "Offres et campagnes",
+    services: "Consultations et soins",
+    gallery: "Notre structure en images",
+    testimonials: "Avis de patients",
+    team: "Notre équipe soignante",
+    faq: "Questions fréquentes",
+    about: "Notre structure",
+    contact: "Nous joindre",
+    location: "Nous trouver",
+    booking: "Prendre rendez-vous",
+  },
+  subheadings: {
+    services: "Consultations, actes et tarifs affichés avant de venir.",
+    booking: "Choisissez un créneau : nous confirmons votre rendez-vous.",
+    team: "Les praticiens qui vous reçoivent.",
+    contact: "En cas d'urgence, ne passez pas par ce site : rendez-vous aux urgences ou appelez les secours de votre pays.",
+  },
+  heroTitle: () => "Des soins de proximité, un rendez-vous simple",
+  heroSubtitle: (name) => `Retrouvez les consultations de ${name}, les horaires, l'équipe et prenez rendez-vous en quelques clics.`,
+  primaryCtaLabel: "Prendre rendez-vous",
+  primaryCtaTarget: "booking",
+  secondaryCtaLabel: "Voir les consultations",
+  secondaryCtaTarget: "services",
+  defaultAccent: { primary: "#0F766E", secondary: "#38BDF8" },
+  highlights: [
+    { icon: "calendar", title: "Rendez-vous en ligne", subtitle: "Demandez un créneau à tout moment" },
+    { icon: "heart", title: "Consultations présentées", subtitle: "Actes et tarifs affichés clairement" },
+    { icon: "clock", title: "Horaires affichés", subtitle: "Vérifiez quand nous recevons", requires: "openingHours" },
+    { icon: "pin", title: "Accès simple", subtitle: "Adresse et plan pour nous trouver", requires: "location" },
+  ],
+  sections: ["hero", "services", "about", "team", "booking", "testimonials", "faq", "location", "contact"],
+  newBadgeLabel: "Nouveau",
+  emptyCatalogMessage: "Les consultations sont en cours de mise à jour — contactez-nous pour connaître les actes et tarifs.",
+};
+
+const EDUCATION: StorefrontBlueprint = {
+  sector: "education",
+  eyebrow: "Éducation & formation",
+  catalogLabel: "Formations",
+  catalogItemLabel: "formation",
+  catalogItemLabelPlural: "formations",
+  headings: {
+    products: "Nos formations",
+    categories: "Filières et domaines",
+    promotions: "Offres d'inscription",
+    services: "Nos formations",
+    gallery: "La vie de l'établissement",
+    testimonials: "Parcours et témoignages",
+    team: "Équipe pédagogique",
+    faq: "Questions fréquentes",
+    about: "Notre établissement",
+    contact: "Admissions et contact",
+    location: "Notre campus",
+    booking: "Demander une visite ou un entretien",
+  },
+  subheadings: {
+    services: "Programmes, durée et frais présentés avant l'inscription.",
+    booking: "Visite de l'établissement ou entretien d'admission.",
+    team: "Ceux qui vous accompagnent tout au long de la formation.",
+  },
+  heroTitle: () => "Une formation claire, un parcours qui avance",
+  heroSubtitle: (name) => `Découvrez les formations de ${name}, les conditions d'admission et inscrivez-vous en quelques étapes.`,
+  primaryCtaLabel: "Demander une admission",
+  primaryCtaTarget: "booking",
+  secondaryCtaLabel: "Voir les formations",
+  secondaryCtaTarget: "services",
+  defaultAccent: { primary: "#4338CA", secondary: "#F59E0B" },
+  highlights: [
+    { icon: "graduation", title: "Formations détaillées", subtitle: "Programme, durée et frais affichés" },
+    { icon: "handshake", title: "Inscription guidée", subtitle: "Une équipe répond à vos questions" },
+    { icon: "calendar", title: "Visites et entretiens", subtitle: "Prenez rendez-vous avec l'admission" },
+    { icon: "pin", title: "Campus accessible", subtitle: "Adresse et plan pour venir", requires: "location" },
+  ],
+  sections: ["hero", "services", "about", "team", "gallery", "testimonials", "booking", "faq", "location", "contact"],
+  newBadgeLabel: "Nouveau",
+  emptyCatalogMessage: "Les formations sont en cours de mise à jour — contactez l'admission pour recevoir les programmes et les frais.",
+};
+
 export const STOREFRONT_BLUEPRINTS: Record<StorefrontSector, StorefrontBlueprint> = {
   retail: RETAIL,
   restaurant: RESTAURANT,
   beauty: BEAUTY,
   professional_services: PROFESSIONAL_SERVICES,
   real_estate: REAL_ESTATE,
+  health: HEALTH,
+  education: EDUCATION,
   "": DEFAULT,
 };
 
@@ -421,6 +512,13 @@ const SECTOR_KEYWORDS: Record<Exclude<StorefrontSector, "">, string[]> = {
   beauty: ["salon", "coiffure", "beaute", "beauty", "bien-etre", "bien etre", "spa", "estheti", "coiffeur", "coiffeuse", "barbier", "onglerie", "massage"],
   professional_services: [
     "service", "conseil", "consulting", "cabinet", "avocat", "juridique", "comptab", "formation", "agence", "informatique", "digital", "architecte", "ingenier",
+  ],
+  health: [
+    "sante", "medecin", "medecine", "medical", "clinique", "hopital", "dentiste", "dentaire", "pediatr", "gynecolog", "cardiolog", "kine", "physiotherap",
+    "laboratoire", "analyses", "infirm", "ophtalm", "optique", "radiolog", "psycholog", "dispensaire", "polyclinique", "soins",
+  ],
+  education: [
+    "education", "ecole", "college", "lycee", "universite", "institut", "academie", "campus", "formation professionnelle", "centre de formation", "cours", "scolaire", "etudiant", "enseignement",
   ],
   real_estate: ["immobilier", "real estate", "real_estate", "agence immobiliere", "location", "logement", "appartement", "terrain", "foncier"],
 };
@@ -445,7 +543,8 @@ export function resolveStorefrontSector(industry: string | null | undefined): St
   if (!industry || !industry.trim()) return "";
 
   const normalized = normalizeForMatching(industry);
-  for (const key of ["retail", "restaurant", "beauty", "real_estate", "professional_services"] as const) {
+  // Santé et éducation d'abord : « cabinet médical » ou « institut de formation » ne doivent pas tomber sur « cabinet » / « formation » (services professionnels).
+  for (const key of ["health", "education", "retail", "restaurant", "beauty", "real_estate", "professional_services"] as const) {
     if (SECTOR_KEYWORDS[key].some((keyword) => normalized.includes(keyword))) return key;
   }
   return "";

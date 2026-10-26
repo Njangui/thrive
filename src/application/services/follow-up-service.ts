@@ -1,7 +1,9 @@
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { hasFeature } from "./entitlements-service";
 import { getMessagingProviderForChannel } from "@/infrastructure/providers/registry";
-import { generateAIReply } from "./ai-response-service";
+import { buildTenantAIContext } from "./tenant-ai-context";
+import { runAITask } from "./ai-metering";
+import { checkReplyQuality } from "./reply-quality";
 import { notifyOrgAdmins } from "./notification-service";
 
 const HIGH_ENGAGEMENT_SCORE = 70;
@@ -21,6 +23,42 @@ function buildDeterministicFollowUp(firstName: string | null, score: number | nu
     return `${hello}, je reviens vers vous concernant votre demande. Nous pouvons vous aider à finaliser votre choix si vous avez encore une question.`;
   }
   return `${hello}, nous restons disponibles si vous souhaitez reprendre votre demande. Dites-nous simplement ce dont vous avez besoin et nous vous répondrons rapidement.`;
+}
+
+/** Plafond de sortie IA d'une relance (audit R4) : un message court, jamais un texte long. */
+export const FOLLOW_UP_MAX_TOKENS = 160;
+/** Une tâche `processing` plus ancienne que ça est considérée abandonnée (crash) et reprise. */
+const STALE_PROCESSING_MS = 15 * 60 * 1000;
+
+/**
+ * Personnalisation IA d'une relance (Q23 B) : mêmes garde-fous que les réponses clients.
+ * Le modèle ne voit QUE notre message fixe (aucun texte client : pas d'injection possible) ;
+ * sa sortie est écartée par le contrôle qualité si elle cite un prix, un lien, un contact,
+ * un stock, fuit les consignes ou salue de nouveau. Dans tous ces cas, le message fixe part.
+ */
+export async function personalizeFollowUp(organizationId: string, base: string): Promise<string> {
+  try {
+    const systemPrompt = await buildTenantAIContext(organizationId, []);
+    const userMessage =
+      "Reformule cette relance en une ou deux phrases chaleureuses, sans salutation, sans prix, sans lien, " +
+      `sans promesse ni remise, sans coordonnées : ${base}`;
+    const res = await runAITask({
+      organizationId,
+      task: "follow_up",
+      inputChars: systemPrompt.length + userMessage.length,
+      call: (provider) => provider.generateText({ systemPrompt, userMessage, maxTokens: FOLLOW_UP_MAX_TOKENS }),
+    });
+    const text = res?.text?.trim();
+    if (!text) return base;
+    const verdict = checkReplyQuality(
+      text,
+      { allowedAmounts: [], allowedOrigins: [], allowedPhones: [], allowedEmails: [], alreadyGreeted: true, protectedMarkers: [] },
+      { maxLength: 400, maxLines: 4 },
+    );
+    return verdict.ok ? text : base;
+  } catch {
+    return base; // IA optionnelle (indisponible, crédits épuisés...) : le message fixe reste la valeur envoyée.
+  }
 }
 
 async function hasRecentInboundSince(supabase: ReturnType<typeof getSupabaseServiceClient>, conversationId: string, since: string) {
@@ -132,7 +170,23 @@ export async function processDueFollowUps(now = new Date()): Promise<FollowUpRun
   const result: FollowUpRunResult = { scheduled: 0, sent: 0, skipped: 0, failed: 0 };
   const followUpsByOrg = new Map<string, boolean>();
 
+  // Reprise des tâches abandonnées en `processing` (crash entre la réservation et l'envoi).
+  await supabase
+    .from("automated_followups")
+    .update({ status: "pending" })
+    .eq("status", "processing")
+    .lt("claimed_at", new Date(now.getTime() - STALE_PROCESSING_MS).toISOString());
+
   for (const task of tasks ?? []) {
+    // Réservation atomique (audit R2) : un seul exécutant obtient la ligne.
+    const { data: claimed } = await supabase
+      .from("automated_followups")
+      .update({ status: "processing", claimed_at: now.toISOString() })
+      .eq("id", task.id)
+      .eq("status", "pending")
+      .select("id");
+    if (!claimed || claimed.length === 0) continue;
+
     if (!(await orgHasFollowUps(followUpsByOrg, task.organization_id))) {
       await supabase.from("automated_followups").update({ status: "skipped", error_message: "Relances automatiques non incluses dans l'offre" }).eq("id", task.id);
       result.skipped++;
@@ -173,18 +227,10 @@ export async function processDueFollowUps(now = new Date()): Promise<FollowUpRun
     const firstName = lead.contacts?.full_name?.split(/\s+/)[0] ?? null;
     let content = buildDeterministicFollowUp(firstName, lead.score, task.tier as "engaged_24h" | "standard_48h");
 
-    // IA en dernière position : elle enrichit le message, elle ne décide ni
-    // du délai ni de la population relancée. Si elle échoue, le message
-    // déterministe reste la valeur envoyée.
-    try {
-      const { data: aiConfig } = await supabase.from("ai_config").select("enabled").eq("organization_id", task.organization_id).maybeSingle();
-      if (aiConfig?.enabled) {
-        const ai = await generateAIReply(task.organization_id, `Personnalisez cette relance commerciale courte sans inventer d'information : ${content}`);
-        if (ai?.text?.trim()) content = ai.text.trim();
-      }
-    } catch {
-      // AI optionnelle : le fallback déterministe est intentionnel.
-    }
+    // IA en dernière position, sous contrôle qualité (Q23 B) : elle enrichit le message sans jamais
+    // décider du délai ni de la population relancée ; au moindre doute, le message fixe part.
+    const { data: aiConfig } = await supabase.from("ai_config").select("enabled").eq("organization_id", task.organization_id).maybeSingle();
+    if (aiConfig?.enabled) content = await personalizeFollowUp(task.organization_id, content);
 
     try {
       const messaging = await getMessagingProviderForChannel(task.organization_id, conversation.channel, (conversation as { provider_account_id?: string | null }).provider_account_id);
@@ -200,7 +246,7 @@ export async function processDueFollowUps(now = new Date()): Promise<FollowUpRun
         message_content: content,
         provider_message_id: sent.providerMessageId,
         sent_at: now.toISOString(),
-      }).eq("id", task.id).eq("status", "pending");
+      }).eq("id", task.id).eq("status", "processing");
 
       await supabase.from("messages").insert({
         organization_id: task.organization_id,

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listPlans, type PlanSummary } from "@/application/services/plans-repository";
-import { PLAN_ORDER, PRICING_FEATURES } from "@/application/config/pricing";
+import { listPlans, listPlanEntitlements, type PlanSummary } from "@/application/services/plans-repository";
+import { PLAN_ORDER, PRICING_FEATURES, applyDbLimits, type LimitsByPlan } from "@/application/config/pricing";
 import { buildMarketingMetadata } from "@/app/_lib/marketing-page";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -11,6 +11,12 @@ export async function generateMetadata(): Promise<Metadata> {
     description: "Discover gratuit, Starter et Pro : des offres Flexco simples et progressives.",
   });
 }
+
+const PLAN_BLURBS: Record<string, string> = {
+  free: "Un site professionnel, Telegram, YouTube et les fonctions métier de base.",
+  starter: "WhatsApp, automatisation IA, CRM et davantage de canaux.",
+  pro: "Plus de comptes, groupes, IA et membres d'équipe.",
+};
 
 function planValue(value: string | boolean): { included: boolean; label: string } {
   if (value === true) return { included: true, label: "Inclus" };
@@ -23,7 +29,18 @@ export default async function PricingPage() {
   const ordered = PLAN_ORDER
     .map((key) => plans.find((plan) => plan.key === key))
     .filter((plan): plan is PlanSummary => Boolean(plan));
-  const groups = Array.from(new Set(PRICING_FEATURES.map((feature) => feature.group)));
+  // Quotas lus dans plan_entitlements (source unique) ; repli sur le texte statique si la lecture échoue.
+  const limits: LimitsByPlan = {};
+  try {
+    for (const plan of ordered) {
+      const rows = await listPlanEntitlements(plan.key);
+      limits[plan.key] = Object.fromEntries(rows.map((row) => [row.entitlementKey, row.limitValue]));
+    }
+  } catch (error) {
+    console.error("/tarifs: lecture des quotas impossible, texte statique utilisé:", error);
+  }
+  const features = applyDbLimits(PRICING_FEATURES, limits);
+  const groups = Array.from(new Set(features.map((feature) => feature.group)));
 
   return (
     <main className="pricing-page">
@@ -59,7 +76,7 @@ export default async function PricingPage() {
                 <div key={group} className="mb-6 last:mb-0">
                   <p className="mb-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">{group}</p>
                   <ul>
-                    {PRICING_FEATURES.filter((feature) => feature.group === group).map((feature) => {
+                    {features.filter((feature) => feature.group === group).map((feature) => {
                       const { included, label } = planValue(feature.values[plan.key]);
                       return (
                         <li key={feature.key} className={!included ? "disabled" : ""}>
@@ -83,9 +100,13 @@ export default async function PricingPage() {
           <p>Votre numéro WhatsApp Business existant peut rester utilisable dans l&apos;application grâce à la coexistence. Les Groupes WhatsApp utilisent un numéro distinct connecté en Cloud API uniquement. Le numéro fourni par Flexco est facturé séparément.</p>
         </div>
         <div className="pricing-economics">
-          <div><span>Discover</span><b>0 FCFA / mois</b><small>100 produits, Telegram, YouTube et les fonctions métier de base.</small></div>
-          <div><span>Starter</span><b>15 000 FCFA / mois</b><small>WhatsApp, automatisation IA, CRM et davantage de canaux.</small></div>
-          <div><span>Pro</span><b>30 000 FCFA / mois</b><small>Plus de comptes, groupes, IA et membres d&apos;équipe.</small></div>
+          {ordered.map((plan) => (
+            <div key={plan.key}>
+              <span>{plan.name}</span>
+              <b>{plan.priceFcfa.toLocaleString("fr-FR")} FCFA / mois</b>
+              <small>{PLAN_BLURBS[plan.key]}</small>
+            </div>
+          ))}
         </div>
       </section>
     </main>

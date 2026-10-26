@@ -19,3 +19,11 @@ export interface StorageProvider {
 
   getUrl(organizationId: string, path: string): Promise<string>;
 }
+
+/** L'objet existe déjà à ce chemin (envoi non écrasant refusé par le stockage). Permet une reprise idempotente d'une migration. */
+export class StorageObjectExistsError extends Error {
+  constructor(public readonly objectPath: string) {
+    super(`Un fichier existe déjà à ce chemin (${objectPath})`);
+    this.name = "StorageObjectExistsError";
+  }
+}

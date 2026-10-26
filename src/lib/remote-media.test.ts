@@ -1,4 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+beforeEach(() => vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://abcd.supabase.co"));
 import { isAllowedRemoteMediaHost, isZernioMediaHost, fileNameFromUrl, TELEGRAM_UPLOAD_MAX_BYTES } from "./remote-media";
 
 describe("liste blanche des hôtes de médias (anti-SSRF)", () => {
@@ -27,5 +29,30 @@ describe("liste blanche des hôtes de médias (anti-SSRF)", () => {
 
   it("plafond Telegram par téléversement : 50 Mo (contre 20 Mo par URL)", () => {
     expect(TELEGRAM_UPLOAD_MAX_BYTES).toBe(50 * 1024 * 1024);
+  });
+});
+
+describe("SEC2 : projet unique et redirections manuelles", () => {
+  it("refuse le Storage d'un autre projet", () => {
+    expect(isAllowedRemoteMediaHost("https://autre.supabase.co/a.mp4")).toBe(false);
+  });
+  it("refuse une redirection hors liste blanche sans requêter la cible", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (u: string) => {
+      calls.push(String(u));
+      return new Response(null, { status: 302, headers: { location: "http://169.254.169.254/latest/meta-data" } });
+    });
+    const { downloadRemoteMedia } = await import("./remote-media");
+    await expect(downloadRemoteMedia("https://media.zernio.com/temp/a.mp4", 1000)).rejects.toThrow(/non autoris/);
+    expect(calls).toEqual(["https://media.zernio.com/temp/a.mp4"]);
+    vi.unstubAllGlobals();
+  });
+  it("suit une redirection autorisée (3 sauts max)", async () => {
+    let n = 0;
+    vi.stubGlobal("fetch", async () => (n++ < 1 ? new Response(null, { status: 302, headers: { location: "https://media.zernio.com/b.mp4" } }) : new Response("ok", { status: 200 })));
+    const { downloadRemoteMedia } = await import("./remote-media");
+    const r = await downloadRemoteMedia("https://media.zernio.com/a.mp4", 1000);
+    expect(r.data.byteLength).toBe(2);
+    vi.unstubAllGlobals();
   });
 });

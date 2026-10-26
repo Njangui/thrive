@@ -1,23 +1,45 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { getSupabaseServiceClient } from "@/infrastructure/supabase/server-client";
 import { env } from "@/lib/env";
 import { NotFoundError, QuotaExceededError } from "@/lib/errors";
 import { canUseFeature } from "./entitlements-service";
+import { requireMembership } from "./auth-service";
 import { YouTubeClient } from "@/infrastructure/providers/social/youtube/client";
 
 const SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/yt-analytics.readonly"];
 const STATE_TTL_MS = 10 * 60 * 1000;
 
-function stateSecret() { return process.env.YOUTUBE_OAUTH_STATE_SECRET || process.env.CRON_SECRET || "development-youtube-state-secret"; }
-function sign(value: string) { return createHmac("sha256", stateSecret()).update(value).digest("hex"); }
-function makeState(organizationId: string) { const raw = `${organizationId}.${Date.now()}.${randomBytes(16).toString("hex")}`; return `${raw}.${sign(raw)}`; }
-function readState(state: string) {
+/**
+ * Secret OBLIGATOIRE (audit S1, Q26) : aucun repli sur CRON_SECRET ni sur une valeur écrite en dur.
+ * Sans secret d'au moins 32 caractères, la connexion YouTube est désactivée.
+ */
+export function youtubeStateSecret(): string {
+  const secret = process.env.YOUTUBE_OAUTH_STATE_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("La connexion YouTube n'est pas configurée (YOUTUBE_OAUTH_STATE_SECRET manquant ou trop court).");
+  }
+  return secret;
+}
+function sign(value: string) { return createHmac("sha256", youtubeStateSecret()).update(value).digest("hex"); }
+function safeEqualHex(a: string, b: string) {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+/** L'état est lié à l'organisation ET à l'utilisateur connecté qui a lancé la connexion (audit S1/S2). */
+export function makeYouTubeState(organizationId: string, userId: string, now = Date.now()) {
+  const raw = `${organizationId}.${userId}.${now}.${randomBytes(16).toString("hex")}`;
+  return `${raw}.${sign(raw)}`;
+}
+export function readYouTubeState(state: string, now = Date.now()): { organizationId: string; userId: string } {
   const parts = state.split(".");
-  if (parts.length !== 4) throw new Error("État de connexion YouTube invalide.");
-  const [organizationId, timestamp, nonce, signature] = parts;
-  const raw = `${organizationId}.${timestamp}.${nonce}`;
-  if (sign(raw) !== signature || Date.now() - Number(timestamp) > STATE_TTL_MS) throw new Error("La demande de connexion YouTube a expiré. Recommencez.");
-  return organizationId as string;
+  if (parts.length !== 5) throw new Error("État de connexion YouTube invalide.");
+  const [organizationId, userId, timestamp, nonce, signature] = parts as [string, string, string, string, string];
+  const raw = `${organizationId}.${userId}.${timestamp}.${nonce}`;
+  if (!safeEqualHex(sign(raw), signature)) throw new Error("État de connexion YouTube invalide.");
+  const age = now - Number(timestamp);
+  if (!Number.isFinite(age) || age < 0 || age > STATE_TTL_MS) throw new Error("La demande de connexion YouTube a expiré. Recommencez.");
+  return { organizationId, userId };
 }
 
 function googleConfig() {
@@ -27,16 +49,19 @@ function googleConfig() {
   return { clientId, clientSecret };
 }
 
-export function createYouTubeConnectUrl(organizationId: string) {
+export function createYouTubeConnectUrl(organizationId: string, userId: string) {
   const { clientId } = googleConfig();
-  const state = makeState(organizationId);
+  const state = makeYouTubeState(organizationId, userId);
   const redirectUri = `${env.NEXT_PUBLIC_APP_URL}/api/youtube/callback`;
   const params = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", access_type: "offline", prompt: "consent", include_granted_scopes: "true", scope: SCOPES.join(" "), state });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
-export async function completeYouTubeOAuth(code: string, state: string) {
-  const organizationId = readState(state);
+/** `sessionUserId` : utilisateur actuellement connecté — doit être celui qui a lancé la connexion et rester propriétaire/admin de l'organisation. */
+export async function completeYouTubeOAuth(code: string, state: string, sessionUserId: string) {
+  const { organizationId, userId } = readYouTubeState(state);
+  if (userId !== sessionUserId) throw new Error("Cette demande de connexion YouTube n'a pas été lancée depuis votre session.");
+  await requireMembership(organizationId, ["owner", "admin"]);
   const { clientId, clientSecret } = googleConfig();
   const redirectUri = `${env.NEXT_PUBLIC_APP_URL}/api/youtube/callback`;
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }) });
